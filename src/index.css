@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #ff6b00;
+  --color-secondary: #ffa94d;
+  --color-accent: #f8f9fa;
+  --color-dark: #1f2937;
+  --color-border: #e5e7eb;
+  
+  --color-card-blue: #ff6b0010;
+  --color-card-orange: #ffa94d20;
+  --color-card-gold: #fffde7;
+  --color-card-pink: #fce4ec;
+
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+  --radius-4xl: 3rem;
+}
+
+@layer base {
+  body {
+    @apply bg-[#f8f9fa] text-[var(--color-dark)] antialiased overflow-x-hidden;
+    font-family: 'Urbanist', system-ui, -apple-system, sans-serif;
+  }
+}
+
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl shadow-gray-200/50;
+  }
+  
+  .premium-card {
+    @apply bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:text-white font-medium relative;
+  }
+  
+  .sidebar-link.active {
+    @apply text-white bg-white/10 shadow-lg;
+  }
+  
+  .sidebar-link.active::after {
+    content: '';
+    @apply absolute -left-2 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-white rounded-r-full;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 4px;
+    width: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 rounded-full hover:bg-gray-300;
+  }
+}
+
