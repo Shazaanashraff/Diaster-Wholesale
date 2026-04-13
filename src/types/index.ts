@@ -23,7 +23,9 @@ export interface Customer {
   phone: string;
   email: string;
   address: string;
-  credit_balance: number;
+  type: 'Wholesale' | 'Retail';
+  credit_limit: number;
+  outstanding_balance: number;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +59,7 @@ export interface Invoice {
   discount: number;
   total: number;
   status: 'draft' | 'confirmed' | 'paid' | 'cancelled';
+  payment_status: 'unpaid' | 'partial' | 'paid';
   notes: string;
   created_at: string;
   updated_at: string;
