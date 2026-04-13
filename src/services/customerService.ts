@@ -93,12 +93,12 @@ export const recordPayment = async (
           paid_at: new Date().toISOString()
         }
       ]);
-    
+
     if (insertError) throw insertError;
 
     // Fetch current customer outstanding_balance
     const customer = await getCustomerById(customerId);
-    
+
     // Calculate newBalance
     const newBalance = Math.max(0, customer.outstanding_balance - amount);
 
@@ -117,15 +117,15 @@ export const recordPayment = async (
         .select('total')
         .eq('id', invoiceId)
         .single();
-        
+
       if (invoice) {
         const { data: allPayments } = await supabase
           .from('payments')
           .select('amount')
           .eq('invoice_id', invoiceId);
-          
+
         const totalPaid = (allPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-        
+
         if (totalPaid >= invoice.total) {
           await supabase
             .from('invoices')

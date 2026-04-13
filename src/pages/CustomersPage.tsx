@@ -19,7 +19,7 @@ export const CustomersPage: React.FC = () => {
     phone: '',
     email: '',
     address: '',
-    type: 'Retail' as 'Wholesale' | 'Retail',
+    type: 'retail' as 'wholesale' | 'retail',
     credit_limit: 0,
   });
   const [formLoading, setFormLoading] = useState(false);
@@ -56,7 +56,7 @@ export const CustomersPage: React.FC = () => {
         phone: '',
         email: '',
         address: '',
-        type: 'Retail',
+        type: 'retail',
         credit_limit: 0,
       });
       await loadCustomers();
@@ -105,7 +105,7 @@ export const CustomersPage: React.FC = () => {
                     <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-2">Type</p>
                     <span className={cn(
                       "px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                      customer.type === 'Wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                      customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
                     )}>
                       {customer.type}
                     </span>
@@ -226,8 +226,8 @@ export const CustomersPage: React.FC = () => {
                 onChange={(e) => setFormData({...formData, type: e.target.value as any})}
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none"
               >
-                <option value="Retail">Retail</option>
-                <option value="Wholesale">Wholesale</option>
+                <option value="retail">Retail</option>
+                <option value="wholesale">Wholesale</option>
               </select>
             </div>
             <div className="space-y-2">
