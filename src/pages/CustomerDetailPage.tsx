@@ -130,7 +130,7 @@ export const CustomerDetailPage: React.FC = () => {
                 <h1 className="text-3xl font-bold text-dark tracking-tight">{customer.name}</h1>
                 <span className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                  customer.type === 'Wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                  customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
                 )}>
                   {customer.type}
                 </span>
