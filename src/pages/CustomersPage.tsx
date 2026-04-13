@@ -134,13 +134,13 @@ export const CustomersPage: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Credit Limit</p>
                       <p className="text-sm font-bold text-gray-600">
-                        {customer.credit_limit > 0 ? customer.credit_limit.toLocaleString() : 'No Limit'}
+                        {(customer.credit_limit || 0) > 0 ? (customer.credit_limit || 0).toLocaleString() : 'No Limit'}
                       </p>
                     </div>
                     <div className="flex justify-between items-center">
                       <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Balance</p>
-                      <p className={cn("text-lg font-bold tracking-tighter", customer.outstanding_balance > 0 ? "text-red-500" : "text-dark")}>
-                        {customer.outstanding_balance.toLocaleString()}
+                      <p className={cn("text-lg font-bold tracking-tighter", (customer.outstanding_balance || 0) > 0 ? "text-red-500" : "text-dark")}>
+                        {(customer.outstanding_balance || 0).toLocaleString()}
                       </p>
                     </div>
                     

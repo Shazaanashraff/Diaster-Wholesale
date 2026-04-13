@@ -23,7 +23,7 @@ export interface Customer {
   phone: string;
   email: string;
   address: string;
-  type: 'Wholesale' | 'Retail';
+  type: 'wholesale' | 'retail';
   credit_limit: number;
   outstanding_balance: number;
   created_at: string;

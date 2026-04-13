@@ -154,8 +154,8 @@ export const CustomerDetailPage: React.FC = () => {
             </div>
             <div>
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">Outstanding Balance</p>
-              <p className={cn("text-2xl font-bold tracking-tighter", customer.outstanding_balance > 0 ? "text-red-500" : "text-dark")}>
-                Rs. {customer.outstanding_balance.toLocaleString()}
+              <p className={cn("text-2xl font-bold tracking-tighter", (customer.outstanding_balance || 0) > 0 ? "text-red-500" : "text-dark")}>
+                Rs. {(customer.outstanding_balance || 0).toLocaleString()}
               </p>
             </div>
           </div>
@@ -167,7 +167,7 @@ export const CustomerDetailPage: React.FC = () => {
             <div>
               <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">Credit Limit</p>
               <p className="text-2xl font-bold tracking-tighter text-dark">
-                {customer.credit_limit > 0 ? `Rs. ${customer.credit_limit.toLocaleString()}` : 'No Limit'}
+                {(customer.credit_limit || 0) > 0 ? `Rs. ${(customer.credit_limit || 0).toLocaleString()}` : 'No Limit'}
               </p>
             </div>
           </div>
@@ -226,7 +226,7 @@ export const CustomerDetailPage: React.FC = () => {
                           {new Date(inv.created_at).toLocaleDateString()}
                         </td>
                         <td className="py-4 text-sm font-bold text-dark text-right">
-                          Rs. {inv.total.toLocaleString()}
+                          Rs. {(inv.total || 0).toLocaleString()}
                         </td>
                         <td className="py-4 text-center">
                           <span className={cn(
@@ -283,7 +283,7 @@ export const CustomerDetailPage: React.FC = () => {
                             </span>
                           </td>
                           <td className="py-4 text-sm font-bold text-green-600 text-right">
-                            + Rs. {pay.amount.toLocaleString()}
+                            + Rs. {(pay.amount || 0).toLocaleString()}
                           </td>
                         </tr>
                       );
@@ -347,7 +347,7 @@ export const CustomerDetailPage: React.FC = () => {
                     <option value="general">General Payment (No Invoice)</option>
                     {unpaidInvoices.map(inv => (
                       <option key={inv.id} value={inv.id}>
-                        {inv.invoice_number} — Rs. {inv.total.toLocaleString()} ({inv.payment_status})
+                        {inv.invoice_number} — Rs. {(inv.total || 0).toLocaleString()} ({inv.payment_status})
                       </option>
                     ))}
                   </select>
