@@ -109,7 +109,7 @@ export const CustomerDetailPage: React.FC = () => {
   }
 
   const remainingCredit = getRemainingCredit(customer);
-  const unpaidInvoices = invoices.filter(i => i.payment_status !== 'paid' && i.status !== 'cancelled');
+  const unpaidInvoices = invoices.filter(i => i.payment_status !== 'paid');
 
   return (
     <div className="flex flex-col min-h-screen bg-accent">
@@ -221,7 +221,7 @@ export const CustomerDetailPage: React.FC = () => {
                   ) : (
                     invoices.map((inv) => (
                       <tr key={inv.id} className="border-b border-border/50 hover:bg-slate-50 transition-colors">
-                        <td className="py-4 text-sm font-bold text-dark">{inv.invoice_number}</td>
+                        <td className="py-4 text-sm font-bold text-dark">{inv.invoice_no}</td>
                         <td className="py-4 text-sm font-semibold text-gray-500">
                           {new Date(inv.created_at).toLocaleDateString()}
                         </td>
@@ -279,7 +279,7 @@ export const CustomerDetailPage: React.FC = () => {
                           </td>
                           <td className="py-4">
                             <span className="text-sm font-bold text-dark">
-                              {linkedInv ? linkedInv.invoice_number : 'General'}
+                              {linkedInv ? linkedInv.invoice_no : 'General'}
                             </span>
                           </td>
                           <td className="py-4 text-sm font-bold text-green-600 text-right">
@@ -347,7 +347,7 @@ export const CustomerDetailPage: React.FC = () => {
                     <option value="general">General Payment (No Invoice)</option>
                     {unpaidInvoices.map(inv => (
                       <option key={inv.id} value={inv.id}>
-                        {inv.invoice_number} — Rs. {(inv.total || 0).toLocaleString()} ({inv.payment_status})
+                        {inv.invoice_no} — Rs. {(inv.total || 0).toLocaleString()} ({inv.payment_status})
                       </option>
                     ))}
                   </select>

@@ -23,15 +23,15 @@ import type { ProductStock, ComputedStock } from '../types';
 export function computeStock(row: ProductStock): ComputedStock {
   const ppc = row.pieces_per_carton || 1; // guard against 0 division
 
-  const totalPiecesIn  = row.cartons_in  * ppc + row.pieces_in;
+  const totalPiecesIn = row.cartons_in * ppc + row.pieces_in;
   const totalPiecesOut = row.cartons_sold * ppc + row.pieces_sold;
-  const totalAdj       = row.carton_adj  * ppc + row.piece_adj;
+  const totalAdj = row.carton_adj * ppc + row.piece_adj;
 
   // Clamp to 0 — never show negative stock
   const totalPieces = Math.max(0, totalPiecesIn - totalPiecesOut + totalAdj);
 
   const availCartons = Math.floor(totalPieces / ppc);
-  const availLoose   = totalPieces % ppc;
+  const availLoose = totalPieces % ppc;
 
   return { totalPieces, availCartons, availLoose };
 }

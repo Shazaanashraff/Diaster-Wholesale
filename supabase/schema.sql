@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS stock_batches (
   product_id    UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   shipment_id   UUID REFERENCES shipments(id) ON DELETE SET NULL,
   cartons       INT NOT NULL DEFAULT 0,
-  pieces        INT NOT NULL DEFAULT 0,
+  loose_pieces  INT NOT NULL DEFAULT 0,
   cost_per_piece NUMERIC(12,2) NOT NULL DEFAULT 0,
   notes         TEXT NOT NULL DEFAULT '',
   received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -75,13 +75,14 @@ ALTER TABLE stock_batches DISABLE ROW LEVEL SECURITY;
 -- =========================
 CREATE TABLE IF NOT EXISTS invoices (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  invoice_number TEXT NOT NULL UNIQUE,
+  invoice_no    TEXT NOT NULL UNIQUE,
   customer_id   UUID NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
+  mode          TEXT NOT NULL DEFAULT 'retail' CHECK (mode IN ('wholesale','retail')),
   subtotal      NUMERIC(12,2) NOT NULL DEFAULT 0,
   discount      NUMERIC(12,2) NOT NULL DEFAULT 0,
   total         NUMERIC(12,2) NOT NULL DEFAULT 0,
-  status        TEXT NOT NULL DEFAULT 'draft'
-                  CHECK (status IN ('draft','confirmed','paid','cancelled')),
+  payment_status TEXT NOT NULL DEFAULT 'unpaid'
+                  CHECK (payment_status IN ('unpaid','partial','paid')),
   notes         TEXT NOT NULL DEFAULT '',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -96,10 +97,10 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id    UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   product_id    UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-  quantity_cartons INT NOT NULL DEFAULT 0,
-  quantity_pieces  INT NOT NULL DEFAULT 0,
+  cartons       INT NOT NULL DEFAULT 0,
+  pieces        INT NOT NULL DEFAULT 0,
   unit_price    NUMERIC(12,2) NOT NULL DEFAULT 0,
-  line_total    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total         NUMERIC(12,2) NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -160,54 +161,38 @@ SELECT
   p.wholesale_price,
   p.retail_price,
   p.pieces_per_carton,
-
-  -- Total pieces received from all batches
-  COALESCE(batch_totals.total_pieces_in, 0)     AS total_pieces_in,
-
-  -- Total pieces sold via confirmed/paid invoices
-  COALESCE(sold_totals.total_pieces_out, 0)      AS total_pieces_out,
-
-  -- Net manual adjustments
-  COALESCE(adj_totals.total_adjustment, 0)        AS total_adjustment,
-
-  -- Final available
-  (
-    COALESCE(batch_totals.total_pieces_in, 0)
-    - COALESCE(sold_totals.total_pieces_out, 0)
-    + COALESCE(adj_totals.total_adjustment, 0)
-  ) AS available_pieces
-
+  COALESCE(batch_totals.cartons_in, 0)     AS cartons_in,
+  COALESCE(batch_totals.pieces_in, 0)      AS pieces_in,
+  COALESCE(sold_totals.cartons_sold, 0)    AS cartons_sold,
+  COALESCE(sold_totals.pieces_sold, 0)     AS pieces_sold,
+  COALESCE(adj_totals.carton_adj, 0)       AS carton_adj,
+  COALESCE(adj_totals.piece_adj, 0)        AS piece_adj
 FROM products p
-
--- Subquery: total pieces received per product
 LEFT JOIN (
   SELECT
-    sb.product_id,
-    SUM(sb.cartons * p2.pieces_per_carton + sb.pieces) AS total_pieces_in
-  FROM stock_batches sb
-  JOIN products p2 ON p2.id = sb.product_id
-  GROUP BY sb.product_id
+    product_id,
+    SUM(cartons) AS cartons_in,
+    SUM(loose_pieces) AS pieces_in
+  FROM stock_batches
+  GROUP BY product_id
 ) batch_totals ON batch_totals.product_id = p.id
-
--- Subquery: total pieces sold per product (only confirmed/paid invoices)
 LEFT JOIN (
   SELECT
     ii.product_id,
-    SUM(ii.quantity_cartons * p3.pieces_per_carton + ii.quantity_pieces) AS total_pieces_out
+    SUM(ii.cartons) AS cartons_sold,
+    SUM(ii.pieces) AS pieces_sold
   FROM invoice_items ii
-  JOIN products p3 ON p3.id = ii.product_id
   JOIN invoices inv ON inv.id = ii.invoice_id
-  WHERE inv.status IN ('confirmed', 'paid')
+  WHERE inv.payment_status IN ('partial', 'paid')
   GROUP BY ii.product_id
 ) sold_totals ON sold_totals.product_id = p.id
-
--- Subquery: net stock adjustments per product
 LEFT JOIN (
   SELECT
-    sa.product_id,
-    SUM(sa.adjustment_pieces) AS total_adjustment
-  FROM stock_adjustments sa
-  GROUP BY sa.product_id
+    product_id,
+    0 AS carton_adj,
+    SUM(adjustment_pieces) AS piece_adj
+  FROM stock_adjustments
+  GROUP BY product_id
 ) adj_totals ON adj_totals.product_id = p.id;
 
 -- ============================================================

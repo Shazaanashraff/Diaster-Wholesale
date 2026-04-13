@@ -9,7 +9,7 @@ export const getCustomers = async (): Promise<Customer[]> => {
 
   if (error) throw error;
   return data as Customer[];
-};
+}
 
 export const getCustomerById = async (id: string): Promise<Customer> => {
   const { data, error } = await supabase
@@ -20,7 +20,7 @@ export const getCustomerById = async (id: string): Promise<Customer> => {
 
   if (error) throw error;
   return data as Customer;
-};
+}
 
 export const createCustomer = async (
   data: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'outstanding_balance'>
@@ -33,7 +33,7 @@ export const createCustomer = async (
 
   if (error) throw error;
   return customer as Customer;
-};
+}
 
 export const updateCustomer = async (
   id: string,
@@ -48,7 +48,7 @@ export const updateCustomer = async (
 
   if (error) throw error;
   return customer as Customer;
-};
+}
 
 export const getCustomerLedger = async (
   id: string
@@ -73,7 +73,7 @@ export const getCustomerLedger = async (
     invoices: invoices as Invoice[],
     payments: payments as Payment[]
   };
-};
+}
 
 export const recordPayment = async (
   customerId: string,
@@ -143,4 +143,4 @@ export const recordPayment = async (
     console.error('Error recording payment:', error);
     throw error;
   }
-};
+}

@@ -42,38 +42,38 @@ export interface Shipment {
 export interface StockBatch {
   id: string;
   product_id: string;
-  shipment_id: string | null;
+  shipment_id?: string;
   cartons: number;
-  pieces: number;
-  cost_per_piece: number;
-  notes: string;
-  received_at: string;
-  created_at: string;
+  loose_pieces: number;
+  cost_per_piece?: number;
+  notes?: string;
+  received_at?: string;
+  created_at?: string;
 }
 
 export interface Invoice {
   id: string;
-  invoice_number: string;
   customer_id: string;
+  invoice_no: string;
+  mode: 'wholesale' | 'retail';
   subtotal: number;
   discount: number;
   total: number;
-  status: 'draft' | 'confirmed' | 'paid' | 'cancelled';
   payment_status: 'unpaid' | 'partial' | 'paid';
-  notes: string;
-  created_at: string;
-  updated_at: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface InvoiceItem {
   id: string;
   invoice_id: string;
   product_id: string;
-  quantity_cartons: number;
-  quantity_pieces: number;
+  cartons: number;
+  pieces: number;
   unit_price: number;
-  line_total: number;
-  created_at: string;
+  total: number;
+  created_at?: string;
 }
 
 export interface Payment {
