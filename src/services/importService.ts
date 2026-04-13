@@ -183,7 +183,7 @@ export async function confirmImport(
       product_id: r.matched_product!.id,
       shipment_id: shipmentRecord.id,
       cartons: r.cartons,
-      pieces: 0,
+      loose_pieces: 0,
       cost_per_piece: r.cost_price ?? 0,
       notes: `Imported via ${shipmentCode}`,
       received_at: new Date().toISOString(),
