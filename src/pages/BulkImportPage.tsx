@@ -23,6 +23,7 @@ export const BulkImportPage: React.FC = () => {
   // ── State ──────────────────────────────────────────────
   const [file, setFile] = useState<File | null>(null);
   const [shipmentCode, setShipmentCode] = useState('');
+  const [supplierName, setSupplierName] = useState('');
   const [parsedRows, setParsedRows] = useState<ImportRow[]>([]);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [step, setStep] = useState<Step>('upload');
@@ -97,7 +98,7 @@ export const BulkImportPage: React.FC = () => {
     setError(null);
 
     try {
-      const summary = await confirmImport(parsedRows, shipmentCode);
+      const summary = await confirmImport(parsedRows, shipmentCode, supplierName);
       setImportSummary(summary);
       setStep('done');
       await loadShipments(); // refresh rollback list
@@ -277,6 +278,8 @@ export const BulkImportPage: React.FC = () => {
                     <input
                       type="text"
                       placeholder="e.g. Digital Distro Ltd."
+                      value={supplierName}
+                      onChange={(e) => setSupplierName(e.target.value)}
                       className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
                       id="supplier-name-input"
                     />
@@ -307,7 +310,7 @@ export const BulkImportPage: React.FC = () => {
                     "Keys must be unique and non-duplicate."
                   ].map((note, idx) => (
                     <li key={idx} className="flex gap-4">
-                      <div className="w-6 h-6 rounded-full bg-orange-50 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-orange-100">{idx+1}</div>
+                      <div className="w-6 h-6 rounded-full bg-orange-50 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-orange-100">{idx + 1}</div>
                       <p className="text-xs text-gray-400 leading-relaxed font-semibold">{note}</p>
                     </li>
                   ))}

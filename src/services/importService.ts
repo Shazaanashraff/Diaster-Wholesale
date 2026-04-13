@@ -122,14 +122,15 @@ export async function classifyRows(rawRows: ImportRow[]): Promise<ImportRow[]> {
 
 export async function confirmImport(
   rows: ImportRow[],
-  shipmentCode: string
+  shipmentCode: string,
+  supplierName: string
 ): Promise<ImportSummary> {
   // Step A: insert shipment
   const { data: shipment, error: shipError } = await supabase
     .from('shipments')
     .insert({
       reference: shipmentCode,
-      supplier: '',
+      supplier: supplierName,
       notes: `Bulk import: ${shipmentCode}`,
       arrived_at: new Date().toISOString(),
     })
