@@ -6,6 +6,7 @@ import { POSPage } from './pages/POSPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { CustomersPage } from './pages/CustomersPage';
+import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { BulkImportPage } from './pages/BulkImportPage';
 import { ReportsPage } from './pages/ReportsPage';
 
@@ -19,6 +20,7 @@ const App: React.FC = () => {
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/import" element={<BulkImportPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />
