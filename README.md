@@ -57,19 +57,34 @@ The custom NSIS script stores and reuses the previous install directory.
 
 Auto update is initialized from Electron main process in `electron/main.mjs`.
 
-Current publish provider is a placeholder URL in `package.json`:
+Current publish provider is GitHub Releases in `package.json`:
 
 ```json
 "publish": [
   {
-    "provider": "generic",
-    "url": "https://example.com/updates"
+    "provider": "github",
+    "owner": "Hesara2003",
+    "repo": "Diaster-Wholesale",
+    "releaseType": "release"
   }
 ]
 ```
 
+Update behavior:
+
+1. App checks for updates on startup.
+2. App checks again in the background every 15 minutes.
+3. If a newer tagged release exists, installer is downloaded in the background.
+4. When download completes, user is prompted to restart and install.
+
+For private release feeds, provide a token via environment variable at runtime (never hardcode in source):
+
+```bash
+DIASTER_UPDATER_TOKEN=your_token_here
+```
+
 Before using updates in production:
 
-1. Change `publish.url` to your real HTTPS update host.
-2. Upload `latest.yml`, installer `.exe`, and `.blockmap` files from `release/`.
-3. Bump app version in `package.json` for each new release.
+1. Publish each new version as a GitHub Release with assets (`latest.yml`, setup `.exe`, `.blockmap`).
+2. Bump app version in `package.json` for each release.
+3. Keep secrets in CI/environment variables only (`GH_TOKEN`/`DIASTER_UPDATER_TOKEN`).

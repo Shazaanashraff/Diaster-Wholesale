@@ -10,9 +10,15 @@ const __dirname = path.dirname(__filename);
 
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const updaterAccessToken =
+  process.env.DIASTER_UPDATER_TOKEN ||
+  process.env.GH_TOKEN ||
+  '';
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
+let updateCheckTimer = null;
 
 function sendUpdaterStatus(status, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -49,10 +55,31 @@ function createMainWindow() {
   }
 }
 
+async function checkForUpdates(reason = 'manual') {
+  if (isDev) {
+    return { ok: false, reason: 'development-mode' };
+  }
+
+  try {
+    await autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (error) {
+    const message = error?.message ?? String(error);
+    sendUpdaterStatus('error', { message, reason });
+    return { ok: false, reason: message };
+  }
+}
+
 function configureAutoUpdater() {
   if (isDev) {
     sendUpdaterStatus('skipped', { reason: 'development-mode' });
     return;
+  }
+
+  if (updaterAccessToken) {
+    autoUpdater.requestHeaders = {
+      Authorization: `token ${updaterAccessToken}`,
+    };
   }
 
   autoUpdater.autoDownload = true;
@@ -98,9 +125,11 @@ function configureAutoUpdater() {
     sendUpdaterStatus('error', { message: error?.message ?? String(error) });
   });
 
-  autoUpdater.checkForUpdates().catch((error) => {
-    sendUpdaterStatus('error', { message: error?.message ?? String(error) });
-  });
+  checkForUpdates('startup');
+
+  updateCheckTimer = setInterval(() => {
+    checkForUpdates('interval');
+  }, UPDATE_CHECK_INTERVAL_MS);
 }
 
 app.whenReady().then(() => {
@@ -116,16 +145,7 @@ app.whenReady().then(() => {
 });
 
 ipcMain.handle('updater:check-now', async () => {
-  if (isDev) {
-    return { ok: false, reason: 'development-mode' };
-  }
-
-  try {
-    await autoUpdater.checkForUpdates();
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, reason: error?.message ?? 'check-failed' };
-  }
+  return checkForUpdates('manual');
 });
 
 ipcMain.on('updater:install-now', () => {
@@ -137,5 +157,12 @@ ipcMain.on('updater:install-now', () => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
   }
 });

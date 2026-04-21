@@ -70,8 +70,10 @@
     "asar": true,
     "publish": [
       {
-        "provider": "generic",
-        "url": "https://example.com/updates"
+        "provider": "github",
+        "owner": "Hesara2003",
+        "repo": "Diaster-Wholesale",
+        "releaseType": "release"
       }
     ],
     "win": {
