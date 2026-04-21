@@ -153,12 +153,3 @@ export const deleteCustomer = async (id: string): Promise<void> => {
 
   if (error) throw error;
 }
-
-export const deleteCustomer = async (id: string): Promise<void> => {
-  const { error } = await supabase
-    .from('customers')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
-}
