@@ -146,7 +146,9 @@ export const BulkImportPage: React.FC = () => {
   // ── Computed counts ───────────────────────────────────
   const matchedCount = parsedRows.filter((r) => r.status === 'match_code' || r.status === 'match_name').length;
   const newCount = parsedRows.filter((r) => r.status === 'new').length;
+  const conflictCount = parsedRows.filter((r) => r.status === 'conflict').length;
   const errorCount = parsedRows.filter((r) => r.status === 'error').length;
+  const blockingCount = errorCount + conflictCount;
 
   // ── Status badge renderer ─────────────────────────────
   const renderStatusBadge = (row: ImportRow) => {
@@ -167,6 +169,12 @@ export const BulkImportPage: React.FC = () => {
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-100">
             <Package size={12} /> New Product
+          </span>
+        );
+      case 'conflict':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100" title={row.error_message}>
+            <AlertTriangle size={12} /> Duplicate Conflict
           </span>
         );
       case 'error':
@@ -380,17 +388,17 @@ export const BulkImportPage: React.FC = () => {
                 <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mt-1">New Products</p>
               </div>
               <div className="bg-red-50 rounded-2xl border border-red-100 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-red-600">{errorCount}</p>
-                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Errors</p>
+                <p className="text-2xl font-bold text-red-600">{blockingCount}</p>
+                <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Blocked Rows</p>
               </div>
             </div>
 
             {/* Error warning */}
-            {errorCount > 0 && (
+            {blockingCount > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
                 <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
                 <p className="text-sm font-semibold text-amber-700">
-                  {errorCount} row{errorCount > 1 ? 's have' : ' has'} errors and will be skipped during import.
+                  {blockingCount} row{blockingCount > 1 ? 's are' : ' is'} blocked. Resolve duplicate conflicts or invalid rows before importing.
                 </p>
               </div>
             )}
@@ -419,7 +427,7 @@ export const BulkImportPage: React.FC = () => {
                   <tbody>
                     {parsedRows.map((row, idx) => (
                       <React.Fragment key={idx}>
-                        <tr className={`border-b border-border/30 hover:bg-accent/50 transition-colors ${row.status === 'error' ? 'bg-red-50/30' : ''}`}>
+                        <tr className={`border-b border-border/30 hover:bg-accent/50 transition-colors ${row.status === 'error' || row.status === 'conflict' ? 'bg-red-50/30' : ''}`}>
                           <td className="p-5 pl-8 text-xs font-bold text-gray-300">{idx + 1}</td>
                           <td className="p-5 text-xs font-semibold text-dark font-mono">{row.item_code || '—'}</td>
                           <td className="p-5 text-xs font-semibold text-dark max-w-[200px] truncate">{row.name}</td>
@@ -428,8 +436,8 @@ export const BulkImportPage: React.FC = () => {
                           <td className="p-5 text-xs font-semibold text-gray-500 text-right">{row.units_per_carton}</td>
                           <td className="p-5 pr-8">{renderStatusBadge(row)}</td>
                         </tr>
-                        {/* Show error message as a sub-row */}
-                        {row.status === 'error' && row.error_message && (
+                        {/* Show conflict/error message as a sub-row */}
+                        {(row.status === 'error' || row.status === 'conflict') && row.error_message && (
                           <tr className="bg-red-50/30">
                             <td />
                             <td colSpan={6} className="px-5 pb-4 pt-0">
@@ -457,7 +465,7 @@ export const BulkImportPage: React.FC = () => {
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={!shipmentCode.trim() || loading}
+                disabled={!shipmentCode.trim() || loading || conflictCount > 0}
                 className="flex-1 py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-orange-100 flex items-center justify-center gap-4 hover:bg-orange-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 id="confirm-import-btn"
               >
@@ -475,6 +483,11 @@ export const BulkImportPage: React.FC = () => {
             {!shipmentCode.trim() && (
               <p className="text-xs font-semibold text-amber-500 text-center -mt-4">
                 Please enter a Shipment Tracking ID before confirming.
+              </p>
+            )}
+            {conflictCount > 0 && (
+              <p className="text-xs font-semibold text-red-500 text-center -mt-4">
+                Resolve {conflictCount} duplicate conflict{conflictCount > 1 ? 's' : ''} before confirming import.
               </p>
             )}
           </div>

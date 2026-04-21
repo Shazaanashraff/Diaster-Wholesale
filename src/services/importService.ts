@@ -1,8 +1,8 @@
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { getProducts, createProduct } from './productService';
-import type { Product, Shipment } from '../types';
-import type { RawExcelRow, ImportRow, ImportSummary } from '../types/import';
+import type { Shipment } from '../types';
+import type { ImportRow, ImportSummary } from '../types/import';
 
 // ============================================================
 // Import Service — Excel parsing, classification & Supabase writes
@@ -84,6 +84,7 @@ export async function parseExcelFile(file: File): Promise<ImportRow[]> {
 
 export async function classifyRows(rawRows: ImportRow[]): Promise<ImportRow[]> {
   const products = await getProducts();
+  const normalize = (value: string) => value.trim().toLowerCase();
 
   return rawRows.map((row) => {
     // Skip rows that already failed validation
@@ -99,12 +100,27 @@ export async function classifyRows(rawRows: ImportRow[]): Promise<ImportRow[]> {
       }
     }
 
-    // Case 2: model exact match (case-insensitive) AND name includes match (case-insensitive)
-    const nameModelMatch = products.find(
-      (p) =>
-        p.model.toLowerCase() === row.model.toLowerCase() &&
-        p.name.toLowerCase().includes(row.name.toLowerCase())
-    );
+    // Case 2: detect similar existing product by exact model + name.
+    const nameModelMatch = products.find((p) => {
+      return normalize(p.model) === normalize(row.model)
+        && normalize(p.name) === normalize(row.name);
+    });
+
+    // Duplicate-prevention rule:
+    // if same model+name exists but incoming code differs, mark as conflict.
+    if (
+      row.item_code
+      && nameModelMatch
+      && normalize(nameModelMatch.item_code) !== normalize(row.item_code)
+    ) {
+      return {
+        ...row,
+        status: 'conflict' as const,
+        matched_product: nameModelMatch,
+        error_message: `Similar product exists: ${nameModelMatch.item_code} - ${nameModelMatch.name}`,
+      };
+    }
+
     if (nameModelMatch) {
       return { ...row, status: 'match_name' as const, matched_product: nameModelMatch };
     }
@@ -147,7 +163,7 @@ export async function confirmImport(
   // Step B: for 'new' rows, create the product first
   const processedRows: ImportRow[] = [];
   for (const row of rows) {
-    if (row.status === 'error') {
+    if (row.status === 'error' || row.status === 'conflict') {
       processedRows.push(row);
       continue;
     }
@@ -206,7 +222,7 @@ export async function confirmImport(
     matched_by_code: processedRows.filter((r) => r.status === 'match_code').length,
     matched_by_name: processedRows.filter((r) => r.status === 'match_name').length,
     new_products: processedRows.filter((r) => r.status === 'new').length,
-    errors: processedRows.filter((r) => r.status === 'error').length,
+    errors: processedRows.filter((r) => r.status === 'error' || r.status === 'conflict').length,
   };
 
   return summary;

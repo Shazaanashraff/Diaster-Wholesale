@@ -23,7 +23,7 @@ export interface ImportRow {
   cartons: number;
   units_per_carton: number;
   cost_price?: number;
-  status: 'match_code' | 'match_name' | 'new' | 'error';
+  status: 'match_code' | 'match_name' | 'new' | 'conflict' | 'error';
   matched_product?: Product;
   error_message?: string;
 }

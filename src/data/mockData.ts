@@ -3,7 +3,6 @@ import {
   Gamepad2, 
   Gift, 
   Globe, 
-  Cpu, 
   Server,
   MonitorCheck
 } from 'lucide-react';
@@ -17,6 +16,7 @@ export interface Product {
   category: string;
   wholesale_price: number;
   retail_price: number;
+  pieces_per_carton: number;
   created_at: string;
 }
 
@@ -52,6 +52,7 @@ export const PRODUCTS: Product[] = [
     category: 'software',
     wholesale_price: 45.00,
     retail_price: 89.00,
+    pieces_per_carton: 10,
     created_at: '2024-01-15',
   },
   {
@@ -63,6 +64,7 @@ export const PRODUCTS: Product[] = [
     category: 'software',
     wholesale_price: 320.00,
     retail_price: 549.00,
+    pieces_per_carton: 10,
     created_at: '2024-02-10',
   },
   {
@@ -74,6 +76,7 @@ export const PRODUCTS: Product[] = [
     category: 'giftcards',
     wholesale_price: 88.00,
     retail_price: 100.00,
+    pieces_per_carton: 10,
     created_at: '2024-03-01',
   },
   {
@@ -85,6 +88,7 @@ export const PRODUCTS: Product[] = [
     category: 'gaming',
     wholesale_price: 42.00,
     retail_price: 69.99,
+    pieces_per_carton: 10,
     created_at: '2024-03-05',
   },
   {
@@ -96,6 +100,7 @@ export const PRODUCTS: Product[] = [
     category: 'cloud',
     wholesale_price: 350.00,
     retail_price: 480.00,
+    pieces_per_carton: 10,
     created_at: '2024-03-12',
   },
   {
@@ -107,6 +112,7 @@ export const PRODUCTS: Product[] = [
     category: 'subscriptions',
     wholesale_price: 32.00,
     retail_price: 54.00,
+    pieces_per_carton: 10,
     created_at: '2024-03-15',
   },
 ];

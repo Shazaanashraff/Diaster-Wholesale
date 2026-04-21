@@ -8,7 +8,8 @@ import {
   Landmark,
   Wallet,
   BarChart2,
-  Zap
+  Zap,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -25,6 +26,7 @@ const navItems: NavItem[] = [
   { icon: FileText, label: 'Products', path: '/products' },
   { icon: Landmark, label: 'Customers', path: '/customers' },
   { icon: Wallet, label: 'Bulk Import', path: '/import' },
+  { icon: RotateCcw, label: 'Returns', path: '/returns' },
   { icon: BarChart2, label: 'Reports', path: '/reports' },
 ];
 
@@ -63,21 +65,6 @@ export const Sidebar: React.FC = () => {
           </NavLink>
         ))}
       </nav>
-
-      <div className="p-6">
-        <div className="bg-orange-50 border border-orange-100 rounded-3xl p-6 relative overflow-hidden group hover:bg-orange-100/50 transition-all duration-500">
-          <div className="relative z-10">
-            <h3 className="text-primary font-bold text-lg mb-2">Diaster</h3>
-            <p className="text-gray-500 text-xs font-semibold leading-relaxed mb-4">
-              Manage sales, inventory, and payments all in one place. Start selling faster and smarter.
-            </p>
-            <button className="w-full bg-primary text-white py-3 rounded-xl text-xs font-bold hover:bg-orange-600 transition-all shadow-lg shadow-orange-100">
-              Get Started
-            </button>
-          </div>
-          <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all"></div>
-        </div>
-      </div>
     </aside>
   );
 };

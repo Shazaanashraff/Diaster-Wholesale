@@ -1,6 +1,5 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
-import { TopBar } from './TopBar';
 
 interface LayoutWrapperProps {
   children: React.ReactNode;

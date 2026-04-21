@@ -42,3 +42,58 @@ export async function insertStockAdjustment(
 
   return row as StockAdjustment;
 }
+
+/**
+ * Fetch weighted average cost per piece for a product list.
+ * This is used by POS to prevent discounting below cost.
+ */
+export async function getAverageCostPerPiece(
+  productIds: string[]
+): Promise<Record<string, number>> {
+  if (productIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('stock_batches')
+    .select(`
+      product_id,
+      cartons,
+      loose_pieces,
+      cost_per_piece,
+      products!inner ( pieces_per_carton )
+    `)
+    .in('product_id', productIds);
+
+  if (error) {
+    console.error('getAverageCostPerPiece error:', error.message);
+    throw new Error(error.message);
+  }
+
+  const totals: Record<string, { pieces: number; cost: number }> = {};
+
+  for (const row of (data ?? []) as Array<{
+    product_id: string;
+    cartons: number;
+    loose_pieces: number;
+    cost_per_piece: number;
+    products?: { pieces_per_carton?: number } | Array<{ pieces_per_carton?: number }>;
+  }>) {
+    const product = Array.isArray(row.products) ? row.products[0] : row.products;
+    const piecesPerCarton = Number(product?.pieces_per_carton ?? 1) || 1;
+    const batchPieces = Number(row.cartons ?? 0) * piecesPerCarton + Number(row.loose_pieces ?? 0);
+    const batchCost = batchPieces * Number(row.cost_per_piece ?? 0);
+
+    if (!totals[row.product_id]) {
+      totals[row.product_id] = { pieces: 0, cost: 0 };
+    }
+
+    totals[row.product_id].pieces += batchPieces;
+    totals[row.product_id].cost += batchCost;
+  }
+
+  const averages: Record<string, number> = {};
+  for (const [productId, total] of Object.entries(totals)) {
+    averages[productId] = total.pieces > 0 ? total.cost / total.pieces : 0;
+  }
+
+  return averages;
+}

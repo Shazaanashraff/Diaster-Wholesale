@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LayoutWrapper } from './components/LayoutWrapper';
 import { DashboardPage } from './pages/DashboardPage';
 import { POSPage } from './pages/POSPage';
@@ -9,6 +9,9 @@ import { CustomersPage } from './pages/CustomersPage';
 import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { BulkImportPage } from './pages/BulkImportPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { ReturnsPage } from './pages/ReturnsPage';
+
+const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
 const App: React.FC = () => {
   return (
@@ -22,6 +25,7 @@ const App: React.FC = () => {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/import" element={<BulkImportPage />} />
+          <Route path="/returns" element={<ReturnsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />
           <Route path="*" element={<Navigate to="/" replace />} />

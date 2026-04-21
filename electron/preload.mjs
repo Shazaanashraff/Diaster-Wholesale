@@ -1,0 +1,22 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('desktop', {
+  updater: {
+    checkNow: () => ipcRenderer.invoke('updater:check-now'),
+    installNow: () => ipcRenderer.send('updater:install-now'),
+    onStatus: (callback) => {
+      if (typeof callback !== 'function') {
+        return () => {};
+      }
+
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on('updater:status', listener);
+      return () => ipcRenderer.removeListener('updater:status', listener);
+    },
+  },
+  versions: {
+    chrome: process.versions.chrome,
+    electron: process.versions.electron,
+    node: process.versions.node,
+  },
+});

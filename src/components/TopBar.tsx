@@ -1,5 +1,4 @@
 import React from 'react';
-import { Search, Bell, Command } from 'lucide-react';
 
 export const TopBar: React.FC = () => {
   return (
