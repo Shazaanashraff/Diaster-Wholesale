@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { TopBar } from '../components/TopBar';
-import { UserPlus, Phone, CreditCard, ChevronRight, Mail, MapPin, User, Hash, AlertCircle } from 'lucide-react';
+import { UserPlus, Phone, CreditCard, ChevronRight, Mail, MapPin, User, Hash, AlertCircle, Trash2, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
-import { getCustomers, createCustomer } from '../services/customerService';
+import { getCustomers, createCustomer, deleteCustomer } from '../services/customerService';
 import type { Customer } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +12,8 @@ export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -60,8 +62,21 @@ export const CustomersPage: React.FC = () => {
         credit_limit: 0,
       });
       await loadCustomers();
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!customerToDelete) return;
+    try {
+      setFormLoading(true);
+      await deleteCustomer(customerToDelete.id);
+      setIsDeleteModalOpen(false);
+      setCustomerToDelete(null);
+      await loadCustomers();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to create customer');
+      setFormError(err.message || 'Failed to delete customer');
     } finally {
       setFormLoading(false);
     }
@@ -101,14 +116,26 @@ export const CustomersPage: React.FC = () => {
                   <div className="w-20 h-20 bg-orange-50 text-primary rounded-[1.75rem] flex items-center justify-center border-2 border-orange-100 shadow-sm shadow-orange-50 group-hover:bg-primary group-hover:text-white transition-all duration-500">
                     <span className="text-3xl font-bold uppercase">{customer.name.charAt(0)}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-2">Type</p>
-                    <span className={cn(
-                      "px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                      customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
-                    )}>
-                      {customer.type}
-                    </span>
+                  <div className="flex flex-col items-end gap-3">
+                    <div className="text-right">
+                      <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-2">Type</p>
+                      <span className={cn(
+                        "px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
+                        customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                      )}>
+                        {customer.type}
+                      </span>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCustomerToDelete(customer);
+                        setIsDeleteModalOpen(true);
+                      }}
+                      className="p-2.5 rounded-xl bg-red-50 text-red-400 hover:bg-red-500 hover:text-white transition-all duration-300"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
 
@@ -271,6 +298,42 @@ export const CustomersPage: React.FC = () => {
               className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
               {formLoading ? 'SAVING...' : 'REGISTER CUSTOMER'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Customer"
+      >
+        <div className="space-y-6">
+          <div className="p-6 bg-red-50 rounded-[2rem] flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-red-500 mb-4 shadow-sm border border-red-100">
+              <AlertTriangle size={32} />
+            </div>
+            <h4 className="text-xl font-bold text-dark mb-2">Are you sure?</h4>
+            <p className="text-sm text-gray-500 font-semibold leading-relaxed">
+              You are about to delete <span className="text-red-500 font-bold">{customerToDelete?.name}</span>. 
+              This action will permanently remove the customer and all associated ledger history. This cannot be undone.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="py-4 rounded-2xl border-2 border-border/50 text-sm font-bold text-gray-400 hover:text-dark hover:border-dark/20 transition-all"
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleDeleteCustomer}
+              disabled={formLoading}
+              className="py-4 bg-red-500 text-white rounded-2xl font-bold text-sm shadow-xl shadow-red-100 hover:bg-red-600 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {formLoading ? 'DELETING...' : 'YES, DELETE'}
             </button>
           </div>
         </div>
