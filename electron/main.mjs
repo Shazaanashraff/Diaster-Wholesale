@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import electronUpdater from 'electron-updater';
+import log from 'electron-log';
 
 const { autoUpdater } = electronUpdater;
 
@@ -75,10 +76,11 @@ function configureAutoUpdater() {
 
   if (updaterAccessToken) {
     autoUpdater.requestHeaders = {
-      Authorization: `Bearer ${updaterAccessToken}`,
+      Authorization: `token ${updaterAccessToken}`,
     };
   }
 
+  autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
