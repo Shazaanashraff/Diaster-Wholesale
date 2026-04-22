@@ -137,7 +137,7 @@ export const InventoryPage: React.FC = () => {
           <div className="flex items-center gap-4">
             {/* ── Low-stock threshold control ── */}
             <div className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-border/50 rounded-2xl shadow-sm">
-              <SlidersHorizontal size={16} strokeWidth={2.5} className="text-amber-500" />
+              <SlidersHorizontal size={16} strokeWidth={2.5} className="text-indigo-500" />
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Low Stock</span>
               <input
                 type="number"
@@ -182,7 +182,7 @@ export const InventoryPage: React.FC = () => {
             <p className="text-sm font-semibold text-red-400">{error}</p>
             <button 
               onClick={fetchInventory}
-              className="px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-orange-600 transition-all"
+              className="px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all"
             >
               Try Again
             </button>
@@ -230,7 +230,7 @@ export const InventoryPage: React.FC = () => {
                       key={row.product_id} 
                       className={cn(
                         "hover:bg-accent/50 transition-colors group cursor-pointer border-b border-border/50 last:border-0",
-                        isLowStock && "bg-amber-50/60 hover:bg-amber-50"
+                        isLowStock && "bg-indigo-50/60 hover:bg-indigo-50"
                       )}
                     >
                       <td className="px-8 py-6 text-xs font-bold text-primary font-mono tracking-tighter uppercase">
@@ -250,7 +250,7 @@ export const InventoryPage: React.FC = () => {
                       <td className="px-8 py-6 text-right">
                         <span className={cn(
                           "text-sm font-bold",
-                          isLowStock ? "text-amber-600" : "text-dark"
+                          isLowStock ? "text-indigo-600" : "text-dark"
                         )}>
                           {stock.availCartons}
                         </span>
@@ -258,7 +258,7 @@ export const InventoryPage: React.FC = () => {
                       <td className="px-8 py-6 text-right">
                         <span className={cn(
                           "text-sm font-bold",
-                          isLowStock ? "text-amber-600" : "text-dark"
+                          isLowStock ? "text-indigo-600" : "text-dark"
                         )}>
                           {stock.availLoose}
                         </span>
@@ -281,11 +281,11 @@ export const InventoryPage: React.FC = () => {
                         <div className="flex items-center gap-2 justify-end">
                           <button
                             onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
-                            className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-accent hover:text-primary hover:bg-orange-50 transition-all opacity-0 group-hover:opacity-100"
+                            className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-accent hover:text-primary hover:bg-violet-50 transition-all opacity-0 group-hover:opacity-100"
                           >
                             Adjust
                           </button>
-                          <div className="p-3 rounded-2xl text-gray-200 bg-accent hover:text-primary hover:bg-orange-50 transition-all opacity-0 group-hover:opacity-100 inline-flex">
+                          <div className="p-3 rounded-2xl text-gray-200 bg-accent hover:text-primary hover:bg-violet-50 transition-all opacity-0 group-hover:opacity-100 inline-flex">
                             <ChevronRight size={18} />
                           </div>
                         </div>
@@ -389,7 +389,7 @@ export const InventoryPage: React.FC = () => {
               <button
                 onClick={handleAdjustSubmit}
                 disabled={adjSaving}
-                className="flex-1 px-6 py-3.5 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-orange-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-6 py-3.5 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {adjSaving ? (
                   <>

@@ -148,7 +148,7 @@ export const ReturnsPage: React.FC = () => {
                     className={cn(
                       'w-full text-left rounded-2xl p-4 border transition-all',
                       selectedInvoiceId === invoice.id
-                        ? 'border-primary bg-orange-50/60'
+                        ? 'border-primary bg-violet-50/60'
                         : 'border-border/60 bg-white hover:border-primary/20'
                     )}
                   >
@@ -265,7 +265,7 @@ export const ReturnsPage: React.FC = () => {
                     'w-full py-4 rounded-2xl font-bold text-sm tracking-widest transition-all',
                     processing || selectedInvoice.is_returned
                       ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                      : 'bg-primary text-white shadow-xl shadow-orange-100 hover:bg-orange-600'
+                      : 'bg-primary text-white shadow-xl shadow-violet-100 hover:bg-violet-600'
                   )}
                 >
                   {selectedInvoice.is_returned ? 'ALREADY RETURNED' : 'PROCESS RETURN'}
@@ -300,7 +300,7 @@ export const ReturnsPage: React.FC = () => {
               disabled={processing}
               className={cn(
                 'flex-1 py-3 rounded-xl text-sm font-bold text-white transition-all',
-                processing ? 'bg-orange-300 cursor-not-allowed' : 'bg-primary hover:bg-orange-600'
+                processing ? 'bg-violet-300 cursor-not-allowed' : 'bg-primary hover:bg-violet-600'
               )}
             >
               {processing ? 'PROCESSING...' : 'Confirm Return'}

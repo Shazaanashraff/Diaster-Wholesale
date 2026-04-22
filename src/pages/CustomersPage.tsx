@@ -94,7 +94,7 @@ export const CustomersPage: React.FC = () => {
           </div>
           <button 
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98]"
           >
             <UserPlus size={22} strokeWidth={2.5} /> NEW CUSTOMER
           </button>
@@ -110,10 +110,10 @@ export const CustomersPage: React.FC = () => {
               <div 
                 key={customer.id} 
                 onClick={() => navigate(`/customers/${customer.id}`)}
-                className="bg-white rounded-[2.5rem] p-8 hover:-translate-y-2 transition-all duration-500 group cursor-pointer shadow-sm border border-border/50 hover:shadow-2xl hover:shadow-orange-100/20 flex flex-col"
+                className="bg-white rounded-[2.5rem] p-8 hover:-translate-y-2 transition-all duration-500 group cursor-pointer shadow-sm border border-border/50 hover:shadow-2xl hover:shadow-violet-100/20 flex flex-col"
               >
                 <div className="flex items-start justify-between mb-8">
-                  <div className="w-20 h-20 bg-orange-50 text-primary rounded-[1.75rem] flex items-center justify-center border-2 border-orange-100 shadow-sm shadow-orange-50 group-hover:bg-primary group-hover:text-white transition-all duration-500">
+                  <div className="w-20 h-20 bg-violet-50 text-primary rounded-[1.75rem] flex items-center justify-center border-2 border-violet-100 shadow-sm shadow-violet-50 group-hover:bg-primary group-hover:text-white transition-all duration-500">
                     <span className="text-3xl font-bold uppercase">{customer.name.charAt(0)}</span>
                   </div>
                   <div className="flex flex-col items-end gap-3">
@@ -121,7 +121,7 @@ export const CustomersPage: React.FC = () => {
                       <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mb-2">Type</p>
                       <span className={cn(
                         "px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                        customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                        customer.type === 'wholesale' ? "bg-purple-50 text-purple-600 border-purple-100" : "bg-indigo-50 text-indigo-600 border-indigo-100"
                       )}>
                         {customer.type}
                       </span>
@@ -295,7 +295,7 @@ export const CustomersPage: React.FC = () => {
             <button 
               disabled={formLoading}
               onClick={handleRegister}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
+              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
             >
               {formLoading ? 'SAVING...' : 'REGISTER CUSTOMER'}
             </button>

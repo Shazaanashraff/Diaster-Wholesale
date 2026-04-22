@@ -1,8 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  CATEGORIES, 
-  PRODUCTS as mockProducts, 
-} from '../data/mockData';
+import { CATEGORIES } from '../data/mockData';
 // Ensure no redundant Type Product from mockData
 import type { Product, Customer } from '../types';
 import { getProducts } from '../services/productService';
@@ -55,11 +52,7 @@ export const POSPage: React.FC = () => {
           getInventory(),
         ]);
 
-        const resolvedProducts = fetchedProducts.length > 0
-          ? fetchedProducts
-          : (mockProducts as unknown as Product[]);
-
-        setProducts(resolvedProducts);
+        setProducts(fetchedProducts);
         
         setCustomers(fetchedCustomers);
 
@@ -72,7 +65,7 @@ export const POSPage: React.FC = () => {
           setStockPiecesByProduct(stockMap);
           setIsInventoryEnforced(true);
 
-          const costMap = await getAverageCostPerPiece(resolvedProducts.map((p) => p.id));
+          const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
           setAvgCostByProduct(costMap);
         } else {
           setStockPiecesByProduct({});
@@ -81,7 +74,7 @@ export const POSPage: React.FC = () => {
         }
       } catch (err) {
         console.error("Error loading POS data", err);
-        setProducts(mockProducts as unknown as Product[]);
+        setProducts([]);
         setStockPiecesByProduct({});
         setAvgCostByProduct({});
         setIsInventoryEnforced(false);
@@ -337,7 +330,7 @@ export const POSPage: React.FC = () => {
             const canIncreasePieces = !isInventoryEnforced || (qtyCartons * piecesPerCarton + qtyPieces + 1) <= remainingPieces;
             
             return (
-              <div key={product.id} className="bg-white rounded-[1.25rem] p-4 shadow-sm border border-border/50 group flex flex-col justify-between hover:shadow-xl hover:shadow-orange-100/20 transition-all duration-500 min-h-[250px]">
+              <div key={product.id} className="bg-white rounded-[1.25rem] p-4 shadow-sm border border-border/50 group flex flex-col justify-between hover:shadow-xl hover:shadow-violet-100/20 transition-all duration-500 min-h-[250px]">
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex-1 min-w-0">
@@ -385,7 +378,7 @@ export const POSPage: React.FC = () => {
                         disabled={!canIncreaseCartons}
                         className={cn(
                           "flex-1 py-1 rounded flex items-center justify-center transition-all shadow-sm",
-                          canIncreaseCartons ? "bg-primary text-white hover:bg-orange-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          canIncreaseCartons ? "bg-primary text-white hover:bg-violet-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
                         )}
                       >
                         <Plus size={12} strokeWidth={3} />
@@ -414,7 +407,7 @@ export const POSPage: React.FC = () => {
                         disabled={!canIncreasePieces}
                         className={cn(
                           "flex-1 py-1 rounded flex items-center justify-center transition-all shadow-sm",
-                          canIncreasePieces ? "bg-primary text-white hover:bg-orange-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          canIncreasePieces ? "bg-primary text-white hover:bg-violet-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
                         )}
                       >
                         <Plus size={12} strokeWidth={3} />
@@ -435,7 +428,7 @@ export const POSPage: React.FC = () => {
                       "w-full py-2.5 rounded-xl font-bold text-[10px] tracking-widest transition-all active:scale-[0.98] mt-1",
                       (!hasAmount || exceedsStock) 
                         ? "bg-accent text-gray-300 pointer-events-none" 
-                        : "bg-primary text-white hover:bg-orange-600 shadow-xl shadow-orange-100"
+                        : "bg-primary text-white hover:bg-violet-600 shadow-xl shadow-violet-100"
                     )}
                   >
                     ADD TO CART
@@ -578,18 +571,18 @@ export const POSPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div 
               onClick={() => setPaymentMethod('cash')}
-              className={cn("p-4 border-2 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all", paymentMethod === 'cash' ? "bg-orange-50 border-primary" : "bg-white border-border hover:border-primary/30")}
+              className={cn("p-4 border-2 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all", paymentMethod === 'cash' ? "bg-violet-50 border-primary" : "bg-white border-border hover:border-primary/30")}
             >
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm", paymentMethod === 'cash' ? "bg-white text-primary shadow-orange-100" : "bg-accent text-gray-400")}>
+              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm", paymentMethod === 'cash' ? "bg-white text-primary shadow-violet-100" : "bg-accent text-gray-400")}>
                 <Wallet size={24} />
               </div>
               <p className={cn("text-[11px] font-bold uppercase", paymentMethod === 'cash' ? "text-primary": "text-gray-400")}>Pay with Cash</p>
             </div>
             <div 
               onClick={() => setPaymentMethod('creditCard')}
-              className={cn("p-4 border-2 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all", paymentMethod === 'creditCard' ? "bg-orange-50 border-primary" : "bg-white border-border hover:border-primary/30")}
+              className={cn("p-4 border-2 rounded-3xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-all", paymentMethod === 'creditCard' ? "bg-violet-50 border-primary" : "bg-white border-border hover:border-primary/30")}
             >
-              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm", paymentMethod === 'creditCard' ? "bg-white text-primary shadow-orange-100" : "bg-accent text-gray-400")}>
+              <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm", paymentMethod === 'creditCard' ? "bg-white text-primary shadow-violet-100" : "bg-accent text-gray-400")}>
                 <CreditCard size={24} />
               </div>
               <p className={cn("text-[11px] font-bold uppercase", paymentMethod === 'creditCard' ? "text-primary": "text-gray-400")}>Pay with Card</p>
@@ -604,7 +597,7 @@ export const POSPage: React.FC = () => {
             "w-full py-5 rounded-2xl font-bold text-sm tracking-widest transition-all active:scale-[0.98]",
             !canProcessTransaction
               ? "bg-gray-100 text-gray-300 cursor-not-allowed" 
-              : "bg-primary text-white shadow-2xl shadow-orange-100 hover:bg-orange-600"
+              : "bg-primary text-white shadow-2xl shadow-violet-100 hover:bg-violet-600"
           )}
         >
           {isProcessing ? 'PROCESSING...' : 'PROCESS TRANSACTION'}
@@ -627,7 +620,7 @@ export const POSPage: React.FC = () => {
             className={cn(
               "py-8 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all group",
               selectedTable === t.toString() 
-                ? "bg-orange-50 border-primary text-primary" 
+                ? "bg-violet-50 border-primary text-primary" 
                 : "bg-white border-border/50 hover:border-primary/20 text-gray-400"
             )}
           >
@@ -650,7 +643,7 @@ export const POSPage: React.FC = () => {
       title="Transaction Success"
     >
       <div className="flex flex-col items-center justify-center py-6 text-center">
-        <div className="w-24 h-24 bg-orange-50 text-primary rounded-full flex items-center justify-center mb-8 shadow-inner shadow-orange-100">
+        <div className="w-24 h-24 bg-violet-50 text-primary rounded-full flex items-center justify-center mb-8 shadow-inner shadow-violet-100">
           <CheckCircle2 size={48} strokeWidth={2.5} />
         </div>
         <h2 className="text-2xl font-bold text-dark tracking-tight mb-2">Payment Completed!</h2>

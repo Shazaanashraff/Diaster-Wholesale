@@ -2,21 +2,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #ff6b00;
-  --color-secondary: #ffa94d;
-  --color-accent: #f8f9fa;
-  --color-dark: #1f2937;
-  --color-border: #e5e7eb;
+  --color-primary: #8b5cf6;
+  --color-secondary: #c4b5fd;
+  --color-accent: #f5f3ff;
+  --color-dark: #1e1b4b;
+  --color-border: #eef2ff;
   
-  --color-card-blue: #ff6b0010;
-  --color-card-orange: #ffa94d20;
-  --color-card-gold: #fffde7;
-  --color-card-pink: #fce4ec;
+  --color-card-purple: #8b5cf610;
+  --color-card-violet: #c4b5fd20;
+  --color-card-gold: #faf5ff;
+  --color-card-fuchsia: #fdf4ff;
 
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
-  --radius-4xl: 3rem;
+  --radius-3xl: 2.25rem;
+  --radius-4xl: 4rem;
 }
 
 @layer base {

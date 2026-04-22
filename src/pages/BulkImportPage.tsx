@@ -161,19 +161,19 @@ export const BulkImportPage: React.FC = () => {
         );
       case 'match_name':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600 border border-purple-100">
             <CheckCircle2 size={12} /> Matched by Name
           </span>
         );
       case 'new':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-100">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100">
             <Package size={12} /> New Product
           </span>
         );
       case 'conflict':
         return (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100" title={row.error_message}>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-violet-50 text-violet-600 border border-violet-100" title={row.error_message}>
             <AlertTriangle size={12} /> Duplicate Conflict
           </span>
         );
@@ -231,7 +231,7 @@ export const BulkImportPage: React.FC = () => {
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onClick={handleBrowse}
-                className="bg-white rounded-[3rem] border-4 border-dashed border-orange-50 p-16 flex flex-col items-center justify-center group hover:border-primary/20 hover:bg-orange-50/10 transition-all cursor-pointer shadow-sm"
+                className="bg-white rounded-[3rem] border-4 border-dashed border-violet-50 p-16 flex flex-col items-center justify-center group hover:border-primary/20 hover:bg-violet-50/10 transition-all cursor-pointer shadow-sm"
                 id="file-drop-zone"
               >
                 {loading ? (
@@ -298,7 +298,7 @@ export const BulkImportPage: React.FC = () => {
               <button
                 disabled={!file || loading}
                 onClick={() => file && handleFile(file)}
-                className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-orange-100 flex items-center justify-center gap-4 hover:bg-orange-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 id="start-import-btn"
               >
                 START IMPORT PROCESSING <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
@@ -318,7 +318,7 @@ export const BulkImportPage: React.FC = () => {
                     "Keys must be unique and non-duplicate."
                   ].map((note, idx) => (
                     <li key={idx} className="flex gap-4">
-                      <div className="w-6 h-6 rounded-full bg-orange-50 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-orange-100">{idx + 1}</div>
+                      <div className="w-6 h-6 rounded-full bg-violet-50 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-violet-100">{idx + 1}</div>
                       <p className="text-xs text-gray-400 leading-relaxed font-semibold">{note}</p>
                     </li>
                   ))}
@@ -332,7 +332,7 @@ export const BulkImportPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="bg-orange-50/30 rounded-[2.5rem] border border-orange-100/50 p-8">
+              <div className="bg-violet-50/30 rounded-[2.5rem] border border-violet-100/50 p-8">
                 <h3 className="font-bold text-dark mb-6 flex items-center gap-3">
                   <History size={20} className="text-primary" /> Last 48 Hours
                 </h3>
@@ -383,9 +383,9 @@ export const BulkImportPage: React.FC = () => {
                 <p className="text-2xl font-bold text-green-600">{matchedCount}</p>
                 <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-1">Matched</p>
               </div>
-              <div className="bg-amber-50 rounded-2xl border border-amber-100 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-amber-600">{newCount}</p>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mt-1">New Products</p>
+              <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm text-center">
+                <p className="text-2xl font-bold text-indigo-600">{newCount}</p>
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">New Products</p>
               </div>
               <div className="bg-red-50 rounded-2xl border border-red-100 p-5 shadow-sm text-center">
                 <p className="text-2xl font-bold text-red-600">{blockingCount}</p>
@@ -395,9 +395,9 @@ export const BulkImportPage: React.FC = () => {
 
             {/* Error warning */}
             {blockingCount > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
-                <AlertTriangle size={20} className="text-amber-500 flex-shrink-0" />
-                <p className="text-sm font-semibold text-amber-700">
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 flex items-center gap-4">
+                <AlertTriangle size={20} className="text-indigo-500 flex-shrink-0" />
+                <p className="text-sm font-semibold text-indigo-700">
                   {blockingCount} row{blockingCount > 1 ? 's are' : ' is'} blocked. Resolve duplicate conflicts or invalid rows before importing.
                 </p>
               </div>
@@ -466,7 +466,7 @@ export const BulkImportPage: React.FC = () => {
               <button
                 onClick={handleConfirm}
                 disabled={!shipmentCode.trim() || loading || conflictCount > 0}
-                className="flex-1 py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-orange-100 flex items-center justify-center gap-4 hover:bg-orange-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 id="confirm-import-btn"
               >
                 {loading ? (
@@ -481,7 +481,7 @@ export const BulkImportPage: React.FC = () => {
               </button>
             </div>
             {!shipmentCode.trim() && (
-              <p className="text-xs font-semibold text-amber-500 text-center -mt-4">
+              <p className="text-xs font-semibold text-indigo-500 text-center -mt-4">
                 Please enter a Shipment Tracking ID before confirming.
               </p>
             )}
@@ -521,10 +521,10 @@ export const BulkImportPage: React.FC = () => {
                 <p className="text-2xl font-bold text-green-600">{importSummary.matched_by_code + importSummary.matched_by_name}</p>
                 <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-1">Matched</p>
               </div>
-              <div className="bg-amber-50 rounded-2xl border border-amber-100 p-5 shadow-sm text-center">
-                <Package size={16} className="text-amber-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-amber-600">{importSummary.new_products}</p>
-                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mt-1">New Products</p>
+              <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm text-center">
+                <Package size={16} className="text-indigo-400 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-indigo-600">{importSummary.new_products}</p>
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">New Products</p>
               </div>
               <div className="bg-red-50 rounded-2xl border border-red-100 p-5 shadow-sm text-center">
                 <AlertTriangle size={16} className="text-red-400 mx-auto mb-2" />
@@ -536,7 +536,7 @@ export const BulkImportPage: React.FC = () => {
             {/* Import another */}
             <button
               onClick={resetAll}
-              className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-orange-100 flex items-center justify-center gap-4 hover:bg-orange-600 transition-all active:scale-[0.98] group tracking-widest text-sm"
+              className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm"
               id="import-another-btn"
             >
               IMPORT ANOTHER <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />

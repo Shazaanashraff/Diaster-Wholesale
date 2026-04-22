@@ -133,7 +133,7 @@ export const ProductsPage: React.FC = () => {
           </div>
           <button 
             onClick={() => { setIsAddModalOpen(true); setDuplicateWarning(null); }}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98]"
           >
             <Plus size={22} strokeWidth={2.5} /> ADD NEW ITEM
           </button>
@@ -156,7 +156,7 @@ export const ProductsPage: React.FC = () => {
             <p className="text-sm font-semibold text-red-400">{error}</p>
             <button 
               onClick={fetchProducts}
-              className="px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-orange-600 transition-all"
+              className="px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all"
             >
               Try Again
             </button>
@@ -240,11 +240,11 @@ export const ProductsPage: React.FC = () => {
         <div className="space-y-6">
           {/* ── Duplicate Warning Banner ── */}
           {duplicateWarning && (
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-              <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" />
+            <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-2xl">
+              <AlertTriangle size={18} className="text-indigo-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs font-bold text-amber-700">{duplicateWarning}</p>
-                <p className="text-[11px] text-amber-500 mt-1">Click "ADD PRODUCT" again to confirm.</p>
+                <p className="text-xs font-bold text-indigo-700">{duplicateWarning}</p>
+                <p className="text-[11px] text-indigo-500 mt-1">Click "ADD PRODUCT" again to confirm.</p>
               </div>
             </div>
           )}
@@ -339,7 +339,7 @@ export const ProductsPage: React.FC = () => {
             <button 
               onClick={handleSubmit}
               disabled={saving}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {saving && <Loader2 size={16} className="animate-spin" />}
               {editingProduct ? "SAVE CHANGES" : "ADD PRODUCT"}

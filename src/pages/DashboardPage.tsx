@@ -36,15 +36,15 @@ const chartData = [
 ];
 
 const gaugeData = [
-  { name: 'Completed', value: 92.46, color: '#ff6b00' },
+  { name: 'Completed', value: 92.46, color: '#8b5cf6' },
   { name: 'Remaining', value: 7.54, color: '#f8f9fa' },
 ];
 
 const stats = [
-  { label: 'Orders to Ship', value: '52.00', update: 'Updated 1 hr Ago', color: 'bg-blue-50', iconColor: 'text-blue-600', icon: Package },
-  { label: 'Late Orders', value: '64.00', update: 'Updated 2 hr Ago', color: 'bg-[#fff3e0]', iconColor: 'text-orange-600', icon: Clock },
-  { label: 'Open Opportunities', value: '154.00', update: 'Updated 1 hr Ago', color: 'bg-[#fffde7]', iconColor: 'text-yellow-600', icon: TrendingUp },
-  { label: 'Overdue Deals', value: '152.00', update: 'Updated 4 hr Ago', color: 'bg-[#fce4ec]', iconColor: 'text-pink-600', icon: AlertCircle },
+  { label: 'Orders to Ship', value: '52.00', update: 'Updated 1 hr Ago', color: 'bg-purple-50', iconColor: 'text-purple-600', icon: Package },
+  { label: 'Late Orders', value: '64.00', update: 'Updated 2 hr Ago', color: 'bg-[#f5f3ff]', iconColor: 'text-violet-600', icon: Clock },
+  { label: 'Open Opportunities', value: '154.00', update: 'Updated 1 hr Ago', color: 'bg-[#f0f9ff]', iconColor: 'text-indigo-600', icon: TrendingUp },
+  { label: 'Overdue Deals', value: '152.00', update: 'Updated 4 hr Ago', color: 'bg-[#fdf4ff]', iconColor: 'text-fuchsia-600', icon: AlertCircle },
 ];
 
 const customers = [
@@ -100,8 +100,8 @@ export const DashboardPage: React.FC = () => {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ff6b00" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#ff6b00" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -119,12 +119,12 @@ export const DashboardPage: React.FC = () => {
                   />
                   <Tooltip 
                     contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    cursor={{stroke: '#ff6b00', strokeWidth: 2}}
+                    cursor={{stroke: '#8b5cf6', strokeWidth: 2}}
                   />
                   <Area 
                     type="monotone" 
                     dataKey="value" 
-                    stroke="#ff6b00" 
+                    stroke="#8b5cf6" 
                     strokeWidth={3}
                     fillOpacity={1} 
                     fill="url(#colorValue)" 
@@ -221,13 +221,13 @@ export const DashboardPage: React.FC = () => {
                     <td className="py-4 px-4 text-[12px] font-semibold text-dark">{customer.phone}</td>
                     <td className="py-4 px-4 text-[12px] font-semibold text-gray-400">{customer.type}</td>
                     <td className="py-4 px-4">
-                      <span className="text-[12px] font-semibold text-blue-600 underline cursor-pointer">{customer.summary}</span>
+                      <span className="text-[12px] font-semibold text-purple-600 underline cursor-pointer">{customer.summary}</span>
                     </td>
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <span className={cn(
                           "px-4 py-1.5 rounded-full text-[11px] font-bold leading-none",
-                          customer.status === 'Open' ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-500"
+                          customer.status === 'Open' ? "bg-violet-50 text-violet-600" : "bg-purple-50 text-purple-500"
                         )}>
                           {customer.status}
                         </span>

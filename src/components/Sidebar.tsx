@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
             className={(props) => 
               cn(
                 "sidebar-link",
-                props.isActive ? "text-primary bg-orange-50/50 after:opacity-100" : "text-gray-400"
+                props.isActive ? "text-primary bg-violet-50/50 after:opacity-100" : "text-gray-400"
               )
             }
           >

@@ -130,7 +130,7 @@ export const CustomerDetailPage: React.FC = () => {
                 <h1 className="text-3xl font-bold text-dark tracking-tight">{customer.name}</h1>
                 <span className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                  customer.type === 'wholesale' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                  customer.type === 'wholesale' ? "bg-purple-50 text-purple-600 border-purple-100" : "bg-indigo-50 text-indigo-600 border-indigo-100"
                 )}>
                   {customer.type}
                 </span>
@@ -140,7 +140,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
           <button 
             onClick={openPaymentModal}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98]"
           >
             <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
           </button>
@@ -161,7 +161,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-border/50 flex items-center gap-6">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center">
               <CreditCard size={24} strokeWidth={2.5} />
             </div>
             <div>
@@ -197,7 +197,7 @@ export const CustomerDetailPage: React.FC = () => {
           {/* Invoices */}
           <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-border/50">
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-orange-50 text-primary rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-violet-50 text-primary rounded-xl flex items-center justify-center">
                 <Receipt size={24} strokeWidth={2.5} />
               </div>
               <h2 className="text-xl font-bold text-dark">Invoices</h2>
@@ -232,7 +232,7 @@ export const CustomerDetailPage: React.FC = () => {
                           <span className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
                             inv.payment_status === 'paid' ? "bg-green-50 text-green-600" :
-                            inv.payment_status === 'partial' ? "bg-amber-50 text-amber-600" :
+                            inv.payment_status === 'partial' ? "bg-indigo-50 text-indigo-600" :
                             "bg-red-50 text-red-600"
                           )}>
                             {inv.payment_status}
@@ -366,7 +366,7 @@ export const CustomerDetailPage: React.FC = () => {
                 <button 
                   disabled={paymentLoading}
                   onClick={handleRecordPayment}
-                  className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-orange-100 hover:bg-orange-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
                 >
                   {paymentLoading ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
