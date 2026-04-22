@@ -201,7 +201,7 @@ export const POSPage: React.FC = () => {
   const tax = subtotal * 0.1;
   const total = subtotal - discount + tax;
   const isBelowCost = subtotal - discount < estimatedCostFloor;
-  const canProcessTransaction = cart.length > 0 && !!selectedCustomerId && !isProcessing && !isBelowCost;
+  const canProcessTransaction = cart.length > 0 && !!selectedCustomerId && !isProcessing;
 
   const processTransaction = async () => {
     if (cart.length === 0 || !selectedCustomerId) {
@@ -209,12 +209,7 @@ export const POSPage: React.FC = () => {
       return;
     }
 
-    if (isBelowCost) {
-      setValidationMessage(
-        `Cannot process sale below cost. Minimum allowed before tax: LKR ${estimatedCostFloor.toFixed(2)}.`
-      );
-      return;
-    }
+    // Below cost is allowed as per user request, we just show the warning in UI
 
     setIsProcessing(true);
     try {
