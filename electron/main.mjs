@@ -75,7 +75,7 @@ function configureAutoUpdater() {
 
   if (updaterAccessToken) {
     autoUpdater.requestHeaders = {
-      Authorization: `token ${updaterAccessToken}`,
+      Authorization: `Bearer ${updaterAccessToken}`,
     };
   }
 
