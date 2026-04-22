@@ -75,6 +75,14 @@ function configureAutoUpdater() {
   }
 
   if (updaterAccessToken) {
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'Hesara2003',
+      repo: 'Diaster-Wholesale',
+      token: updaterAccessToken,
+      vPrefixedTagName: true,
+    });
+    
     autoUpdater.requestHeaders = {
       Authorization: `token ${updaterAccessToken}`,
     };
