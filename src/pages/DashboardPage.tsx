@@ -41,7 +41,7 @@ const gaugeData = [
 ];
 
 const stats = [
-  { label: 'Orders to Ship', value: '52.00', update: 'Updated 1 hr Ago', color: 'bg-purple-50', iconColor: 'text-purple-600', icon: Package },
+  { label: 'Orders to Ship', value: '52.00', update: 'Updated 1 hr Ago', color: 'bg-[#ede9fe]', iconColor: 'text-purple-600', icon: Package },
   { label: 'Late Orders', value: '64.00', update: 'Updated 2 hr Ago', color: 'bg-[#f5f3ff]', iconColor: 'text-violet-600', icon: Clock },
   { label: 'Open Opportunities', value: '154.00', update: 'Updated 1 hr Ago', color: 'bg-[#f0f9ff]', iconColor: 'text-indigo-600', icon: TrendingUp },
   { label: 'Overdue Deals', value: '152.00', update: 'Updated 4 hr Ago', color: 'bg-[#fdf4ff]', iconColor: 'text-fuchsia-600', icon: AlertCircle },
