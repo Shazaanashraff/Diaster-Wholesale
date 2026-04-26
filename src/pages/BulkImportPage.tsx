@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { ImportRow, ImportSummary } from '../types/import';
 import type { Shipment } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   parseExcelFile,
   classifyRows,
@@ -190,21 +191,21 @@ export const BulkImportPage: React.FC = () => {
   // RENDER
   // ═══════════════════════════════════════════════════════
   return (
-    <div className="flex flex-col min-h-screen bg-accent">
+    <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
       <TopBar />
 
-      <div className="p-10 max-w-6xl mx-auto w-full">
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold text-dark tracking-tight">Bulk Import</h1>
-          <p className="text-gray-400 text-sm font-semibold mt-1">Upload inventory files to sync digital product inventory.</p>
+      <div className="p-10 pos-page-body w-full">
+        <div className="pos-page-header mb-10 text-center" style={{ animation: 'posFadeIn 380ms ease both' }}>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Bulk Import</h1>
+          <p className="text-gray-500 text-sm font-semibold mt-1">Upload inventory files to sync digital product inventory.</p>
         </div>
 
         {/* ── Global error banner ─────────────────────── */}
         {error && (
-          <div className="mb-8 bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-4">
-            <AlertTriangle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="mb-8 bg-red-900/20 border border-red-900/30 rounded-2xl p-5 flex items-start gap-4" style={{ animation: 'posFadeIn 380ms ease' }}>
+            <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-bold text-red-700">Something went wrong</p>
+              <p className="text-sm font-bold text-red-400">Something went wrong</p>
               <p className="text-xs text-red-500 mt-1 font-semibold">{error}</p>
             </div>
           </div>
@@ -215,7 +216,7 @@ export const BulkImportPage: React.FC = () => {
         ════════════════════════════════════════════════ */}
         {step === 'upload' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2 space-y-8" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '100ms' }}>
               {/* Hidden file input */}
               <input
                 ref={fileInputRef}
@@ -231,7 +232,7 @@ export const BulkImportPage: React.FC = () => {
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onClick={handleBrowse}
-                className="bg-white rounded-[3rem] border-4 border-dashed border-violet-50 p-16 flex flex-col items-center justify-center group hover:border-primary/20 hover:bg-violet-50/10 transition-all cursor-pointer shadow-sm"
+                className="bg-[#171c23] rounded-[3rem] border-2 border-dashed border-[#2b313a] p-16 flex flex-col items-center justify-center group hover:border-primary/50 transition-all cursor-pointer shadow-sm"
                 id="file-drop-zone"
               >
                 {loading ? (
@@ -239,22 +240,22 @@ export const BulkImportPage: React.FC = () => {
                     <div className="w-24 h-24 bg-primary rounded-[2rem] flex items-center justify-center text-white mb-6 shadow-sm">
                       <Loader2 size={48} strokeWidth={2.5} className="animate-spin" />
                     </div>
-                    <h3 className="text-xl font-bold text-dark">Processing file…</h3>
+                    <h3 className="text-xl font-bold text-white">Processing file…</h3>
                     <p className="text-sm text-gray-400 font-semibold mt-2">Parsing and classifying rows</p>
                   </>
                 ) : (
                   <>
-                    <div className="w-24 h-24 bg-accent rounded-[2rem] flex items-center justify-center text-gray-300 group-hover:bg-primary group-hover:text-white transition-all duration-500 mb-6 shadow-sm border border-border/50">
+                    <div className="w-24 h-24 bg-[#1d222a] rounded-[2rem] flex items-center justify-center text-gray-500 group-hover:bg-primary group-hover:text-white transition-all duration-500 mb-6 border border-[#2b313a]">
                       <FileUp size={48} strokeWidth={2.5} />
                     </div>
-                    <h3 className="text-xl font-bold text-dark">
+                    <h3 className="text-xl font-bold text-white">
                       {file ? file.name : 'Drop your Excel file here'}
                     </h3>
-                    <p className="text-sm text-gray-400 font-semibold mt-2">
+                    <p className="text-sm text-gray-500 font-semibold mt-2">
                       Supports .xlsx, .xls, and .csv • Maximum file size: 10MB
                     </p>
                     <button
-                      className="mt-10 px-10 py-4 bg-white border-2 border-border/50 rounded-2xl text-sm font-bold text-dark hover:border-primary/20 transition-all shadow-sm"
+                      className="mt-10 px-10 py-4 bg-[#1d222a] border border-[#2b313a] rounded-2xl text-sm font-bold text-gray-300 hover:text-white hover:bg-[#2b313a] transition-all shadow-sm"
                       id="browse-files-btn"
                     >
                       BROWSE FILES
@@ -264,9 +265,9 @@ export const BulkImportPage: React.FC = () => {
               </div>
 
               {/* Shipment information */}
-              <div className="bg-white rounded-[2.5rem] border border-border/50 p-10 shadow-sm">
+              <div className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] p-10 shadow-sm">
                 <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-lg font-bold text-dark">Shipment Information</h3>
+                  <h3 className="text-lg font-bold text-white">Shipment Information</h3>
                   <Box size={22} className="text-primary" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -277,7 +278,7 @@ export const BulkImportPage: React.FC = () => {
                       placeholder="e.g. TRK-BIJ-2024"
                       value={shipmentCode}
                       onChange={(e) => setShipmentCode(e.target.value)}
-                      className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+                      className="w-full bg-[#1d222a] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white placeholder-gray-500"
                       id="shipment-code-input"
                     />
                   </div>
@@ -288,7 +289,7 @@ export const BulkImportPage: React.FC = () => {
                       placeholder="e.g. Digital Distro Ltd."
                       value={supplierName}
                       onChange={(e) => setSupplierName(e.target.value)}
-                      className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+                      className="w-full bg-[#1d222a] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white placeholder-gray-500"
                       id="supplier-name-input"
                     />
                   </div>
@@ -298,7 +299,7 @@ export const BulkImportPage: React.FC = () => {
               <button
                 disabled={!file || loading}
                 onClick={() => file && handleFile(file)}
-                className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed border border-primary/20"
                 id="start-import-btn"
               >
                 START IMPORT PROCESSING <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
@@ -306,9 +307,9 @@ export const BulkImportPage: React.FC = () => {
             </div>
 
             {/* Right sidebar */}
-            <div className="space-y-8">
-              <div className="bg-white rounded-[2.5rem] border border-border/50 p-8 shadow-sm">
-                <h3 className="font-bold text-dark mb-6 flex items-center gap-3">
+            <div className="space-y-8" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '200ms' }}>
+              <div className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] p-8 shadow-sm">
+                <h3 className="font-bold text-white mb-6 flex items-center gap-3">
                   <CheckCircle2 size={20} className="text-primary" strokeWidth={2.5} /> Quality Check
                 </h3>
                 <ul className="space-y-6">
@@ -318,33 +319,33 @@ export const BulkImportPage: React.FC = () => {
                     "Keys must be unique and non-duplicate."
                   ].map((note, idx) => (
                     <li key={idx} className="flex gap-4">
-                      <div className="w-6 h-6 rounded-full bg-violet-50 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-violet-100">{idx + 1}</div>
-                      <p className="text-xs text-gray-400 leading-relaxed font-semibold">{note}</p>
+                      <div className="w-6 h-6 rounded-full bg-indigo-900/20 text-primary text-[11px] flex-shrink-0 flex items-center justify-center font-bold border border-indigo-900/30">{idx + 1}</div>
+                      <p className="text-xs text-gray-500 leading-relaxed font-semibold">{note}</p>
                     </li>
                   ))}
                 </ul>
                 <button
                   onClick={downloadSampleTemplate}
-                  className="w-full mt-10 py-4 rounded-2xl border-2 border-border/50 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-dark hover:border-primary/20 transition-all flex items-center justify-center gap-2"
+                  className="w-full mt-10 py-4 rounded-2xl border border-[#2b313a] text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-white hover:border-primary/50 transition-all flex items-center justify-center gap-2"
                   id="download-template-btn"
                 >
                   <Download size={14} /> Download Template
                 </button>
               </div>
 
-              <div className="bg-violet-50/30 rounded-[2.5rem] border border-violet-100/50 p-8">
-                <h3 className="font-bold text-dark mb-6 flex items-center gap-3">
+              <div className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] p-8">
+                <h3 className="font-bold text-white mb-6 flex items-center gap-3">
                   <History size={20} className="text-primary" /> Last 48 Hours
                 </h3>
                 <div className="space-y-4">
                   {shipments.length === 0 ? (
-                    <p className="text-xs text-gray-400 font-semibold text-center py-4">No recent imports</p>
+                    <p className="text-xs text-gray-500 font-semibold text-center py-4">No recent imports</p>
                   ) : (
                     shipments.slice(0, 5).map((s) => (
-                      <div key={s.id} className="bg-white p-4 rounded-2xl border border-border/50 flex items-center justify-between group shadow-sm">
+                      <div key={s.id} className="bg-[#1d222a] p-4 rounded-2xl border border-[#2b313a] flex items-center justify-between group shadow-sm hover:border-primary/30 transition-colors">
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-dark truncate">{s.reference}</p>
-                          <p className="text-[10px] text-gray-400 font-bold mt-1">
+                          <p className="text-xs font-bold text-white truncate">{s.reference}</p>
+                          <p className="text-[10px] text-gray-500 font-bold mt-1">
                             {new Date(s.created_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -354,7 +355,7 @@ export const BulkImportPage: React.FC = () => {
                             setSelectedShipmentId(s.id);
                             setShowRollbackConfirm(true);
                           }}
-                          className="w-8 h-8 rounded-xl bg-accent text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all flex items-center justify-center"
+                          className="w-8 h-8 rounded-xl bg-[#171c23] text-gray-500 border border-[#2b313a] hover:text-red-400 hover:bg-red-900/20 hover:border-red-900/30 transition-all flex items-center justify-center"
                           id={`rollback-quick-${s.id}`}
                         >
                           <Trash2 size={16} />
@@ -372,76 +373,76 @@ export const BulkImportPage: React.FC = () => {
             STEP: PREVIEW
         ════════════════════════════════════════════════ */}
         {step === 'preview' && (
-          <div className="space-y-8">
+          <div className="space-y-8" style={{ animation: 'posFadeIn 400ms ease both' }}>
             {/* Summary counts */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl border border-border/50 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-dark">{parsedRows.length}</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Total Rows</p>
+              <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] p-5 shadow-sm text-center">
+                <p className="text-2xl font-bold text-white">{parsedRows.length}</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Total Rows</p>
               </div>
-              <div className="bg-green-50 rounded-2xl border border-green-100 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-green-600">{matchedCount}</p>
+              <div className="bg-green-900/20 rounded-2xl border border-green-900/30 p-5 shadow-sm text-center">
+                <p className="text-2xl font-bold text-green-400">{matchedCount}</p>
                 <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-1">Matched</p>
               </div>
-              <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-indigo-600">{newCount}</p>
+              <div className="bg-indigo-900/20 rounded-2xl border border-indigo-900/30 p-5 shadow-sm text-center">
+                <p className="text-2xl font-bold text-indigo-400">{newCount}</p>
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">New Products</p>
               </div>
-              <div className="bg-red-50 rounded-2xl border border-red-100 p-5 shadow-sm text-center">
-                <p className="text-2xl font-bold text-red-600">{blockingCount}</p>
+              <div className="bg-red-900/20 rounded-2xl border border-red-900/30 p-5 shadow-sm text-center">
+                <p className="text-2xl font-bold text-red-400">{blockingCount}</p>
                 <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Blocked Rows</p>
               </div>
             </div>
 
             {/* Error warning */}
             {blockingCount > 0 && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 flex items-center gap-4">
-                <AlertTriangle size={20} className="text-indigo-500 flex-shrink-0" />
-                <p className="text-sm font-semibold text-indigo-700">
+              <div className="bg-indigo-900/20 border border-indigo-900/30 rounded-2xl p-5 flex items-center gap-4">
+                <AlertTriangle size={20} className="text-indigo-400 flex-shrink-0" />
+                <p className="text-sm font-semibold text-indigo-300">
                   {blockingCount} row{blockingCount > 1 ? 's are' : ' is'} blocked. Resolve duplicate conflicts or invalid rows before importing.
                 </p>
               </div>
             )}
 
             {/* Preview table */}
-            <div className="bg-white rounded-[2.5rem] border border-border/50 shadow-sm overflow-hidden">
-              <div className="p-8 border-b border-border/50 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-dark flex items-center gap-3">
+            <div className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-[#2b313a] flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white flex items-center gap-3">
                   <FileSpreadsheet size={20} className="text-primary" /> Import Preview
                 </h3>
-                <p className="text-xs font-semibold text-gray-400">{file?.name}</p>
+                <p className="text-xs font-semibold text-gray-500">{file?.name}</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full" id="preview-table">
                   <thead>
-                    <tr className="border-b border-border/50">
-                      <th className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5 pl-8">#</th>
-                      <th className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5">Item Code</th>
-                      <th className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5">Name</th>
-                      <th className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5">Model</th>
-                      <th className="text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5">Cartons</th>
-                      <th className="text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5">Units/Carton</th>
-                      <th className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest p-5 pr-8">Status</th>
+                    <tr className="border-b border-[#2b313a]">
+                      <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5 pl-8">#</th>
+                      <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5">Item Code</th>
+                      <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5">Name</th>
+                      <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5">Model</th>
+                      <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5">Cartons</th>
+                      <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5">Units/Carton</th>
+                      <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest p-5 pr-8">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {parsedRows.map((row, idx) => (
                       <React.Fragment key={idx}>
-                        <tr className={`border-b border-border/30 hover:bg-accent/50 transition-colors ${row.status === 'error' || row.status === 'conflict' ? 'bg-red-50/30' : ''}`}>
-                          <td className="p-5 pl-8 text-xs font-bold text-gray-300">{idx + 1}</td>
-                          <td className="p-5 text-xs font-semibold text-dark font-mono">{row.item_code || '—'}</td>
-                          <td className="p-5 text-xs font-semibold text-dark max-w-[200px] truncate">{row.name}</td>
+                        <tr className={`border-b border-[#2b313a] hover:bg-[#1d222a] transition-colors ${row.status === 'error' || row.status === 'conflict' ? 'bg-red-900/10' : ''}`}>
+                          <td className="p-5 pl-8 text-xs font-bold text-gray-500">{idx + 1}</td>
+                          <td className="p-5 text-xs font-semibold text-white font-mono">{row.item_code || '—'}</td>
+                          <td className="p-5 text-xs font-semibold text-white max-w-[200px] truncate">{row.name}</td>
                           <td className="p-5 text-xs font-semibold text-gray-500">{row.model}</td>
-                          <td className="p-5 text-xs font-bold text-dark text-right">{row.cartons}</td>
+                          <td className="p-5 text-xs font-bold text-white text-right">{row.cartons}</td>
                           <td className="p-5 text-xs font-semibold text-gray-500 text-right">{row.units_per_carton}</td>
                           <td className="p-5 pr-8">{renderStatusBadge(row)}</td>
                         </tr>
                         {/* Show conflict/error message as a sub-row */}
                         {(row.status === 'error' || row.status === 'conflict') && row.error_message && (
-                          <tr className="bg-red-50/30">
+                          <tr className="bg-red-900/10">
                             <td />
                             <td colSpan={6} className="px-5 pb-4 pt-0">
-                              <p className="text-[11px] font-semibold text-red-500 flex items-center gap-2">
+                              <p className="text-[11px] font-semibold text-red-400 flex items-center gap-2">
                                 <AlertTriangle size={11} /> {row.error_message}
                               </p>
                             </td>
@@ -458,7 +459,7 @@ export const BulkImportPage: React.FC = () => {
             <div className="flex items-center gap-4">
               <button
                 onClick={resetAll}
-                className="px-8 py-5 bg-white border-2 border-border/50 rounded-3xl text-sm font-bold text-dark hover:border-primary/20 transition-all shadow-sm flex items-center gap-3"
+                className="px-8 py-5 bg-[#1d222a] border border-[#2b313a] rounded-3xl text-sm font-bold text-gray-300 hover:text-white hover:bg-[#2b313a] transition-all shadow-sm flex items-center gap-3"
                 id="back-btn"
               >
                 <ArrowLeft size={18} /> BACK
@@ -466,27 +467,29 @@ export const BulkImportPage: React.FC = () => {
               <button
                 onClick={handleConfirm}
                 disabled={!shipmentCode.trim() || loading || conflictCount > 0}
-                className="flex-1 py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 h-[60px] bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100/10 flex items-center justify-center relative overflow-hidden hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm disabled:opacity-40 disabled:cursor-not-allowed border border-primary/20"
                 id="confirm-import-btn"
               >
-                {loading ? (
-                  <>
-                    <Loader2 size={22} className="animate-spin" /> IMPORTING…
-                  </>
-                ) : (
-                  <>
-                    CONFIRM IMPORT <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute flex items-center gap-4">
+                      <Loader2 size={22} className="animate-spin" /> IMPORTING…
+                    </motion.div>
+                  ) : (
+                    <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute flex items-center gap-4">
+                      CONFIRM IMPORT <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </button>
             </div>
             {!shipmentCode.trim() && (
-              <p className="text-xs font-semibold text-indigo-500 text-center -mt-4">
+              <p className="text-xs font-semibold text-indigo-400 text-center -mt-4">
                 Please enter a Shipment Tracking ID before confirming.
               </p>
             )}
             {conflictCount > 0 && (
-              <p className="text-xs font-semibold text-red-500 text-center -mt-4">
+              <p className="text-xs font-semibold text-red-400 text-center -mt-4">
                 Resolve {conflictCount} duplicate conflict{conflictCount > 1 ? 's' : ''} before confirming import.
               </p>
             )}
@@ -497,38 +500,38 @@ export const BulkImportPage: React.FC = () => {
             STEP: DONE
         ════════════════════════════════════════════════ */}
         {step === 'done' && importSummary && (
-          <div className="max-w-2xl mx-auto space-y-8">
+          <div className="space-y-8" style={{ animation: 'posFadeIn 400ms ease both' }}>
             {/* Success header */}
-            <div className="bg-white rounded-[2.5rem] border border-border/50 p-12 shadow-sm text-center">
-              <div className="w-20 h-20 bg-green-50 rounded-[1.5rem] flex items-center justify-center text-green-500 mx-auto mb-6 border border-green-100">
+            <div className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] p-12 shadow-sm text-center">
+              <div className="w-20 h-20 bg-green-900/20 rounded-[1.5rem] flex items-center justify-center text-green-400 mx-auto mb-6 border border-green-900/30">
                 <CheckCircle2 size={44} strokeWidth={2.5} />
               </div>
-              <h2 className="text-2xl font-bold text-dark">Import Complete!</h2>
-              <p className="text-sm text-gray-400 font-semibold mt-2">
-                Shipment <span className="text-dark font-bold">{shipmentCode}</span> has been processed successfully.
+              <h2 className="text-2xl font-bold text-white">Import Complete!</h2>
+              <p className="text-sm text-gray-500 font-semibold mt-2">
+                Shipment <span className="text-white font-bold">{shipmentCode}</span> has been processed successfully.
               </p>
             </div>
 
             {/* Summary grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl border border-border/50 p-5 shadow-sm text-center">
-                <Hash size={16} className="text-gray-300 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-dark">{importSummary.total}</p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Total Rows</p>
+              <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] p-5 shadow-sm text-center">
+                <Hash size={16} className="text-gray-500 mx-auto mb-2" />
+                <p className="text-2xl font-bold text-white">{importSummary.total}</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Total Rows</p>
               </div>
-              <div className="bg-green-50 rounded-2xl border border-green-100 p-5 shadow-sm text-center">
+              <div className="bg-green-900/20 rounded-2xl border border-green-900/30 p-5 shadow-sm text-center">
                 <CheckCircle2 size={16} className="text-green-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-green-600">{importSummary.matched_by_code + importSummary.matched_by_name}</p>
+                <p className="text-2xl font-bold text-green-400">{importSummary.matched_by_code + importSummary.matched_by_name}</p>
                 <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-1">Matched</p>
               </div>
-              <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-5 shadow-sm text-center">
+              <div className="bg-indigo-900/20 rounded-2xl border border-indigo-900/30 p-5 shadow-sm text-center">
                 <Package size={16} className="text-indigo-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-indigo-600">{importSummary.new_products}</p>
+                <p className="text-2xl font-bold text-indigo-400">{importSummary.new_products}</p>
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-1">New Products</p>
               </div>
-              <div className="bg-red-50 rounded-2xl border border-red-100 p-5 shadow-sm text-center">
+              <div className="bg-red-900/20 rounded-2xl border border-red-900/30 p-5 shadow-sm text-center">
                 <AlertTriangle size={16} className="text-red-400 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-red-600">{importSummary.errors}</p>
+                <p className="text-2xl font-bold text-red-400">{importSummary.errors}</p>
                 <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest mt-1">Skipped</p>
               </div>
             </div>
@@ -536,7 +539,7 @@ export const BulkImportPage: React.FC = () => {
             {/* Import another */}
             <button
               onClick={resetAll}
-              className="w-full py-5 bg-primary text-white rounded-3xl font-bold shadow-2xl shadow-violet-100 flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm"
+              className="w-full py-5 bg-primary text-white rounded-3xl font-bold flex items-center justify-center gap-4 hover:bg-violet-600 transition-all active:scale-[0.98] group tracking-widest text-sm border border-primary/20"
               id="import-another-btn"
             >
               IMPORT ANOTHER <ArrowRight size={22} className="group-hover:translate-x-1 transition-transform" />
@@ -547,17 +550,17 @@ export const BulkImportPage: React.FC = () => {
         {/* ════════════════════════════════════════════════
             ROLLBACK SECTION (always visible)
         ════════════════════════════════════════════════ */}
-        <div className="mt-16 bg-white rounded-[2.5rem] border border-border/50 p-10 shadow-sm">
+        <div className="mt-16 bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] p-10 shadow-sm" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '300ms' }}>
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-lg font-bold text-dark flex items-center gap-3">
+            <h3 className="text-lg font-bold text-white flex items-center gap-3">
               <RotateCcw size={20} className="text-primary" /> Rollback Shipment
             </h3>
-            <p className="text-xs text-gray-400 font-semibold">Undo a recent import if stock hasn&apos;t been sold</p>
+            <p className="text-xs text-gray-500 font-semibold">Undo a recent import if stock hasn&apos;t been sold</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-stretch md:items-end gap-4">
             <div className="flex-1 space-y-3">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Select Shipment</label>
+              <label className="text-[11px] font-bold text-gray-500 uppercase tracking-widest pl-1">Select Shipment</label>
               <select
                 value={selectedShipmentId}
                 onChange={(e) => {
@@ -565,7 +568,7 @@ export const BulkImportPage: React.FC = () => {
                   setRollbackMessage(null);
                   setRollbackError(null);
                 }}
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none cursor-pointer"
+                className="w-full bg-[#1d222a] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none cursor-pointer text-white"
                 id="rollback-select"
               >
                 <option value="">Choose a shipment to rollback…</option>
@@ -579,30 +582,34 @@ export const BulkImportPage: React.FC = () => {
             <button
               onClick={() => setShowRollbackConfirm(true)}
               disabled={!selectedShipmentId || rollbackLoading}
-              className="px-8 py-4 bg-red-500 text-white rounded-2xl font-bold text-sm hover:bg-red-600 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-3 min-w-[160px]"
+              className="h-[52px] px-8 bg-red-900/50 text-red-400 border border-red-900/50 rounded-2xl font-bold text-sm hover:bg-red-500 hover:text-white transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden min-w-[160px]"
               id="rollback-btn"
             >
-              {rollbackLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <>
-                  <Trash2 size={16} /> ROLLBACK
-                </>
-              )}
+              <AnimatePresence mode="wait">
+                {rollbackLoading ? (
+                  <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                    <Loader2 size={18} className="animate-spin" />
+                  </motion.div>
+                ) : (
+                  <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute flex items-center gap-3">
+                    <Trash2 size={16} /> ROLLBACK
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </button>
           </div>
 
           {/* Rollback success/error messages */}
           {rollbackMessage && (
-            <div className="mt-6 bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
-              <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" />
-              <p className="text-sm font-semibold text-green-700">{rollbackMessage}</p>
+            <div className="mt-6 bg-green-900/20 border border-green-900/30 rounded-2xl p-4 flex items-center gap-3">
+              <CheckCircle2 size={18} className="text-green-400 flex-shrink-0" />
+              <p className="text-sm font-semibold text-green-400">{rollbackMessage}</p>
             </div>
           )}
           {rollbackError && (
-            <div className="mt-6 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-3">
-              <AlertTriangle size={18} className="text-red-500 flex-shrink-0" />
-              <p className="text-sm font-semibold text-red-700">{rollbackError}</p>
+            <div className="mt-6 bg-red-900/20 border border-red-900/30 rounded-2xl p-4 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
+              <p className="text-sm font-semibold text-red-400">{rollbackError}</p>
             </div>
           )}
         </div>
@@ -615,23 +622,23 @@ export const BulkImportPage: React.FC = () => {
         title="Confirm Rollback"
       >
         <div className="space-y-6">
-          <p className="text-sm text-gray-500 font-semibold">
+          <p className="text-sm text-gray-400 font-semibold">
             This will delete all stock batches associated with this shipment. This action cannot be undone.
           </p>
-          <p className="text-sm font-bold text-dark">
+          <p className="text-sm font-bold text-white">
             Shipment: {shipments.find((s) => s.id === selectedShipmentId)?.reference ?? '—'}
           </p>
           <div className="flex gap-4 pt-2">
             <button
               onClick={() => setShowRollbackConfirm(false)}
-              className="flex-1 py-4 bg-accent rounded-2xl text-sm font-bold text-dark hover:bg-gray-100 transition-all"
+              className="flex-1 py-4 bg-[#1d222a] border border-[#2b313a] rounded-2xl text-sm font-bold text-gray-400 hover:bg-[#2b313a] hover:text-white transition-all"
               id="rollback-cancel-btn"
             >
               Cancel
             </button>
             <button
               onClick={handleRollback}
-              className="flex-1 py-4 bg-red-500 text-white rounded-2xl text-sm font-bold hover:bg-red-600 transition-all active:scale-[0.98]"
+              className="flex-1 py-4 bg-red-900/50 text-red-400 border border-red-900/50 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all active:scale-[0.98]"
               id="rollback-confirm-btn"
             >
               Yes, Rollback
@@ -642,3 +649,7 @@ export const BulkImportPage: React.FC = () => {
     </div>
   );
 };
+
+
+
+

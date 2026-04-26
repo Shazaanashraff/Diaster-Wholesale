@@ -103,3 +103,18 @@ export async function checkDuplicate(
 
   return data as Product[];
 }
+
+/**
+ * Delete a product by ID.
+ */
+export async function deleteProduct(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('deleteProduct error:', error.message);
+    throw new Error(error.message);
+  }
+}

@@ -1,179 +1,321 @@
 import React, { useState, useEffect } from 'react';
-import { TopBar } from '../components/TopBar';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  ShoppingBag, 
-  Users, 
+import {
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  ShoppingBag,
+  Users,
   Calendar,
-  Loader2,
-  AlertTriangle
+  AlertTriangle,
+  Search,
+  Filter,
+  ArrowUpRight,
 } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 import { getDashboardStats, getCategoryDistribution } from '../services/reportService';
 import type { DashboardStats } from '../services/reportService';
 import { cn } from '../lib/utils';
+import { AnimatedNumber } from '../components/AnimatedNumber';
+
+const revenueData = [
+  { name: 'Jan', value: 320 },
+  { name: 'Feb', value: 480 },
+  { name: 'Mar', value: 380 },
+  { name: 'Apr', value: 620 },
+  { name: 'May', value: 550 },
+  { name: 'Jun', value: 780 },
+  { name: 'Jul', value: 690 },
+  { name: 'Aug', value: 920 },
+];
+
+const gaugeData = [
+  { name: 'Completed', value: 92.46, color: '#f8fafc' },
+  { name: 'Remaining', value: 7.54, color: '#1d222a' },
+];
+
+const tileConfig = [
+  { label: 'Total Revenue', prefix: 'LKR ', suffix: '', icon: DollarSign, color: 'bg-[#f2c8de]', trend: '+12.5%', isUp: true },
+  { label: 'Order Count',   prefix: '',     suffix: '', icon: ShoppingBag, color: 'bg-[#d7e5e8]', trend: '+8.2%',  isUp: true },
+  { label: 'Customers',     prefix: '',     suffix: '', icon: Users,       color: 'bg-[#e6d3f0]', trend: '+2.4%',  isUp: true },
+  { label: 'Success Rate',  prefix: '',     suffix: '%',icon: TrendingUp,  color: 'bg-[#d4e8f8]', trend: '+0.5%',  isUp: true },
+];
 
 export const ReportsPage: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [categoryDist, setCategoryDist] = useState<{name: string, value: number}[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats]           = useState<DashboardStats | null>(null);
+  const [categoryDist, setCategoryDist] = useState<{ name: string; value: number }[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [activeTab, setActiveTab]   = useState('Overview');
 
   useEffect(() => {
-    async function loadReports() {
+    async function load() {
       try {
         setLoading(true);
-        const [statsData, distData] = await Promise.all([
-          getDashboardStats(),
-          getCategoryDistribution()
-        ]);
-        setStats(statsData);
-        setCategoryDist(distData);
+        const [s, d] = await Promise.all([getDashboardStats(), getCategoryDistribution()]);
+        setStats(s);
+        setCategoryDist(d);
       } catch (err) {
         console.error('Error loading reports:', err);
-        setError('Failed to load real-time analytics data.');
+        setError('Failed to load analytics data.');
       } finally {
         setLoading(false);
       }
     }
-    loadReports();
+    load();
   }, []);
 
+  /* ── Loading skeleton ── */
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen bg-accent">
-        <TopBar />
-        <div className="flex-1 flex flex-col items-center justify-center py-32 gap-4">
-          <Loader2 size={36} className="animate-spin text-primary" />
-          <p className="text-sm font-semibold text-gray-400">Loading live analytics...</p>
+      <div className="pos-page-grid">
+        <div className="pos-skeleton-main">
+          <div className="pos-skeleton-search skeleton" />
+          <div className="pos-skeleton-grid">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="pos-skeleton-tile skeleton" style={{ animationDelay: `${i * 80}ms` }} />
+            ))}
+          </div>
+          <div className="mt-4 block space-y-4">
+            <div className="w-full h-[360px] rounded-xl skeleton" />
+            <div className="w-full h-[260px] rounded-xl skeleton" />
+          </div>
         </div>
+        <div className="pos-skeleton-panel" />
       </div>
     );
   }
 
+  /* ── Error state ── */
   if (error) {
     return (
-      <div className="flex flex-col min-h-screen bg-accent">
-        <TopBar />
-        <div className="flex-1 flex flex-col items-center justify-center py-32 gap-4">
-          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
-            <AlertTriangle size={28} className="text-red-400" />
+      <div className="pos-page-grid">
+        <div className="pos-main flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4" style={{ animation: 'posFadeIn 380ms ease' }}>
+            <div className="w-16 h-16 rounded-full bg-red-900/20 flex items-center justify-center border border-red-900/50">
+              <AlertTriangle size={28} className="text-red-400" />
+            </div>
+            <p className="text-sm font-semibold text-red-400">{error}</p>
           </div>
-          <p className="text-sm font-semibold text-red-400">{error}</p>
         </div>
+        <div className="pos-bill" />
       </div>
     );
   }
 
-  const statItems = [
-    { 
-      label: 'Total Revenue', 
-      value: `LKR ${stats?.totalRevenue.toLocaleString() || '0'}`, 
-      trend: '+12.5%', 
-      isUp: true, 
-      icon: DollarSign, 
-      color: 'text-primary', 
-      bg: 'bg-violet-50' 
-    },
-    { 
-      label: 'Order Count', 
-      value: stats?.totalOrders || '0', 
-      trend: '+8.2%', 
-      isUp: true, 
-      icon: ShoppingBag, 
-      color: 'text-purple-500', 
-      bg: 'bg-purple-50' 
-    },
-    { 
-      label: 'Total Customers', 
-      value: stats?.newCustomers || '0', 
-      trend: '+2.4%', 
-      isUp: true, 
-      icon: Users, 
-      color: 'text-purple-500', 
-      bg: 'bg-purple-50' 
-    },
-    { 
-      label: 'Success Rate', 
-      value: `${stats?.successRate.toFixed(1)}%`, 
-      trend: '+0.5%', 
-      isUp: true, 
-      icon: TrendingUp, 
-      color: 'text-violet-500', 
-      bg: 'bg-violet-50' 
-    },
+  const tiles = [
+    { ...tileConfig[0], value: stats?.totalRevenue  ?? 0 },
+    { ...tileConfig[1], value: stats?.totalOrders   ?? 0 },
+    { ...tileConfig[2], value: stats?.newCustomers  ?? 0 },
+    { ...tileConfig[3], value: stats?.successRate   ?? 0 },
+  ];
+
+  const successRate = stats?.successRate ?? 92;
+  const liveGauge = [
+    { name: 'Done',      value: successRate,       color: '#f8fafc' },
+    { name: 'Remaining', value: 100 - successRate, color: '#1d222a' },
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-accent">
-      <TopBar />
-      
-      <div className="p-10">
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-3xl font-bold text-dark tracking-tight">Analytics</h1>
-            <p className="text-gray-400 text-sm font-semibold mt-1">Deep dive into your store's live performance.</p>
+    <div className="pos-page-grid">
+
+      {/* ── LEFT MAIN ── */}
+      <section className="pos-main">
+
+        {/* header row */}
+        <div className="pos-main-head">
+          <label className="pos-search">
+            <Search size={18} />
+            <input placeholder="Search reports..." />
+          </label>
+          <div className="pos-mode-toggle">
+            <button type="button" className={cn(activeTab === 'Overview' && 'active')} onClick={() => setActiveTab('Overview')}>
+              Overview
+            </button>
+            <button type="button" className={cn(activeTab === 'Detailed' && 'active')} onClick={() => setActiveTab('Detailed')}>
+              Detailed
+            </button>
           </div>
-          <button className="flex items-center gap-3 px-8 py-4 bg-white border-2 border-border/50 rounded-3xl font-bold text-sm text-dark hover:border-primary/20 transition-all shadow-sm">
-            <Calendar size={22} strokeWidth={2.5} className="text-primary" /> ALL TIME
-          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-          {statItems.map((stat, i) => (
-            <div key={i} className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-border/50 hover:shadow-xl hover:shadow-violet-100/10 transition-all duration-500">
-              <div className="flex items-center justify-between mb-6">
-                <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center border border-violet-100/30 shadow-sm shadow-violet-50", stat.bg, stat.color)}>
-                  <stat.icon size={28} strokeWidth={2.5} />
-                </div>
-                <div className={cn("flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest", stat.isUp ? 'text-primary' : 'text-red-500')}>
-                  {stat.isUp ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                  {stat.trend}
-                </div>
+        {/* stat tiles */}
+        <div className="pos-tile-grid pb-2">
+          {tiles.map((t, i) => (
+            <button
+              key={i}
+              type="button"
+              className={cn('pos-tile transition-all', t.color)}
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <t.icon size={18} />
+              <h3>{t.label}</h3>
+              <p>{t.prefix}<AnimatedNumber value={t.value} />{t.suffix}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* scrollable content */}
+        <div className="px-3 overflow-y-auto pb-8 custom-scrollbar block space-y-6">
+
+          {/* area chart */}
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '200ms', padding: '1.25rem' }}>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Monthly Snapshot</p>
+                <h4 className="text-xl font-bold text-white tracking-tight">Revenue Stream</h4>
+                <strong className="text-2xl mt-1 block">
+                  LKR <AnimatedNumber value={stats?.totalRevenue ?? 0} />
+                </strong>
               </div>
-              <p className="text-xs font-bold text-gray-300 uppercase tracking-widest leading-none mb-2">{stat.label}</p>
-              <h3 className="text-2xl font-bold text-dark tracking-tighter">{stat.value}</h3>
+              <div className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] px-3 py-1.5 rounded-xl cursor-pointer">
+                <span className="text-[11px] font-bold text-gray-400">All Time</span>
+                <ArrowUpRight size={14} className="text-gray-500" />
+              </div>
+            </div>
+
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueData}>
+                  <defs>
+                    <linearGradient id="rpGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#f8fafc" stopOpacity={0.1} />
+                      <stop offset="95%" stopColor="#f8fafc" stopOpacity={0}   />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2b313a" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '12px', border: '1px solid #2b313a', background: '#1c2026', padding: '8px 12px' }}
+                    itemStyle={{ color: '#fff' }}
+                    cursor={{ stroke: '#f8fafc', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke="#f8fafc" strokeWidth={3} fillOpacity={1} fill="url(#rpGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* category distribution */}
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '300ms', padding: '1.25rem' }}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Breakdown</p>
+                <h4 className="text-lg font-bold text-white tracking-tight">Category Distribution</h4>
+              </div>
+              <button className="flex items-center gap-2 px-3 py-1.5 border border-[#2b313a] rounded-xl hover:bg-[#1d222a] transition-colors">
+                <span className="text-[11px] font-bold text-gray-400">Filter</span>
+                <Filter size={14} className="text-gray-500" />
+              </button>
+            </div>
+
+            {categoryDist.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {categoryDist.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-[#1d222a] px-3 py-2.5 rounded-xl border border-[#2b313a]"
+                    style={{ animation: 'posFadeIn 300ms ease both', animationDelay: `${i * 50}ms` }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-gray-400" />
+                      <span className="text-xs font-semibold text-gray-300 capitalize">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-bold text-white">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-600">
+                <ShoppingBag size={36} strokeWidth={1} className="mb-3 opacity-20" />
+                <p className="text-xs font-semibold">No category data yet</p>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </section>
+
+      {/* ── RIGHT BILL PANEL ── */}
+      <aside className="pos-bill">
+
+        <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
+          <h2 className="text-xl font-bold tracking-tight">Performance</h2>
+          <p className="text-xs font-semibold text-gray-500">Real-time KPI gauge</p>
+        </div>
+
+        {/* gauge */}
+        <div className="flex-1 flex flex-col items-center justify-center relative mt-6">
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie
+                data={liveGauge}
+                cx="50%" cy="100%"
+                startAngle={180} endAngle={0}
+                innerRadius={80} outerRadius={110}
+                paddingAngle={0}
+                dataKey="value"
+                stroke="none"
+              >
+                {liveGauge.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute top-[65%] flex flex-col items-center">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Success Rate</p>
+            <p className="text-4xl font-bold text-white tracking-tighter">
+              <AnimatedNumber value={successRate} />
+              <span className="text-lg text-gray-400">%</span>
+            </p>
+          </div>
+        </div>
+
+        {/* mini KPI tiles */}
+        <div className="grid grid-cols-3 gap-2 mt-auto mb-6 px-2">
+          {[
+            { label: 'Revenue', value: stats?.totalRevenue ? `${(stats.totalRevenue / 1000).toFixed(1)}k` : '—', color: 'bg-[#f2c8de]' },
+            { label: 'Orders',  value: String(stats?.totalOrders  ?? '—'), color: 'bg-[#d7e5e8]' },
+            { label: 'Clients', value: String(stats?.newCustomers ?? '—'), color: 'bg-[#e6d3f0]' },
+          ].map((item, i) => (
+            <div key={i} className="text-center bg-[#161a20] rounded-xl border border-[#1f242c] py-3 cursor-default">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <div className={cn('w-2 h-2 rounded-full', item.color)} />
+              </div>
+              <p className="text-[14px] font-bold text-white">{item.value}</p>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">{item.label}</span>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <div className="bg-white rounded-[3rem] border border-border/50 p-10 min-h-[450px] flex flex-col shadow-sm">
-            <div className="flex items-center justify-between mb-10">
-              <h3 className="text-lg font-bold text-dark tracking-tight">Live Forecast</h3>
-              <BarChart3 size={24} className="text-primary" />
+        {/* date range picker placeholder */}
+        <div className="px-1 mb-4">
+          <button className="w-full flex items-center justify-between px-4 py-3 bg-[#1d222a] border border-[#2b313a] rounded-xl hover:border-gray-500/50 transition-all">
+            <div className="flex items-center gap-2">
+              <Calendar size={16} className="text-gray-400" />
+              <span className="text-xs font-bold text-gray-400">All Time</span>
             </div>
-            <div className="flex-1 bg-accent/50 rounded-[2rem] border-4 border-dashed border-violet-50 flex flex-col items-center justify-center text-gray-400">
-              <BarChart3 size={64} strokeWidth={1} className="mb-6 opacity-20" />
-              <p className="text-sm font-semibold text-gray-400">Monthly Revenue Analytics</p>
-              <div className="mt-4 px-4 py-1.5 bg-white rounded-full text-[10px] font-bold text-gray-300 border border-border uppercase tracking-widest">Database Source Connected</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-[3rem] border border-border/50 p-10 min-h-[450px] flex flex-col shadow-sm">
-            <div className="flex items-center justify-between mb-10">
-              <h3 className="text-lg font-bold text-dark tracking-tight">Category Distribution</h3>
-              <ShoppingBag size={24} className="text-primary" />
-            </div>
-            <div className="flex-1 bg-violet-50/20 rounded-[2rem] border-4 border-dashed border-violet-50 flex flex-col items-center justify-center">
-              <div className="relative w-40 h-40 rounded-full border-[12px] border-violet-50 border-t-primary border-r-purple-100 mb-6 shadow-inner flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">{categoryDist.length} Categories</span>
-              </div>
-              <p className="text-sm font-semibold text-gray-400">Item Distribution Breakdown</p>
-              <div className="flex flex-wrap items-center justify-center gap-4 mt-6 px-10">
-                {categoryDist.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary"></div>
-                        <span className="text-[10px] font-bold text-gray-400 uppercase">{item.name} ({item.value})</span>
-                    </div>
-                ))}
-              </div>
-            </div>
-          </div>
+            <ArrowUpRight size={14} className="text-gray-600" />
+          </button>
         </div>
-      </div>
+
+        <button type="button" className="pos-submit mt-auto mb-4">
+          Generate Full Report
+        </button>
+
+      </aside>
     </div>
   );
 };

@@ -30,20 +30,20 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-dark/40 backdrop-blur-[6px]"
+            className="absolute inset-0 bg-black/60 backdrop-blur-[6px]"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-            className="relative w-full max-w-xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-border/50"
+            className="relative w-full max-w-xl bg-[#171c23] rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#2b313a]"
           >
-            <div className="flex items-center justify-between p-8 border-b border-border/50">
-              <h3 className="text-xl font-bold text-dark tracking-tight">{title}</h3>
+            <div className="flex items-center justify-between p-8 border-b border-[#2b313a]">
+              <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-xl bg-accent text-gray-400 hover:text-dark transition-all flex items-center justify-center active:scale-95"
+                className="w-10 h-10 rounded-xl bg-[#1d222a] text-gray-500 border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all flex items-center justify-center active:scale-95"
               >
                 <X size={20} />
               </button>

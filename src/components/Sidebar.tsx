@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  FileText, 
-  Landmark,
-  Wallet,
-  BarChart2,
-  Zap,
-  RotateCcw
+import {
+  Circle,
+  LayoutDashboard,
+  MonitorSmartphone,
+  Boxes,
+  Package2,
+  Users,
+  Upload,
+  RotateCcw,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -21,50 +21,52 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: ShoppingCart, label: 'POS System', path: '/pos' },
-  { icon: Package, label: 'Inventory', path: '/inventory' },
-  { icon: FileText, label: 'Products', path: '/products' },
-  { icon: Landmark, label: 'Customers', path: '/customers' },
-  { icon: Wallet, label: 'Bulk Import', path: '/import' },
+  { icon: MonitorSmartphone, label: 'POS System', path: '/pos' },
+  { icon: Boxes, label: 'Inventory', path: '/inventory' },
+  { icon: Package2, label: 'Products', path: '/products' },
+  { icon: Users, label: 'Customers', path: '/customers' },
+  { icon: Upload, label: 'Bulk Import', path: '/import' },
   { icon: RotateCcw, label: 'Returns', path: '/returns' },
-  { icon: BarChart2, label: 'Reports', path: '/reports' },
+  { icon: BarChart3, label: 'Reports', path: '/reports' },
 ];
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="w-72 h-screen bg-white flex flex-col z-20 shrink-0 border-r border-border">
-      <div className="p-8 flex items-center gap-4">
-        <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white">
-          <Zap size={22} fill="currentColor" strokeWidth={0} />
+    <aside className="pos-sidebar">
+      <div className="pos-sidebar-head">
+        <div className="pos-brand">
+          <div className="pos-brand-meta">
+            <span>Diastar</span>
+          </div>
         </div>
-        <h1 className="font-bold text-xl text-dark tracking-tight uppercase">Diaster</h1>
       </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-1">
+      <p className="pos-nav-section-label">Navigation</p>
+
+      <nav className="pos-nav">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
-            className={(props) => 
-              cn(
-                "sidebar-link",
-                props.isActive ? "text-primary bg-violet-50/50 after:opacity-100" : "text-gray-400"
-              )
-            }
+            className={({ isActive }) => cn('pos-nav-link', isActive && 'active')}
           >
-            {(props) => (
-              <>
-                <div className={cn("relative z-10", props.isActive ? "text-primary" : "text-gray-400")}>
-                  <item.icon size={20} strokeWidth={props.isActive ? 2.5 : 2} />
-                </div>
-                <span className={cn("text-[13px] font-semibold", props.isActive ? "text-dark" : "text-gray-400")}>
-                  {item.label}
-                </span>
-              </>
-            )}
+            <span className="pos-nav-icon">
+              <item.icon size={16} />
+            </span>
+            <span className="pos-nav-text">{item.label}</span>
           </NavLink>
         ))}
       </nav>
+
+      <div className="pos-users mt-auto">
+        {['Leslie K.', 'Cameron W.', 'Jacob J.'].map((name) => (
+          <div key={name} className="pos-user-chip">
+            <span>{name[0]}</span>
+            <p>{name}</p>
+          </div>
+        ))}
+        <div className="pos-footer-note">2026 Diastar App</div>
+      </div>
     </aside>
   );
 };
