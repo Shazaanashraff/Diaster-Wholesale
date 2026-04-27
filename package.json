@@ -60,12 +60,15 @@
   "build": {
     "appId": "com.diaster.wholesale",
     "productName": "Diaster Wholesale",
+    "icon": "build/icon.png",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "build/icon.ico",
+      "build/icon.png",
       "package.json"
     ],
     "asar": true,
@@ -78,6 +81,7 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         {

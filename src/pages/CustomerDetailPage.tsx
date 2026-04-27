@@ -7,6 +7,8 @@ import { Modal } from '../components/Modal';
 import { getCustomerById, getCustomerLedger, recordPayment } from '../services/customerService';
 import { getRemainingCredit } from '../utils/creditCheck';
 import type { Customer, Invoice, Payment } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatedNumber } from '../components/AnimatedNumber';
 
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -90,10 +92,22 @@ export const CustomerDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen bg-accent">
+      <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
         <TopBar />
-        <div className="flex justify-center items-center flex-1">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <div className="p-10 pos-page-body w-full">
+          <div className="flex items-center gap-4 mb-8">
+            <div className="w-12 h-12 rounded-full skeleton"></div>
+            <div className="w-48 h-10 rounded-xl skeleton"></div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-32 rounded-3xl skeleton" style={{ animationDelay: `${i * 100}ms` }}></div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+            <div className="h-96 rounded-[2.5rem] skeleton" style={{ animationDelay: '300ms' }}></div>
+            <div className="h-96 rounded-[2.5rem] skeleton" style={{ animationDelay: '400ms' }}></div>
+          </div>
         </div>
       </div>
     );
@@ -101,7 +115,7 @@ export const CustomerDetailPage: React.FC = () => {
 
   if (!customer) {
     return (
-      <div className="flex flex-col min-h-screen bg-accent">
+      <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
         <TopBar />
         <div className="p-10 text-center text-gray-500 font-bold">Customer not found</div>
       </div>
@@ -112,35 +126,35 @@ export const CustomerDetailPage: React.FC = () => {
   const unpaidInvoices = invoices.filter(i => i.payment_status !== 'paid');
 
   return (
-    <div className="flex flex-col min-h-screen bg-accent">
+    <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
       <TopBar />
       
-      <div className="p-10 max-w-7xl mx-auto w-full">
+      <div className="p-10 pos-page-body w-full">
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div className="pos-page-header flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4" style={{ animation: 'posFadeIn 380ms ease both' }}>
           <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate('/customers')}
-              className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-gray-400 hover:text-dark hover:shadow-md transition-all"
+              className="w-12 h-12 bg-[#1d222a] rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2b313a] border border-[#2b313a] transition-all"
             >
               <ArrowLeft size={20} strokeWidth={2.5} />
             </button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-dark tracking-tight">{customer.name}</h1>
+                <h1 className="text-3xl font-bold text-white tracking-tight">{customer.name}</h1>
                 <span className={cn(
-                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border-2",
-                  customer.type === 'wholesale' ? "bg-purple-50 text-purple-600 border-purple-100" : "bg-indigo-50 text-indigo-600 border-indigo-100"
+                  "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent",
+                  customer.type === 'wholesale' ? "bg-purple-900/30 text-purple-400 border-purple-900/50" : "bg-indigo-900/30 text-indigo-400 border-indigo-900/50"
                 )}>
                   {customer.type}
                 </span>
               </div>
-              <p className="text-gray-400 text-sm font-semibold mt-1">Customer Ledger & History</p>
+              <p className="text-gray-500 text-sm font-semibold mt-1">Customer Ledger & History</p>
             </div>
           </div>
           <button 
             onClick={openPaymentModal}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm hover:bg-violet-600 transition-all active:scale-[0.98]"
           >
             <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
           </button>
@@ -148,44 +162,44 @@ export const CustomerDetailPage: React.FC = () => {
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-border/50 flex items-center gap-6">
-            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center">
+          <div className="bg-[#171c23] rounded-3xl p-6 border border-[#2b313a] flex items-center gap-6" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '100ms' }}>
+            <div className="w-14 h-14 rounded-2xl bg-red-900/20 text-red-400 flex items-center justify-center border border-red-900/30">
               <PieChart size={24} strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">Outstanding Balance</p>
-              <p className={cn("text-2xl font-bold tracking-tighter", (customer.outstanding_balance || 0) > 0 ? "text-red-500" : "text-dark")}>
-                Rs. {(customer.outstanding_balance || 0).toLocaleString()}
+              <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1">Outstanding Balance</p>
+              <p className={cn("text-2xl font-bold tracking-tighter", (customer.outstanding_balance || 0) > 0 ? "text-red-400" : "text-white")}>
+                Rs. <AnimatedNumber value={customer.outstanding_balance || 0} />
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-border/50 flex items-center gap-6">
-            <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center">
+          <div className="bg-[#171c23] rounded-3xl p-6 border border-[#2b313a] flex items-center gap-6" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '200ms' }}>
+            <div className="w-14 h-14 rounded-2xl bg-purple-900/20 text-purple-400 flex items-center justify-center border border-purple-900/30">
               <CreditCard size={24} strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">Credit Limit</p>
-              <p className="text-2xl font-bold tracking-tighter text-dark">
-                {(customer.credit_limit || 0) > 0 ? `Rs. ${(customer.credit_limit || 0).toLocaleString()}` : 'No Limit'}
+              <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1">Credit Limit</p>
+              <p className="text-2xl font-bold tracking-tighter text-white">
+                {(customer.credit_limit || 0) > 0 ? <>Rs. <AnimatedNumber value={customer.credit_limit || 0} /></> : 'No Limit'}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-border/50 flex items-center gap-6">
-            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center", 
-              remainingCredit === Infinity ? "bg-gray-50 text-gray-400" :
-              remainingCredit > 0 ? "bg-green-50 text-green-500" : "bg-red-50 text-red-500"
+          <div className="bg-[#171c23] rounded-3xl p-6 border border-[#2b313a] flex items-center gap-6" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '300ms' }}>
+            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center border", 
+              remainingCredit === Infinity ? "bg-[#1d222a] text-gray-400 border-[#2b313a]" :
+              remainingCredit > 0 ? "bg-green-900/20 text-green-400 border-green-900/30" : "bg-red-900/20 text-red-400 border-red-900/30"
             )}>
               <Wallet size={24} strokeWidth={2.5} />
             </div>
             <div>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mb-1">Remaining Credit</p>
+              <p className="text-[11px] text-gray-500 font-bold uppercase tracking-widest mb-1">Remaining Credit</p>
               <p className={cn("text-2xl font-bold tracking-tighter", 
-                remainingCredit === Infinity ? "text-dark" :
-                remainingCredit > 0 ? "text-green-500" : "text-red-500"
+                remainingCredit === Infinity ? "text-white" :
+                remainingCredit > 0 ? "text-green-400" : "text-red-400"
               )}>
-                {remainingCredit === Infinity ? 'Unlimited' : `Rs. ${remainingCredit.toLocaleString()}`}
+                {remainingCredit === Infinity ? 'Unlimited' : <>Rs. <AnimatedNumber value={remainingCredit} /></>}
               </p>
             </div>
           </div>
@@ -195,45 +209,45 @@ export const CustomerDetailPage: React.FC = () => {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
           
           {/* Invoices */}
-          <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-border/50">
+          <div className="bg-[#171c23] rounded-[2.5rem] p-8 border border-[#2b313a]" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '400ms' }}>
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-violet-50 text-primary rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-indigo-900/20 text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-900/30">
                 <Receipt size={24} strokeWidth={2.5} />
               </div>
-              <h2 className="text-xl font-bold text-dark">Invoices</h2>
+              <h2 className="text-xl font-bold text-white">Invoices</h2>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-border/50">
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">No.</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">Total</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
+                  <tr className="border-b-2 border-[#2b313a]">
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">No.</th>
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Total</th>
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoices.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-sm text-gray-400 font-semibold">No invoices found</td>
+                      <td colSpan={4} className="py-8 text-center text-sm text-gray-500 font-semibold">No invoices found</td>
                     </tr>
                   ) : (
                     invoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-border/50 hover:bg-slate-50 transition-colors">
-                        <td className="py-4 text-sm font-bold text-dark">{inv.invoice_no}</td>
-                        <td className="py-4 text-sm font-semibold text-gray-500">
+                      <tr key={inv.id} className="border-b border-[#2b313a] hover:bg-[#1d222a] transition-colors">
+                        <td className="py-4 text-sm font-bold text-white">{inv.invoice_no}</td>
+                        <td className="py-4 text-sm font-semibold text-gray-400">
                           {new Date(inv.created_at).toLocaleDateString()}
                         </td>
-                        <td className="py-4 text-sm font-bold text-dark text-right">
+                        <td className="py-4 text-sm font-bold text-white text-right">
                           Rs. {(inv.total || 0).toLocaleString()}
                         </td>
                         <td className="py-4 text-center">
                           <span className={cn(
                             "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                            inv.payment_status === 'paid' ? "bg-green-50 text-green-600" :
-                            inv.payment_status === 'partial' ? "bg-indigo-50 text-indigo-600" :
-                            "bg-red-50 text-red-600"
+                            inv.payment_status === 'paid' ? "bg-green-900/30 text-green-400" :
+                            inv.payment_status === 'partial' ? "bg-indigo-900/30 text-indigo-400" :
+                            "bg-red-900/30 text-red-400"
                           )}>
                             {inv.payment_status}
                           </span>
@@ -247,42 +261,42 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
 
           {/* Payments */}
-          <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-border/50">
+          <div className="bg-[#171c23] rounded-[2.5rem] p-8 border border-[#2b313a]" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '500ms' }}>
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-green-50 text-green-500 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-green-900/20 text-green-400 rounded-xl flex items-center justify-center border border-green-900/30">
                 <ClipboardList size={24} strokeWidth={2.5} />
               </div>
-              <h2 className="text-xl font-bold text-dark">Payment History</h2>
+              <h2 className="text-xl font-bold text-white">Payment History</h2>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-border/50">
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Linked To</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-400 uppercase tracking-widest text-right">Amount</th>
+                  <tr className="border-b-2 border-[#2b313a]">
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Linked To</th>
+                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-8 text-center text-sm text-gray-400 font-semibold">No payments found</td>
+                      <td colSpan={3} className="py-8 text-center text-sm text-gray-500 font-semibold">No payments found</td>
                     </tr>
                   ) : (
                     payments.map((pay) => {
                       const linkedInv = pay.invoice_id ? invoices.find(i => i.id === pay.invoice_id) : null;
                       return (
-                        <tr key={pay.id} className="border-b border-border/50 hover:bg-slate-50 transition-colors">
-                          <td className="py-4 text-sm font-semibold text-gray-500">
+                        <tr key={pay.id} className="border-b border-[#2b313a] hover:bg-[#1d222a] transition-colors">
+                          <td className="py-4 text-sm font-semibold text-gray-400">
                             {new Date(pay.paid_at).toLocaleDateString()}
                           </td>
                           <td className="py-4">
-                            <span className="text-sm font-bold text-dark">
+                            <span className="text-sm font-bold text-white">
                               {linkedInv ? linkedInv.invoice_no : 'General'}
                             </span>
                           </td>
-                          <td className="py-4 text-sm font-bold text-green-600 text-right">
+                          <td className="py-4 text-sm font-bold text-green-400 text-right">
                             + Rs. {(pay.amount || 0).toLocaleString()}
                           </td>
                         </tr>
@@ -306,16 +320,16 @@ export const CustomerDetailPage: React.FC = () => {
         <div className="space-y-6">
           {paymentSuccess ? (
             <div className="py-8 flex flex-col items-center justify-center text-center">
-              <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mb-6">
+              <div className="w-20 h-20 bg-green-900/20 text-green-400 rounded-full flex items-center justify-center mb-6 border border-green-900/30">
                 <CheckCircle2 size={40} strokeWidth={2.5} />
               </div>
-              <h3 className="text-2xl font-bold text-dark mb-2">Payment Recorded!</h3>
-              <p className="text-sm font-semibold text-gray-500">The ledger has been updated successfully.</p>
+              <h3 className="text-2xl font-bold text-white mb-2">Payment Recorded!</h3>
+              <p className="text-sm font-semibold text-gray-400">The ledger has been updated successfully.</p>
             </div>
           ) : (
             <>
               {paymentError && (
-                <div className="p-3 bg-red-50 text-red-500 text-sm font-bold rounded-xl">
+                <div className="p-3 bg-red-900/20 text-red-400 text-sm font-bold rounded-xl border border-red-900/30">
                   {paymentError}
                 </div>
               )}
@@ -330,7 +344,7 @@ export const CustomerDetailPage: React.FC = () => {
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value ? Number(e.target.value) : ('' as any))}
                   placeholder="e.g. 5000" 
-                  className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-xl font-bold outline-none transition-all"
+                  className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-xl font-bold outline-none transition-all text-white placeholder-gray-500"
                 />
               </div>
 
@@ -342,7 +356,7 @@ export const CustomerDetailPage: React.FC = () => {
                   <select 
                     value={selectedInvoiceId}
                     onChange={(e) => setSelectedInvoiceId(e.target.value)}
-                    className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none pr-12"
+                    className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none pr-12 text-white"
                   >
                     <option value="general">General Payment (No Invoice)</option>
                     {unpaidInvoices.map(inv => (
@@ -351,7 +365,7 @@ export const CustomerDetailPage: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                  <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={16} />
                 </div>
               </div>
 
@@ -359,18 +373,26 @@ export const CustomerDetailPage: React.FC = () => {
                 <button 
                   disabled={paymentLoading}
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="w-full py-4 rounded-2xl border-2 border-border/50 text-sm font-bold text-gray-400 hover:text-dark hover:border-dark/20 transition-all disabled:opacity-50"
+                  className="w-full py-4 rounded-2xl border border-[#2b313a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all disabled:opacity-50"
                 >
                   CANCEL
                 </button>
                 <button 
-                  disabled={paymentLoading}
+                  disabled={paymentLoading || !paymentAmount}
                   onClick={handleRecordPayment}
-                  className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                  className="w-full h-[52px] bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden border border-primary/20"
                 >
-                  {paymentLoading ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : 'CONFIRM PAYMENT'}
+                  <AnimatePresence mode="wait">
+                    {paymentLoading ? (
+                      <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        CONFIRM PAYMENT
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </button>
               </div>
             </>
@@ -380,3 +402,7 @@ export const CustomerDetailPage: React.FC = () => {
     </div>
   );
 };
+
+
+
+

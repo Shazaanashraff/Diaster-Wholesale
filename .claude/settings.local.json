@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Dell/Desktop/Diaster Wholesale/**)",
+      "Bash(find . -type d \\\\\\( -name \"src\" -o -name \"supabase\" \\\\\\))",
+      "Read(//c/c/Users/Dell/Desktop/Diaster Wholesale/**)",
+      "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/components/**)",
+      "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/pages/**)",
+      "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/services/**)"
+    ]
+  }
+}

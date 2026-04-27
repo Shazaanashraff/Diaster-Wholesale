@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -26,6 +27,14 @@ function sendUpdaterStatus(status, data = {}) {
   mainWindow.webContents.send('updater:status', { status, ...data });
 }
 
+function resolveIcon() {
+  const candidates = [
+    path.join(__dirname, '..', 'build', 'icon.ico'),
+    path.join(__dirname, '..', 'build', 'icon.png'),
+  ];
+  return candidates.find(existsSync) ?? undefined;
+}
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -33,6 +42,7 @@ function createMainWindow() {
     minWidth: 1100,
     minHeight: 700,
     autoHideMenuBar: true,
+    icon: resolveIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,

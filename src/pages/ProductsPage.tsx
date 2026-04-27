@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TopBar } from '../components/TopBar';
-import { Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, deleteProduct } from '../services/productService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -122,114 +122,154 @@ export const ProductsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-accent">
-      <TopBar />
-      
-      <div className="p-10">
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h1 className="text-3xl font-bold text-dark tracking-tight">Product Catalog</h1>
-            <p className="text-gray-400 text-sm font-semibold mt-1">Add or update your digital goods and pricing.</p>
+    <div className="flex h-screen bg-transparent">
+      <section className="pos-main flex-1 border-r-0 max-w-full">
+        <div className="pos-main-head w-full max-w-7xl mx-auto px-3">
+          <label className="pos-search">
+            <Search size={18} />
+            <input 
+              type="text" 
+              placeholder="Search catalog..." 
+            />
+          </label>
+          <div className="pos-mode-toggle">
+            <button 
+              onClick={() => fetchProducts()}
+              className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#1d222a] rounded-lg transition-colors border border-transparent hover:border-[#2b313a] text-gray-400 hover:text-white"
+            >
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
+            </button>
+            <div className="w-[1px] h-4 bg-[#2b313a] mx-1"></div>
+            <button className="flex items-center gap-2">
+              <Filter size={14} /> Filter
+            </button>
+            <button 
+              onClick={() => { setIsAddModalOpen(true); setDuplicateWarning(null); }}
+              className="active flex items-center gap-2 text-primary ml-2 hover:opacity-80 transition-opacity whitespace-nowrap"
+            >
+              <Plus size={16} strokeWidth={3} />
+              <span className="text-xs font-bold uppercase tracking-widest">New</span>
+            </button>
           </div>
-          <button 
-            onClick={() => { setIsAddModalOpen(true); setDuplicateWarning(null); }}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98]"
-          >
-            <Plus size={22} strokeWidth={2.5} /> ADD NEW ITEM
-          </button>
         </div>
 
         {/* ── Loading State ── */}
         {loading && (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <Loader2 size={36} className="animate-spin text-primary" />
-            <p className="text-sm font-semibold text-gray-400">Loading products...</p>
+          <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block">
+            <div className="grid grid-cols-1 gap-4 w-full mt-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-32 rounded-xl skeleton hover:bg-transparent border-0" style={{ animationDelay: `${i * 100}ms` }} />
+              ))}
+            </div>
           </div>
         )}
 
         {/* ── Error State ── */}
         {error && !loading && (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
-              <AlertTriangle size={28} className="text-red-400" />
+          <div className="pos-product-grid px-3">
+            <div className="flex flex-col items-center justify-center py-32 gap-4 w-full" style={{ animation: 'posFadeIn 380ms ease' }}>
+              <div className="w-16 h-16 rounded-full bg-red-900/20 flex items-center justify-center border border-red-900/50">
+                <AlertTriangle size={28} className="text-red-400" />
+              </div>
+              <p className="text-sm font-semibold text-red-400">{error}</p>
+              <button 
+                onClick={fetchProducts}
+                className="px-6 py-3 bg-[#1d222a] text-white rounded-2xl font-bold text-sm border border-[#2b313a] hover:bg-[#2b313a] transition-all"
+              >
+                Try Again
+              </button>
             </div>
-            <p className="text-sm font-semibold text-red-400">{error}</p>
-            <button 
-              onClick={fetchProducts}
-              className="px-6 py-3 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all"
-            >
-              Try Again
-            </button>
           </div>
         )}
 
         {/* ── Empty State ── */}
         {!loading && !error && products.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center border border-border/50">
-              <Package size={28} className="text-gray-300" />
+          <div className="pos-product-grid px-3">
+            <div className="flex flex-col items-center justify-center py-32 gap-4 w-full" style={{ animation: 'posFadeIn 380ms ease' }}>
+              <div className="w-16 h-16 rounded-full bg-[#1d222a] flex items-center justify-center border border-[#2b313a]">
+                <Package size={28} className="text-gray-500" />
+              </div>
+              <p className="text-sm font-semibold text-gray-500">No products yet. Add your first item!</p>
             </div>
-            <p className="text-sm font-semibold text-gray-400">No products yet. Add your first item!</p>
           </div>
         )}
 
         {/* ── Product List ── */}
         {!loading && !error && products.length > 0 && (
-          <div className="grid grid-cols-1 gap-6">
-            {products.map((product) => (
-              <div key={product.id} className="bg-white rounded-[2rem] p-6 flex items-center justify-between hover:border-primary/20 transition-all duration-300 group shadow-sm border border-border/50">
-                <div className="flex items-center gap-8">
-                  <div>
-                    <div className="flex items-center gap-4 mb-3">
-                      <h3 className="text-xl font-bold text-dark">{product.name}</h3>
-                      <span className="px-3 py-1 bg-accent border border-border text-[9px] font-bold text-gray-500 uppercase rounded-full tracking-widest">{product.category}</span>
-                    </div>
-                    <div className="flex items-center gap-6 text-gray-400">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold tracking-widest text-gray-300">Item Code</span>
-                        <p className="text-xs font-bold text-primary font-mono">{product.item_code}</p>
+          <div className="px-3 overflow-y-auto pb-8 custom-scrollbar">
+            <div className="grid grid-cols-1 gap-6 w-full mt-2 max-w-7xl mx-auto">
+              <AnimatePresence>
+                {products.map((product) => (
+                  <motion.div 
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, height: 0, marginBottom: 0, overflow: 'hidden' }}
+                    transition={{ duration: 0.2 }}
+                    key={product.id} 
+                    className="bg-[#171c23] rounded-[2rem] p-6 flex flex-row items-center justify-between hover:border-primary/50 transition-all duration-300 group border border-[#2b313a]"
+                  >
+                    <div className="flex items-center gap-8">
+                      <div>
+                        <div className="flex items-center gap-4 mb-3">
+                          <h3 className="text-xl font-bold text-white">{product.name}</h3>
+                          <span className="px-3 py-1 bg-[#1d222a] border border-[#2b313a] text-[9px] font-bold text-gray-400 uppercase rounded-full tracking-widest">{product.category}</span>
+                        </div>
+                        <div className="flex items-center gap-6 text-gray-500">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Item Code</span>
+                            <p className="text-xs font-bold text-primary font-mono">{product.item_code}</p>
+                          </div>
+                          <div className="w-px h-6 bg-[#2b313a]"></div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Model</span>
+                            <p className="text-xs font-bold text-gray-300">{product.model}</p>
+                          </div>
+                          <div className="w-px h-6 bg-[#2b313a]"></div>
+                          <p className="text-xs font-semibold text-gray-500 max-w-sm line-clamp-1 italic">{product.description}</p>
+                        </div>
                       </div>
-                      <div className="w-px h-6 bg-border"></div>
-                      <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold tracking-widest text-gray-300">Model</span>
-                        <p className="text-xs font-bold text-dark">{product.model}</p>
-                      </div>
-                      <div className="w-px h-6 bg-border"></div>
-                      <p className="text-xs font-semibold text-gray-400 max-w-sm line-clamp-1 italic">{product.description}</p>
                     </div>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-16">
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5 leading-none">Wholesale</p>
-                    <p className="text-xl font-bold text-dark tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Retail</p>
-                    <p className="text-2xl font-bold text-primary tracking-tighter">LKR {product.retail_price.toFixed(2)}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => handleEdit(product)}
-                      className="w-12 h-12 rounded-2xl bg-accent text-gray-400 hover:text-dark hover:bg-gray-200 transition-all flex items-center justify-center"
-                    >
-                      <Edit2 size={20} />
-                    </button>
-                    <button className="w-12 h-12 rounded-2xl bg-accent text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all flex items-center justify-center">
-                      <Trash2 size={20} />
-                    </button>
-                    <div className="w-px h-8 bg-border"></div>
-                    <button className="w-12 h-12 rounded-2xl bg-white border border-border text-gray-400 hover:text-dark transition-all flex items-center justify-center shadow-sm">
-                      <MoreVertical size={20} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                    <div className="flex items-center gap-16">
+                      <div className="text-right">
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Wholesale</p>
+                        <p className="text-xl font-bold text-gray-300 tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Retail</p>
+                        <p className="text-2xl font-bold text-primary tracking-tighter">LKR {product.retail_price.toFixed(2)}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={() => handleEdit(product)}
+                          className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all flex items-center justify-center border border-[#2b313a]"
+                        >
+                          <Edit2 size={20} />
+                        </button>
+                        <button 
+                          onClick={async () => {
+                            if (confirm('Are you sure you want to delete this product?')) {
+                              await deleteProduct(product.id);
+                              setProducts(prev => prev.filter(p => p.id !== product.id));
+                            }
+                          }}
+                          className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
+                          <Trash2 size={20} />
+                        </button>
+                        <div className="w-px h-8 bg-[#2b313a]"></div>
+                        <button className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center">
+                          <MoreVertical size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
           </div>
         )}
-      </div>
+      </section>
 
       {/* ADD/EDIT MODAL */}
       <Modal 
@@ -339,10 +379,19 @@ export const ProductsPage: React.FC = () => {
             <button 
               onClick={handleSubmit}
               disabled={saving}
-              className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full h-[56px] bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100/10 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
-              {saving && <Loader2 size={16} className="animate-spin" />}
-              {editingProduct ? "SAVE CHANGES" : "ADD PRODUCT"}
+              <AnimatePresence mode="wait">
+                {saving ? (
+                  <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                    <Loader2 size={20} className="animate-spin" />
+                  </motion.div>
+                ) : (
+                  <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                    {editingProduct ? "SAVE CHANGES" : "ADD PRODUCT"}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </button>
           </div>
         </div>
@@ -350,3 +399,6 @@ export const ProductsPage: React.FC = () => {
     </div>
   );
 };
+
+
+

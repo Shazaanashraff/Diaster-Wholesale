@@ -13,7 +13,6 @@ export const checkout = async (
   isWholesale: boolean,
   subtotal: number,
   discount: number,
-  tax: number,
   total: number,
   paymentMethod: string
 ) => {
@@ -77,7 +76,6 @@ export const checkout = async (
         discount,
         total,
         payment_status: paymentMethod === 'credit' ? 'unpaid' : 'paid',
-        notes: `Tax: ${tax.toFixed(2)}`,
       })
       .select('id')
       .single();
