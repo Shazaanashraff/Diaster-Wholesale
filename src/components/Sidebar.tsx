@@ -10,6 +10,8 @@ import {
   Upload,
   RotateCcw,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -17,6 +19,11 @@ interface NavItem {
   icon: React.ElementType;
   label: string;
   path: string;
+}
+
+interface SidebarProps {
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
 const navItems: NavItem[] = [
@@ -30,18 +37,31 @@ const navItems: NavItem[] = [
   { icon: BarChart3, label: 'Reports', path: '/reports' },
 ];
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   return (
-    <aside className="pos-sidebar">
+    <aside className={cn('pos-sidebar', collapsed && 'sidebar-collapsed')}>
       <div className="pos-sidebar-head">
         <div className="pos-brand">
-          <div className="pos-brand-meta">
-            <span>Diastar</span>
+          <div className="pos-brand-logo">
+            <Circle size={12} />
           </div>
+          {!collapsed && (
+            <div className="pos-brand-meta">
+              <span>Diastar</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="pos-sidebar-toggle"
+            onClick={onToggle}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+          </button>
         </div>
       </div>
 
-      <p className="pos-nav-section-label">Navigation</p>
+      {!collapsed && <p className="pos-nav-section-label">Navigation</p>}
 
       <nav className="pos-nav">
         {navItems.map((item) => (
@@ -49,23 +69,24 @@ export const Sidebar: React.FC = () => {
             key={item.path}
             to={item.path}
             className={({ isActive }) => cn('pos-nav-link', isActive && 'active')}
+            title={collapsed ? item.label : undefined}
           >
             <span className="pos-nav-icon">
               <item.icon size={16} />
             </span>
-            <span className="pos-nav-text">{item.label}</span>
+            {!collapsed && <span className="pos-nav-text">{item.label}</span>}
           </NavLink>
         ))}
       </nav>
 
       <div className="pos-users mt-auto">
         {['Leslie K.', 'Cameron W.', 'Jacob J.'].map((name) => (
-          <div key={name} className="pos-user-chip">
+          <div key={name} className="pos-user-chip" title={collapsed ? name : undefined}>
             <span>{name[0]}</span>
-            <p>{name}</p>
+            {!collapsed && <p>{name}</p>}
           </div>
         ))}
-        <div className="pos-footer-note">2026 Diastar App</div>
+        {!collapsed && <div className="pos-footer-note">2026 Diastar App</div>}
       </div>
     </aside>
   );

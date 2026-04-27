@@ -9,7 +9,6 @@ import {
   Calendar,
   AlertTriangle,
   Search,
-  Filter,
   ArrowUpRight,
 } from 'lucide-react';
 import {
@@ -24,7 +23,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { getDashboardStats, getCategoryDistribution } from '../services/reportService';
+import { getDashboardStats } from '../services/reportService';
 import type { DashboardStats } from '../services/reportService';
 import { cn } from '../lib/utils';
 import { AnimatedNumber } from '../components/AnimatedNumber';
@@ -54,7 +53,6 @@ const tileConfig = [
 
 export const ReportsPage: React.FC = () => {
   const [stats, setStats]           = useState<DashboardStats | null>(null);
-  const [categoryDist, setCategoryDist] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [activeTab, setActiveTab]   = useState('Overview');
@@ -63,9 +61,8 @@ export const ReportsPage: React.FC = () => {
     async function load() {
       try {
         setLoading(true);
-        const [s, d] = await Promise.all([getDashboardStats(), getCategoryDistribution()]);
+        const s = await getDashboardStats();
         setStats(s);
-        setCategoryDist(d);
       } catch (err) {
         console.error('Error loading reports:', err);
         setError('Failed to load analytics data.');
@@ -205,43 +202,6 @@ export const ReportsPage: React.FC = () => {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* category distribution */}
-          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '300ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Breakdown</p>
-                <h4 className="text-lg font-bold text-white tracking-tight">Category Distribution</h4>
-              </div>
-              <button className="flex items-center gap-2 px-3 py-1.5 border border-[#2b313a] rounded-xl hover:bg-[#1d222a] transition-colors">
-                <span className="text-[11px] font-bold text-gray-400">Filter</span>
-                <Filter size={14} className="text-gray-500" />
-              </button>
-            </div>
-
-            {categoryDist.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2">
-                {categoryDist.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between bg-[#1d222a] px-3 py-2.5 rounded-xl border border-[#2b313a]"
-                    style={{ animation: 'posFadeIn 300ms ease both', animationDelay: `${i * 50}ms` }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-gray-400" />
-                      <span className="text-xs font-semibold text-gray-300 capitalize">{item.name}</span>
-                    </div>
-                    <span className="text-xs font-bold text-white">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-600">
-                <ShoppingBag size={36} strokeWidth={1} className="mb-3 opacity-20" />
-                <p className="text-xs font-semibold">No category data yet</p>
-              </div>
-            )}
           </div>
 
         </div>

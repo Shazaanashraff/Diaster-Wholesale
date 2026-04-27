@@ -15,6 +15,7 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const isProductsRoute = location.pathname === '/products' || location.pathname === '/customers' || location.pathname === '/reports';
   const [hydrated, setHydrated] = useState(false);
   const [isSessionCollapsed, setIsSessionCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -29,7 +30,7 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   return (
     <div className="pos-shell pos-theme app-cosy">
       <div className={cn("pos-frame pos-frame-2col", hydrated && "pos-frame-ready")}>
-        <Sidebar />
+        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(p => !p)} />
         <div
           className={cn(
             "pos-content custom-scrollbar relative flex flex-col p-0",

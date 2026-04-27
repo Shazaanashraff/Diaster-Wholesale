@@ -254,8 +254,7 @@ export const POSPage: React.FC = () => {
   }, 0);
 
   const discount = subtotal > 50 ? 5.5 : 0;
-  const tax = subtotal * 0.1;
-  const total = subtotal - discount + tax;
+  const total = subtotal - discount;
   const isBelowCost = subtotal - discount < estimatedCostFloor;
   const canProcessTransaction = cart.length > 0 && !!selectedCustomerId && !isProcessing;
 
@@ -271,7 +270,6 @@ export const POSPage: React.FC = () => {
         isWholesale,
         subtotal,
         discount,
-        tax,
         total,
         paymentMethod === 'cash' ? 'cash' : 'bank_transfer'
       );
@@ -534,10 +532,6 @@ export const POSPage: React.FC = () => {
             <div>
               <span>Subtotal</span>
               <strong>LKR <AnimatedNumber value={subtotal} /></strong>
-            </div>
-            <div>
-              <span>Tax 10%</span>
-              <strong>LKR <AnimatedNumber value={tax} /></strong>
             </div>
             <div>
               <span>Discount</span>

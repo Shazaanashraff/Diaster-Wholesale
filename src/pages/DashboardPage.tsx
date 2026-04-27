@@ -1,69 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowUpRight,
-  Maximize2,
-  MoreVertical,
-  Filter,
-  Package,
-  Clock,
+import {
+  ArrowDownRight,
   TrendingUp,
-  AlertCircle,
-  Search
+  AlertTriangle,
+  Users,
+  Receipt,
+  DollarSign,
+  Search,
+  Trophy,
+  ShoppingCart,
 } from 'lucide-react';
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { AnimatedNumber } from '../components/AnimatedNumber';
+import {
+  getDashboardMetrics,
+  getTopPerformers,
+  getRecentSales,
+  getProfitExpensesTimeline,
+  getCategoryDistribution,
+} from '../services/reportService';
+import type {
+  DashboardMetrics,
+  TopPerformer,
+  RecentSale,
+  ProfitExpensePoint,
+} from '../services/reportService';
 
-const chartData = [
-  { name: '200', value: 400 },
-  { name: '400', value: 300 },
-  { name: '600', value: 600 },
-  { name: '800', value: 800 },
-  { name: '1000', value: 500 },
-  { name: '1200', value: 900 },
-  { name: '1500', value: 700 },
-  { name: '2000', value: 1100 },
-];
+const CAT_COLORS = ['#d4e8f8', '#f2c8de', '#d4f0e4', '#fde8c8', '#e6d3f0', '#d7e5e8', '#f8d4d4', '#d4d8f8'];
 
-const gaugeData = [
-  { name: 'Completed', value: 92.46, color: '#f8fafc' },
-  { name: 'Remaining', value: 7.54, color: '#1d222a' },
-];
-
-const stats = [
-  { label: 'Orders to Ship', value: 52, update: 'Updated 1 hr Ago', color: 'bg-[#d7e5e8]', icon: Package },
-  { label: 'Late Orders', value: 64, update: 'Updated 2 hr Ago', color: 'bg-[#e6d3f0]', icon: Clock },
-  { label: 'Open Opps', value: 154, update: 'Updated 1 hr Ago', color: 'bg-[#d4e8f8]', icon: TrendingUp },
-  { label: 'Overdue', value: 152, update: 'Updated 4 hr Ago', color: 'bg-[#f2c8de]', icon: AlertCircle },
-];
-
-const customers = [
-  { name: 'Florence', email: 'florence@untitleddui.com', phone: '(406) 555-0120', type: 'Email', summary: 'Called the customer', status: 'Open', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=100&h=100&auto=format&fit=crop' },
-  { name: 'Ammar Faurent', email: 'ammar@untitleddui.com', phone: '(406) 545-0110', type: 'Chat', summary: 'Escalated to AR team', status: 'Completed', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=100&h=100&auto=format&fit=crop' },
-  { name: 'Caitlyn King', email: 'caitlyn@untitleddui.com', phone: '(406) 573-0420', type: 'Note', summary: 'Called the customer', status: 'Open', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=100&h=100&auto=format&fit=crop' },
-];
+type PeriodFilter = 'day' | 'month' | 'all';
 
 export const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Overview');
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [topPerformers, setTopPerformers] = useState<TopPerformer[]>([]);
+  const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
+  const [profitTimeline, setProfitTimeline] = useState<ProfitExpensePoint[]>([]);
+  const [performerFilter, setPerformerFilter] = useState<PeriodFilter>('month');
+  const [performersLoading, setPerformersLoading] = useState(false);
+  const [barsVisible, setBarsVisible] = useState(false);
+  const [categoryDist, setCategoryDist] = useState<{ name: string; value: number }[]>([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 600);
+    const timer = setTimeout(() => setLoading(false), 600);
+    getDashboardMetrics().then(setMetrics).catch(() => {});
+    getTopPerformers('month').then(d => { setTopPerformers(d); setTimeout(() => setBarsVisible(true), 120); }).catch(() => {});
+    getRecentSales().then(setRecentSales).catch(() => {});
+    getProfitExpensesTimeline().then(setProfitTimeline).catch(() => {});
+    getCategoryDistribution().then(setCategoryDist).catch(() => {});
     return () => clearTimeout(timer);
   }, []);
+
+  const handlePeriodChange = async (period: PeriodFilter) => {
+    setPerformerFilter(period);
+    setBarsVisible(false);
+    setPerformersLoading(true);
+    try {
+      const data = await getTopPerformers(period);
+      setTopPerformers(data);
+      setTimeout(() => setBarsVisible(true), 80);
+    } catch (_) {}
+    setPerformersLoading(false);
+  };
+
+  const maxRevenue = topPerformers[0]?.revenue || 1;
 
   if (loading) {
     return (
@@ -71,13 +81,13 @@ export const DashboardPage: React.FC = () => {
         <div className="pos-skeleton-main">
           <div className="pos-skeleton-search skeleton" />
           <div className="pos-skeleton-grid">
-            {Array.from({ length: 4 }).map((_, i) => (
+            {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="pos-skeleton-tile skeleton" style={{ animationDelay: `${i * 80}ms` }} />
             ))}
           </div>
           <div className="pos-skeleton-products mt-4">
-            <div className="w-full h-[400px] rounded-xl skeleton"></div>
-            <div className="w-full h-[300px] rounded-xl skeleton mt-4"></div>
+            <div className="w-full h-[360px] rounded-xl skeleton" />
+            <div className="w-full h-[320px] rounded-xl skeleton mt-4" />
           </div>
         </div>
         <div className="pos-skeleton-panel" />
@@ -94,212 +104,287 @@ export const DashboardPage: React.FC = () => {
             <input placeholder="Search operations..." />
           </label>
           <div className="pos-mode-toggle">
-            <button 
-              type="button" 
-              className={cn(activeTab === 'Overview' && 'active')} 
-              onClick={() => setActiveTab('Overview')}
-            >
-              Overview
-            </button>
-            <button 
-              type="button" 
-              className={cn(activeTab === 'Detailed' && 'active')} 
-              onClick={() => setActiveTab('Detailed')}
-            >
-              Detailed
-            </button>
+            <button type="button" className={cn(activeTab === 'Overview' && 'active')} onClick={() => setActiveTab('Overview')}>Overview</button>
+            <button type="button" className={cn(activeTab === 'Detailed' && 'active')} onClick={() => setActiveTab('Detailed')}>Detailed</button>
           </div>
         </div>
 
-        <div className="pos-tile-grid pb-2">
-          {stats.map((stat, i) => (
-            <button
-              key={i}
-              type="button"
-              className={cn("pos-tile transition-all", stat.color)}
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              <stat.icon size={18} />
-              <h3>{stat.label}</h3>
-              <p><AnimatedNumber value={stat.value} /> alerts</p>
+        {/* METRIC TILES */}
+        <div className="pos-tile-grid pb-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+          {([
+            { label: 'Revenue',          value: metrics?.revenue ?? 0,       icon: DollarSign,    color: 'bg-[#d4e8f8]', currency: true,  decimals: 2 },
+            { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#f2c8de]', currency: true,  decimals: 2 },
+            { label: 'Customers',        value: metrics?.customers ?? 0,     icon: Users,         color: 'bg-[#d7e5e8]', currency: false, decimals: 0 },
+            { label: 'Low Stock Alerts', value: metrics?.lowStockCount ?? 0, icon: AlertTriangle, color: 'bg-[#fde8c8]', currency: false, decimals: 0 },
+            {
+              label: 'Net Profit',
+              value: metrics?.netProfit ?? 0,
+              icon: (metrics?.netProfit ?? 0) >= 0 ? TrendingUp : ArrowDownRight,
+              color: (metrics?.netProfit ?? 0) >= 0 ? 'bg-[#d4f0e4]' : 'bg-[#f8d4d4]',
+              currency: true,
+              decimals: 2,
+            },
+          ] as const).map((tile, i) => (
+            <button key={i} type="button" className={cn('pos-tile transition-all', tile.color)} style={{ animationDelay: `${i * 60}ms` }}>
+              <tile.icon size={18} />
+              <h3>{tile.label}</h3>
+              <p>{tile.currency && 'LKR '}<AnimatedNumber value={tile.value} decimals={tile.decimals} /></p>
             </button>
           ))}
         </div>
 
         <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block space-y-6">
-          
-          {/* AREA CHART */}
+
+          {/* PROFIT & EXPENSES CHART */}
           <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '200ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-gray-400 text-xs mb-1">Monthly Snapshot</p>
-                <h4 className="text-xl font-bold text-white tracking-tight">Revenue Stream</h4>
-                <strong className="text-2xl mt-1 block">LKR <AnimatedNumber value={1100} /> k</strong>
+                <p className="text-gray-400 text-xs mb-1">Last 6 Months</p>
+                <h4 className="text-xl font-bold text-white tracking-tight">Profit & Expenses</h4>
               </div>
-              <div className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] px-3 py-1.5 rounded-xl cursor-pointer">
-                <span className="text-[11px] font-bold text-gray-400">Last Month</span>
-                <ArrowUpRight size={14} className="text-gray-500" />
+              <div className="flex items-center gap-5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#4ade80]" />
+                  <span className="text-[11px] font-bold text-gray-400">Profit</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#f87171]" />
+                  <span className="text-[11px] font-bold text-gray-400">Expenses</span>
+                </div>
               </div>
             </div>
-            
+
             <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f8fafc" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#f8fafc" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2b313a" />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#6b7280', fontSize: 10, fontWeight: 700}}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{fill: '#6b7280', fontSize: 10, fontWeight: 700}}
-                  />
-                  <Tooltip 
-                    contentStyle={{borderRadius: '12px', border: '1px solid #2b313a', background: '#1c2026', padding: '8px 12px'}}
-                    itemStyle={{ color: '#fff' }}
-                    cursor={{stroke: '#f8fafc', strokeWidth: 1.5, strokeDasharray: '4 4'}}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="#f8fafc" 
-                    strokeWidth={3}
-                    fillOpacity={1} 
-                    fill="url(#colorValue)" 
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {profitTimeline.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-gray-600 text-sm">No data available</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={profitTimeline} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="gradProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4ade80" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="#4ade80" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="gradExpenses" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f87171" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2b313a" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #2b313a', background: '#1c2026', padding: '8px 14px' }}
+                      itemStyle={{ color: '#fff', fontSize: 12 }}
+                      formatter={(value, name) => [`LKR ${Number(value).toLocaleString()}`, name === 'profit' ? 'Profit' : 'Expenses']}
+                      cursor={{ stroke: '#f8fafc', strokeWidth: 1, strokeDasharray: '4 4' }}
+                    />
+                    <Area
+                      type="monotone" dataKey="profit" stroke="#4ade80" strokeWidth={2.5}
+                      fillOpacity={1} fill="url(#gradProfit)"
+                      isAnimationActive animationDuration={1200} animationEasing="ease-out"
+                    />
+                    <Area
+                      type="monotone" dataKey="expenses" stroke="#f87171" strokeWidth={2.5}
+                      fillOpacity={1} fill="url(#gradExpenses)"
+                      isAnimationActive animationDuration={1200} animationEasing="ease-out"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
-          {/* CUSTOMERS TABLE */}
+          {/* RECENT SALES */}
           <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '300ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <p className="text-gray-400 text-xs mb-1">CRM Pipeline</p>
-                <h4 className="text-lg font-bold text-white tracking-tight">Active Contacts</h4>
+                <p className="text-gray-400 text-xs mb-1">Latest Transactions</p>
+                <h4 className="text-lg font-bold text-white tracking-tight">Recent Sales</h4>
               </div>
-              <button className="flex items-center gap-2 px-3 py-1.5 border border-[#2b313a] rounded-xl hover:bg-[#1d222a] transition-colors">
-                <span className="text-[11px] font-bold text-gray-400">Filters</span>
-                <Filter size={14} className="text-gray-500" />
-              </button>
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] px-3 py-1.5 rounded-xl">
+                <ShoppingCart size={12} />
+                <span>{recentSales.length} records</span>
+              </div>
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#2b313a]">
-                    <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Contact</th>
-                    <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Phone</th>
-                    <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Activity</th>
-                    <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Summary</th>
-                    <th className="text-right py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.map((customer, i) => (
-                    <tr key={i} className="group hover:bg-[#1d222a] transition-colors border-b border-[#2b313a] last:border-0">
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <img src={customer.avatar} className="w-8 h-8 rounded-full object-cover" alt="" />
-                          <div>
-                            <p className="text-[13px] font-semibold text-white leading-tight">{customer.name}</p>
-                            <p className="text-[11px] text-gray-500 mt-0.5">{customer.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-[12px] font-medium text-white">{customer.phone}</td>
-                      <td className="py-4 px-4 text-[12px] font-medium text-gray-400">{customer.type}</td>
-                      <td className="py-4 px-4">
-                        <span className="text-[11px] font-medium text-[#f1c3db] underline cursor-pointer hover:text-white transition-colors">{customer.summary}</span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-3">
-                          <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                            customer.status === 'Open' ? "bg-[#1d222a] border border-[#2b313a] text-gray-300" : "bg-[#f8fafc] text-[#111315]"
-                          )}>
-                            {customer.status}
-                          </span>
-                        </div>
-                      </td>
+            {recentSales.length === 0 ? (
+              <p className="text-center text-gray-600 text-sm py-8">No sales data</p>
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#2b313a]">
+                      <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Invoice</th>
+                      <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Customer</th>
+                      <th className="text-left py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Product</th>
+                      <th className="text-right py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Total</th>
+                      <th className="text-right py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recentSales.map((sale, i) => (
+                      <tr key={i} className="group hover:bg-[#1d222a] transition-colors border-b border-[#2b313a] last:border-0">
+                        <td className="py-3.5 px-4">
+                          <span className="text-[12px] font-mono font-semibold text-gray-300">{sale.invoice_no}</span>
+                          <p className="text-[10px] text-gray-600 mt-0.5">
+                            {sale.created_at ? new Date(sale.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                          </p>
+                        </td>
+                        <td className="py-3.5 px-4 text-[12px] font-medium text-white">{sale.customer_name}</td>
+                        <td className="py-3.5 px-4 text-[12px] text-gray-400 max-w-[180px] truncate">{sale.product_name}</td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className="text-[12px] font-bold text-white">LKR {sale.total.toLocaleString()}</span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className={cn(
+                            'px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider',
+                            sale.payment_status === 'paid' && 'bg-[#f8fafc] text-[#111315]',
+                            sale.payment_status === 'partial' && 'bg-[#fde8c8] text-[#92400e]',
+                            sale.payment_status === 'unpaid' && 'bg-[#1d222a] border border-[#2b313a] text-gray-400',
+                          )}>
+                            {sale.payment_status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* CATEGORY DISTRIBUTION */}
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '400ms', padding: '1.25rem' }}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-gray-400 text-xs mb-1">Products Breakdown</p>
+                <h4 className="text-lg font-bold text-white tracking-tight">Category Distribution</h4>
+              </div>
+              {categoryDist.length > 0 && (
+                <span className="text-[11px] font-bold text-gray-500 bg-[#1d222a] border border-[#2b313a] px-3 py-1.5 rounded-xl">
+                  {categoryDist.reduce((s, c) => s + c.value, 0)} products
+                </span>
+              )}
             </div>
+
+            {categoryDist.length === 0 ? (
+              <p className="text-center text-gray-600 text-sm py-8">No category data</p>
+            ) : (() => {
+              const total = categoryDist.reduce((s, c) => s + c.value, 0);
+              return (
+                <div className="grid grid-cols-2 gap-2">
+                  {categoryDist.map((item, i) => {
+                    const pct = total > 0 ? (item.value / total) * 100 : 0;
+                    const color = CAT_COLORS[i % CAT_COLORS.length];
+                    return (
+                      <div
+                        key={i}
+                        className="bg-[#1d222a] px-3 py-3 rounded-xl border border-[#2b313a]"
+                        style={{ animation: 'posFadeIn 300ms ease both', animationDelay: `${i * 50}ms` }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                            <span className="text-xs font-semibold text-gray-300 capitalize truncate">{item.name}</span>
+                          </div>
+                          <span className="text-xs font-bold text-white ml-2 shrink-0">{item.value}</span>
+                        </div>
+                        <div className="w-full bg-[#2b313a] rounded-full h-1 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+                        </div>
+                        <p className="text-[10px] text-gray-600 mt-1.5">{pct.toFixed(1)}%</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
         </div>
       </section>
 
+      {/* SIDEBAR — TOP PERFORMERS */}
       <aside className="pos-bill">
-        <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
-          <h2 className="text-xl font-bold tracking-tight">Performance</h2>
-          <p className="text-xs font-semibold text-gray-500">Real-time KPI gauge</p>
-        </div>
-
-        <div className="flex-1 flex flex-col items-center justify-center relative mt-8">
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                data={gaugeData}
-                cx="50%"
-                cy="100%"
-                startAngle={180}
-                endAngle={0}
-                innerRadius={80}
-                outerRadius={110}
-                paddingAngle={0}
-                dataKey="value"
-                stroke="none"
-              >
-                {gaugeData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute top-[70%] flex flex-col items-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Completion</p>
-            <p className="text-4xl font-bold text-white tracking-tighter">92<span className="text-lg text-gray-400">.46%</span></p>
+        <div className="pos-bill-head flex flex-col items-start gap-1 pb-4 border-b border-[#1f242c]">
+          <div className="flex items-center gap-2">
+            <Trophy size={15} className="text-[#f8fafc]" />
+            <h2 className="text-lg font-bold tracking-tight">Top Performers</h2>
           </div>
+          <p className="text-xs font-semibold text-gray-500">Best-selling products by revenue</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-auto mb-8 px-2">
-          {[
-            { label: 'Project', value: '26.4', color: 'bg-[#e6d3f0]' },
-            { label: 'Is Empty', value: '31.7', color: 'bg-[#d7e5e8]' },
-            { label: 'Other', value: '34.3', color: 'bg-[#d4e8f8]' },
-          ].map((item, i) => (
-            <div key={i} className="text-center group cursor-default bg-[#161a20] rounded-xl border border-[#1f242c] py-3">
-              <div className="flex items-center justify-center gap-1.5 mb-1">
-                <div className={cn("w-2 h-2 rounded-full", item.color)}></div>
-              </div>
-              <p className="text-[14px] font-bold text-white">{item.value}</p>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">{item.label}</span>
-            </div>
+        {/* PERIOD FILTER TABS */}
+        <div className="flex gap-1.5 mt-4 mb-5">
+          {(['day', 'month', 'all'] as PeriodFilter[]).map(p => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handlePeriodChange(p)}
+              className={cn(
+                'flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all',
+                performerFilter === p
+                  ? 'bg-[#f8fafc] text-[#111315]'
+                  : 'bg-[#1d222a] text-gray-500 hover:text-gray-300 border border-[#2b313a]',
+              )}
+            >
+              {p === 'all' ? 'All Time' : p}
+            </button>
           ))}
         </div>
 
-        <button type="button" className="pos-submit mt-auto mb-4">
+        {/* PERFORMER LIST */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+          {performersLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton rounded-xl h-[68px]" style={{ animationDelay: `${i * 60}ms` }} />
+            ))
+          ) : topPerformers.length === 0 ? (
+            <p className="text-center text-gray-600 text-sm py-12">No data for this period</p>
+          ) : (
+            topPerformers.map((performer, i) => (
+              <div
+                key={performer.product_id}
+                className="bg-[#161a20] border border-[#1f242c] rounded-xl p-3.5"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={cn(
+                      'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0',
+                      i === 0 ? 'bg-[#f8fafc] text-[#111315]' : 'bg-[#2b313a] text-gray-400',
+                    )}>
+                      {performer.rank}
+                    </span>
+                    <span className="text-[12px] font-semibold text-white leading-tight truncate">{performer.name}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-500 shrink-0 ml-2">{performer.unitsSold} pcs</span>
+                </div>
+
+                <div className="w-full bg-[#2b313a] rounded-full h-1.5 mb-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700 ease-out"
+                    style={{
+                      width: barsVisible ? `${(performer.revenue / maxRevenue) * 100}%` : '0%',
+                      transitionDelay: `${i * 90}ms`,
+                      background: i === 0 ? '#f8fafc' : i === 1 ? '#94a3b8' : '#475569',
+                    }}
+                  />
+                </div>
+
+                <span className="text-[10px] font-bold text-gray-500">LKR {performer.revenue.toLocaleString()}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <button type="button" className="pos-submit mt-4 mb-4">
           Generate Full Report
         </button>
       </aside>
     </div>
   );
 };
-
-
-
-
