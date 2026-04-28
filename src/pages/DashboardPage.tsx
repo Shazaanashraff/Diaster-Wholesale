@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownRight,
   TrendingUp,
@@ -9,6 +10,8 @@ import {
   Search,
   Trophy,
   ShoppingCart,
+  PanelRightClose,
+  PanelRightOpen,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -40,6 +43,7 @@ const CAT_COLORS = ['#d4e8f8', '#f2c8de', '#d4f0e4', '#fde8c8', '#e6d3f0', '#d7e
 type PeriodFilter = 'day' | 'month' | 'all';
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Overview');
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -50,6 +54,7 @@ export const DashboardPage: React.FC = () => {
   const [performersLoading, setPerformersLoading] = useState(false);
   const [barsVisible, setBarsVisible] = useState(false);
   const [categoryDist, setCategoryDist] = useState<{ name: string; value: number }[]>([]);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 600);
@@ -96,7 +101,7 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="pos-page-grid">
+    <div className={cn("pos-page-grid", rightCollapsed && "right-collapsed")}>
       <section className="pos-main">
         <div className="pos-main-head">
           <label className="pos-search">
@@ -112,10 +117,10 @@ export const DashboardPage: React.FC = () => {
         {/* METRIC TILES */}
         <div className="pos-tile-grid pb-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
           {([
-            { label: 'Revenue',          value: metrics?.revenue ?? 0,       icon: DollarSign,    color: 'bg-[#d4e8f8]', currency: true,  decimals: 2 },
-            { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#f2c8de]', currency: true,  decimals: 2 },
-            { label: 'Customers',        value: metrics?.customers ?? 0,     icon: Users,         color: 'bg-[#d7e5e8]', currency: false, decimals: 0 },
-            { label: 'Low Stock Alerts', value: metrics?.lowStockCount ?? 0, icon: AlertTriangle, color: 'bg-[#fde8c8]', currency: false, decimals: 0 },
+            { label: 'Revenue',          value: metrics?.revenue ?? 0,       icon: DollarSign,    color: 'bg-[#d4e8f8]', currency: true,  decimals: 2, to: '/reports' },
+            { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#f2c8de]', currency: true,  decimals: 2, to: '/reports' },
+            { label: 'Customers',        value: metrics?.customers ?? 0,     icon: Users,         color: 'bg-[#d7e5e8]', currency: false, decimals: 0, to: '/customers' },
+            { label: 'Low Stock Alerts', value: metrics?.lowStockCount ?? 0, icon: AlertTriangle, color: 'bg-[#fde8c8]', currency: false, decimals: 0, to: '/inventory' },
             {
               label: 'Net Profit',
               value: metrics?.netProfit ?? 0,
@@ -123,9 +128,10 @@ export const DashboardPage: React.FC = () => {
               color: (metrics?.netProfit ?? 0) >= 0 ? 'bg-[#d4f0e4]' : 'bg-[#f8d4d4]',
               currency: true,
               decimals: 2,
+              to: '/reports',
             },
           ] as const).map((tile, i) => (
-            <button key={i} type="button" className={cn('pos-tile transition-all', tile.color)} style={{ animationDelay: `${i * 60}ms` }}>
+            <button key={i} type="button" onClick={() => navigate(tile.to)} className={cn('pos-tile transition-all cursor-pointer', tile.color)} style={{ animationDelay: `${i * 60}ms` }}>
               <tile.icon size={18} />
               <h3>{tile.label}</h3>
               <p>{tile.currency && 'LKR '}<AnimatedNumber value={tile.value} decimals={tile.decimals} /></p>
@@ -309,6 +315,17 @@ export const DashboardPage: React.FC = () => {
 
       {/* SIDEBAR — TOP PERFORMERS */}
       <aside className="pos-bill">
+        <button
+          type="button"
+          onClick={() => setRightCollapsed((prev) => !prev)}
+          className="pos-bill-collapse-toggle"
+          aria-label={rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}
+          title={rightCollapsed ? 'Expand panel' : 'Collapse panel'}
+        >
+          {rightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+        </button>
+        {!rightCollapsed && (
+        <div className="pos-bill-inner">
         <div className="pos-bill-head flex flex-col items-start gap-1 pb-4 border-b border-[#1f242c]">
           <div className="flex items-center gap-2">
             <Trophy size={15} className="text-[#f8fafc]" />
@@ -381,9 +398,11 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
 
-        <button type="button" className="pos-submit mt-4 mb-4">
+        <button type="button" className="pos-submit mt-4 mb-4" onClick={() => navigate('/reports')}>
           Generate Full Report
         </button>
+        </div>
+        )}
       </aside>
     </div>
   );

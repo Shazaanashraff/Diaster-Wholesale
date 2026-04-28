@@ -70,7 +70,7 @@ export const POSPage: React.FC = () => {
   const [isOrderTypeModalOpen, setIsOrderTypeModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
 
   useEffect(() => {
     let active = true;
@@ -259,13 +259,13 @@ export const POSPage: React.FC = () => {
   const canProcessTransaction =
     cart.length > 0
     && !!selectedCustomerId
-    && !isProcessing
+    && btnPhase === 'idle'
     && !isBelowCost;
 
   const processTransaction = async () => {
     if (!canProcessTransaction) return;
 
-    setIsProcessing(true);
+    setBtnPhase('loading');
 
     try {
       await checkout(
@@ -285,25 +285,26 @@ export const POSPage: React.FC = () => {
       if (isInventoryEnforced) {
         setStockPiecesByProduct((prev) => {
           const next = { ...prev };
-
           for (const item of cart) {
             const pieces = item.quantityCartons * (item.product.pieces_per_carton || 1) + item.quantityPieces;
-            const current = next[item.product.id] ?? 0;
-            next[item.product.id] = Math.max(0, current - pieces);
+            next[item.product.id] = Math.max(0, (next[item.product.id] ?? 0) - pieces);
           }
-
           return next;
         });
       }
 
       setValidationMessage(null);
-      setIsSuccessModalOpen(true);
+      setBtnPhase('done');
+      setTimeout(() => {
+        setCart([]);
+        setSelectedCustomerId('');
+        setBtnPhase('idle');
+      }, 1600);
     } catch (error) {
       console.error('Transaction Failed:', error);
       const message = error instanceof Error ? error.message : 'Transaction failed. See console for details.';
       setValidationMessage(message);
-    } finally {
-      setIsProcessing(false);
+      setBtnPhase('idle');
     }
   };
 
@@ -383,7 +384,7 @@ export const POSPage: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div 
               key={selectedCategory}
-              className="pos-product-grid"
+              className="pos-product-grid mt-3"
               initial="hidden"
               animate="show"
               exit="exit"
@@ -472,7 +473,7 @@ export const POSPage: React.FC = () => {
         <aside className="pos-bill">
           <div className="pos-bill-head">
             <div>
-              <h2>Table 5</h2>
+              <h2>POS System</h2>
               <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Walk-in'}</p>
             </div>
             {cart.length > 0 && (
@@ -584,23 +585,72 @@ export const POSPage: React.FC = () => {
             </button>
           </div>
 
-          <button type="button" className="pos-submit" onClick={processTransaction} disabled={!canProcessTransaction}>
-            {isProcessing ? (
-              <span className="pos-processing-state">
-                <LoaderCircle size={16} className="animate-spin" />
-                Processing
-              </span>
-            ) : (
-              'Place Order'
-            )}
+          <button
+            type="button"
+            className="pos-submit relative overflow-hidden"
+            onClick={processTransaction}
+            disabled={!canProcessTransaction}
+            style={{
+              background: btnPhase === 'done' ? '#16a34a' : undefined,
+              transition: 'background 0.3s ease',
+            }}
+          >
+            {/* invisible spacer — keeps the button's natural height */}
+            <span className="invisible select-none" aria-hidden>Place Order</span>
+            <AnimatePresence mode="wait">
+              {btnPhase === 'idle' && (
+                <motion.span
+                  key="label"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  Place Order
+                </motion.span>
+              )}
+              {btnPhase === 'loading' && (
+                <motion.span
+                  key="loading"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 flex items-center justify-center gap-2"
+                >
+                  <LoaderCircle size={16} className="animate-spin" />
+                  Processing
+                </motion.span>
+              )}
+              {btnPhase === 'done' && (
+                <motion.span
+                  key="done"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <polyline
+                      points="3,11 8.5,16.5 19,5"
+                      stroke="white"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="30"
+                      strokeDashoffset="30"
+                      style={{ animation: 'pos-check-draw 0.35s cubic-bezier(0.4,0,0.2,1) 0.05s forwards' }}
+                    />
+                  </svg>
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
-
-          {isProcessing && (
-            <div className="pos-processing-overlay">
-              <div className="pos-processing-bar" />
-              <p>Syncing order and updating stock...</p>
-            </div>
-          )}
+          <style>{`
+            @keyframes pos-check-draw { to { stroke-dashoffset: 0; } }
+          `}</style>
         </aside>
 
       <Modal isOpen={isOrderTypeModalOpen} onClose={() => setIsOrderTypeModalOpen(false)} title="Order Type">
@@ -615,7 +665,9 @@ export const POSPage: React.FC = () => {
               }}
               className={cn(
                 'py-4 rounded-xl border text-sm font-semibold transition-colors',
-                selectedOrderType === type ? 'bg-violet-100 border-violet-300 text-violet-700' : 'bg-white border-slate-200'
+                selectedOrderType === type
+                  ? 'bg-[#e6d3f0] border-[#d7bde6] text-[#312e81]'
+                  : 'bg-[#d7e5e8] border-[#c4d7db] text-[#1f2937]'
               )}
             >
               {type}
@@ -631,7 +683,7 @@ export const POSPage: React.FC = () => {
           <button
             type="button"
             onClick={resetAfterSuccess}
-            className="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold"
+            className="w-full py-3 rounded-xl bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] font-semibold hover:bg-[#dcc4ed] transition-colors"
           >
             Back to POS
           </button>

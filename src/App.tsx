@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LayoutWrapper } from './components/LayoutWrapper';
 import { DashboardPage } from './pages/DashboardPage';
@@ -10,10 +10,19 @@ import { CustomerDetailPage } from './pages/CustomerDetailPage';
 import { BulkImportPage } from './pages/BulkImportPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ReturnsPage } from './pages/ReturnsPage';
+import { PinAuthPage } from './pages/PinAuthPage';
 
 const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
 const App: React.FC = () => {
+  const [authenticated, setAuthenticated] = useState(
+    () => sessionStorage.getItem('pin_auth') === '1'
+  );
+
+  if (!authenticated) {
+    return <PinAuthPage onSuccess={() => setAuthenticated(true)} />;
+  }
+
   return (
     <Router>
       <LayoutWrapper>

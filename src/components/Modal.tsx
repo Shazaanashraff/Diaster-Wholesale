@@ -37,7 +37,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-            className="relative w-full max-w-xl bg-[#171c23] rounded-[2.5rem] shadow-2xl overflow-hidden border border-[#2b313a]"
+            className="relative w-full max-w-xl bg-[#171c23] rounded-[2.5rem] shadow-2xl border border-[#2b313a]"
           >
             <div className="flex items-center justify-between p-8 border-b border-[#2b313a]">
               <h3 className="text-xl font-bold text-white tracking-tight">{title}</h3>
@@ -48,7 +48,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="p-8">
               {children}
             </div>
           </motion.div>

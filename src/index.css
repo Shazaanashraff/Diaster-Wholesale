@@ -691,6 +691,34 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 350px;
     min-height: 100%;
+    transition: grid-template-columns 160ms cubic-bezier(0.2, 0, 0, 1);
+    will-change: grid-template-columns;
+  }
+
+  .pos-page-grid.right-collapsed {
+    grid-template-columns: minmax(0, 1fr) 56px;
+  }
+
+  .pos-page-grid.right-collapsed .pos-bill {
+    padding: 0.8rem 0.45rem;
+  }
+
+  .pos-bill-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    flex: 1;
+    min-height: 0;
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0, 0, 1);
+    will-change: opacity, transform;
+  }
+
+  .pos-page-grid.right-collapsed .pos-bill-inner {
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
   }
 
   .pos-frame-ready .pos-sidebar,
@@ -1141,6 +1169,25 @@
     overflow: hidden;
   }
 
+  .pos-bill-collapse-toggle {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid #2b313a;
+    background: #1d222a;
+    color: #c2c9d3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    transition: all 160ms ease;
+  }
+
+  .pos-bill-collapse-toggle:hover {
+    background: #2a2f36;
+    color: #ffffff;
+  }
+
   .pos-bill-head {
     display: flex;
     justify-content: space-between;
@@ -1198,7 +1245,8 @@
 
   .pos-cart-item {
     position: relative;
-    overflow: visible;
+    overflow: hidden;
+    border-radius: 10px;
   }
 
   .pos-cart-item-front {
@@ -1272,13 +1320,15 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 160ms ease, background-color 150ms ease;
-    z-index: 1;
+    z-index: 4;
+    transform: translateX(-6px);
   }
 
   .pos-cart-item:hover .pos-cart-delete,
   .pos-cart-item:focus-within .pos-cart-delete {
     opacity: 1;
     pointer-events: auto;
+    transform: translateX(0);
   }
 
   .pos-cart-delete:hover,
@@ -1553,3 +1603,44 @@
   }
 }
 
+/* Reporting Module Styles */
+.pos-shell aside {
+  animation: posFadeIn 300ms ease-out both;
+}
+
+.pos-shell main {
+  animation: posFadeIn 400ms ease-out both;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2f3742;
+  border-radius: 10px;
+}
+
+.report-table {
+  @apply border border-[#2b313a] rounded-xl overflow-hidden;
+}
+
+.report-table th {
+  @apply bg-[#1d222a] text-gray-500 text-[10px] uppercase tracking-widest font-bold px-4 py-3 border-b border-[#2b313a];
+}
+
+.report-table td {
+  @apply px-4 py-3 text-sm text-gray-300 border-b border-[#2b313a];
+}
+
+.report-table tr:last-child td {
+  @apply border-b-0;
+}
+
+.report-table tr:hover {
+  @apply bg-[#1f2630];
+}

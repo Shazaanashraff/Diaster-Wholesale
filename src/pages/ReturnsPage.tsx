@@ -294,7 +294,7 @@ export const ReturnsPage: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={() => setShowConfirm(false)}
-              className="flex-1 py-3 rounded-xl bg-[#1d222a] border border-[#2b313a] text-sm font-bold text-gray-400 hover:bg-[#2b313a] hover:text-white transition-all"
+              className="flex-1 py-3 rounded-xl bg-[#d7e5e8] border border-[#c4d7db] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all"
             >
               Cancel
             </button>
@@ -302,8 +302,10 @@ export const ReturnsPage: React.FC = () => {
               onClick={handleProcessReturn}
               disabled={processing}
               className={cn(
-                'flex-1 h-[48px] rounded-xl text-sm font-bold text-white transition-all border border-primary/20 relative overflow-hidden flex items-center justify-center',
-                processing ? 'bg-indigo-900/50 cursor-not-allowed text-indigo-400' : 'bg-primary hover:bg-violet-600'
+                'flex-1 h-[48px] rounded-xl text-sm font-bold transition-all border relative overflow-hidden flex items-center justify-center',
+                processing
+                  ? 'bg-[#ece7ec] text-[#7a7a7a] border-[#d7d1d9] cursor-not-allowed'
+                  : 'bg-[#e6d3f0] text-[#312e81] border-[#d7bde6] hover:bg-[#dcc4ed]'
               )}
             >
               <AnimatePresence mode="wait">

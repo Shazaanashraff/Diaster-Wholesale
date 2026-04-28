@@ -144,15 +144,6 @@ ALTER TABLE stock_adjustments DISABLE ROW LEVEL SECURITY;
 -- =========================
 -- 9. VIEW: product_stock
 -- Calculates available stock per product
---
--- Formula:
---   total_pieces_in  = SUM(batch.cartons * product.pieces_per_carton + batch.pieces)
---   total_pieces_out = SUM(inv_item.quantity_cartons * product.pieces_per_carton + inv_item.quantity_pieces)
---                      from confirmed/paid invoices only
---   adjustment_pieces = SUM(stock_adjustments.adjustment_pieces)
---   available_pieces  = total_pieces_in - total_pieces_out + adjustment_pieces
---   avail_cartons     = available_pieces / pieces_per_carton   (integer division)
---   avail_pieces      = available_pieces % pieces_per_carton   (remainder)
 -- =========================
 CREATE OR REPLACE VIEW product_stock AS
 SELECT
@@ -197,6 +188,36 @@ LEFT JOIN (
   FROM stock_adjustments
   GROUP BY product_id
 ) adj_totals ON adj_totals.product_id = p.id;
+
+-- =========================
+-- 10. EXPENSES
+-- =========================
+CREATE TABLE IF NOT EXISTS expenses (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  category      TEXT NOT NULL DEFAULT 'general',
+  description   TEXT NOT NULL DEFAULT '',
+  amount        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  reference     TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
+
+-- =========================
+-- 11. RETURNS
+-- =========================
+CREATE TABLE IF NOT EXISTS returns (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id    UUID REFERENCES invoices(id) ON DELETE SET NULL,
+  product_id    UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  cartons       INT NOT NULL DEFAULT 0,
+  pieces        INT NOT NULL DEFAULT 0,
+  reason        TEXT NOT NULL DEFAULT '',
+  refund_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE returns DISABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- SEED: Insert a default walk-in customer

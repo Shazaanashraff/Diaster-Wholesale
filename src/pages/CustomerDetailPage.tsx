@@ -373,14 +373,14 @@ export const CustomerDetailPage: React.FC = () => {
                 <button 
                   disabled={paymentLoading}
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="w-full py-4 rounded-2xl border border-[#2b313a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all disabled:opacity-50"
+                  className="w-full py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all disabled:opacity-50"
                 >
                   CANCEL
                 </button>
                 <button 
                   disabled={paymentLoading || !paymentAmount}
                   onClick={handleRecordPayment}
-                  className="w-full h-[52px] bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden border border-primary/20"
+                  className="w-full h-[52px] bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] rounded-2xl font-bold text-sm hover:bg-[#dcc4ed] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
                 >
                   <AnimatePresence mode="wait">
                     {paymentLoading ? (

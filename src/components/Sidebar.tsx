@@ -12,6 +12,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -38,6 +39,12 @@ const navItems: NavItem[] = [
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
+  const handleLogout = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.reload();
+  };
+
   return (
     <aside className={cn('pos-sidebar', collapsed && 'sidebar-collapsed')}>
       <div className="pos-sidebar-head">
@@ -80,12 +87,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       </nav>
 
       <div className="pos-users mt-auto">
-        {['Leslie K.', 'Cameron W.', 'Jacob J.'].map((name) => (
-          <div key={name} className="pos-user-chip" title={collapsed ? name : undefined}>
-            <span>{name[0]}</span>
-            {!collapsed && <p>{name}</p>}
-          </div>
-        ))}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="pos-user-chip"
+          title={collapsed ? 'Logout' : undefined}
+        >
+          <span>
+            <LogOut size={12} />
+          </span>
+          {!collapsed && <p>Logout</p>}
+        </button>
         {!collapsed && <div className="pos-footer-note">2026 Diastar App</div>}
       </div>
     </aside>

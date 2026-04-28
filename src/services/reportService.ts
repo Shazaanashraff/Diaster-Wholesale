@@ -1,17 +1,8 @@
 import { supabase } from '../lib/supabase';
 
-// Deduplicates concurrent expense fetches so parallel callers share one request
-let _expensesReq: Promise<{ amount: number; created_at: string }[]> | null = null;
-const fetchExpenses = (): Promise<{ amount: number; created_at: string }[]> => {
-  if (!_expensesReq) {
-    const req = Promise.resolve(supabase.from('expenses').select('amount, created_at'))
-      .then(({ data }) => (data as { amount: number; created_at: string }[] | null) ?? [])
-      .catch((): { amount: number; created_at: string }[] => []);
-    _expensesReq = req;
-    req.finally(() => { _expensesReq = null; });
-  }
-  return _expensesReq!;
-};
+// ============================================================
+// Types & Interfaces
+// ============================================================
 
 export interface DashboardStats {
   totalRevenue: number;
@@ -59,46 +50,164 @@ export interface ProfitExpensePoint {
   profit: number;
 }
 
-export const getTopPerformers = async (period: 'day' | 'month' | 'all'): Promise<TopPerformer[]> => {
-  const now = new Date();
-  let invoiceQuery = supabase
-    .from('invoices')
-    .select('id')
-    .in('payment_status', ['paid', 'partial']);
+// ============================================================
+// Helper: Fetch Expenses (Shared)
+// ============================================================
+let _expensesReq: Promise<{ amount: number; created_at: string }[]> | null = null;
+const fetchExpenses = (): Promise<{ amount: number; created_at: string }[]> => {
+  if (!_expensesReq) {
+    const req = Promise.resolve(supabase.from('expenses').select('amount, created_at'))
+      .then(({ data }) => (data as { amount: number; created_at: string }[] | null) ?? [])
+      .catch((): { amount: number; created_at: string }[] => []);
+    _expensesReq = req;
+    req.finally(() => { _expensesReq = null; });
+  }
+  return _expensesReq!;
+};
 
-  if (period === 'day') {
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    invoiceQuery = invoiceQuery.gte('created_at', start.toISOString());
-  } else if (period === 'month') {
-    invoiceQuery = invoiceQuery.gte('created_at', new Date(now.getFullYear(), now.getMonth(), 1).toISOString());
+// ============================================================
+// Phase 1: Service Layer Extensions
+// ============================================================
+
+/** 1.1 Profit & Loss Report */
+export const getProfitAndLoss = async (from?: string, to?: string) => {
+  let invQuery = supabase.from('invoices').select('total, subtotal, discount, payment_status, created_at');
+  let expQuery = supabase.from('expenses').select('amount, created_at');
+  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton), invoice_id, created_at');
+  let batchQuery = supabase.from('stock_batches').select('product_id, cost_per_piece');
+
+  if (from) {
+    invQuery = invQuery.gte('created_at', from);
+    expQuery = expQuery.gte('created_at', from);
+    itemQuery = itemQuery.gte('created_at', from);
+  }
+  if (to) {
+    invQuery = invQuery.lte('created_at', to);
+    expQuery = expQuery.lte('created_at', to);
+    itemQuery = itemQuery.lte('created_at', to);
   }
 
-  const { data: invData } = await invoiceQuery;
-  const invoiceIds = (invData || []).map(i => i.id);
-  if (invoiceIds.length === 0) return [];
+  const [invRes, expRes, itemRes, batchRes] = await Promise.all([invQuery, expQuery, itemQuery, batchQuery]);
 
-  const { data, error } = await supabase
-    .from('invoice_items')
-    .select('product_id, total, pieces, cartons, products(name, pieces_per_carton)')
-    .in('invoice_id', invoiceIds);
+  const invoices = invRes.data || [];
+  const expenses = expRes.data || [];
+  const items = itemRes.data || [];
+  const batches = batchRes.data || [];
 
-  if (error) throw error;
+  const revenue = invoices
+    .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
+    .reduce((sum, i) => sum + Number(i.total), 0);
 
-  const map: Record<string, { name: string; revenue: number; unitsSold: number }> = {};
-  (data || []).forEach(item => {
-    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 1;
-    if (!map[item.product_id]) {
-      map[item.product_id] = { name: (item.products as { name?: string } | null)?.name || 'Unknown', revenue: 0, unitsSold: 0 };
-    }
-    map[item.product_id].revenue += Number(item.total);
-    map[item.product_id].unitsSold += item.cartons * ppc + item.pieces;
+  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  // Calculate COGS
+  const costMap: Record<string, number> = {};
+  batches.forEach(b => {
+    if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece);
   });
 
-  return Object.entries(map)
-    .map(([product_id, d]) => ({ product_id, ...d, rank: 0 }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5)
-    .map((d, i) => ({ ...d, rank: i + 1 }));
+  let cogs = 0;
+  items.forEach(item => {
+    const ppc = (item.products as any)?.pieces_per_carton || 1;
+    const totalPieces = item.cartons * ppc + item.pieces;
+    const unitCost = costMap[item.product_id as string] || 0;
+    cogs += unitCost * totalPieces;
+  });
+
+  const grossProfit = revenue - cogs;
+  const netProfit = grossProfit - totalExpenses;
+
+  return { revenue, cogs, grossProfit, expenses: totalExpenses, netProfit };
+};
+
+/** 1.2 Sales Profit Report */
+export const getSalesProfitReport = async (from?: string, to?: string) => {
+  let query = supabase
+    .from('invoice_items')
+    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status)');
+
+  if (from) query = query.gte('created_at', from);
+  if (to) query = query.lte('created_at', to);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
+  const costMap: Record<string, number> = {};
+  batches?.forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
+
+  return (data || []).map(item => {
+    const ppc = (item.products as any)?.pieces_per_carton || 1;
+    const totalPieces = item.cartons * ppc + item.pieces;
+    const unitCost = costMap[item.product_id as string] || 0;
+    const totalCost = unitCost * totalPieces;
+    const profit = Number(item.total) - totalCost;
+
+    return {
+      invoice_no: (item.invoices as any)?.invoice_no,
+      product: (item.products as any)?.name,
+      quantity: totalPieces,
+      selling_price: item.unit_price,
+      cost_price: unitCost,
+      total_revenue: item.total,
+      total_cost: totalCost,
+      profit
+    };
+  });
+};
+
+/** 2.1 Current Stock Report */
+export const getCurrentStockReport = async () => {
+  const { data, error } = await supabase
+    .from('product_stock')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return data;
+};
+
+/** 2.4 Low Stock Report */
+export const getLowStockReport = async (threshold = 10) => {
+  const stocks = await getCurrentStockReport();
+  return stocks.filter(s => {
+    const remaining = (s.cartons_in + s.carton_adj - s.cartons_sold) * s.pieces_per_carton +
+                      (s.pieces_in + s.piece_adj - s.pieces_sold);
+    return remaining <= threshold;
+  });
+};
+
+/** 3.1 Daily Sales Report */
+export const getDailySalesReport = async (from?: string, to?: string) => {
+  let query = supabase.from('invoices').select('total, payment_status, created_at');
+  if (from) query = query.gte('created_at', from);
+  if (to) query = query.lte('created_at', to);
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const totalSales = (data || []).reduce((sum, i) => sum + Number(i.total), 0);
+  const transactions = data?.length || 0;
+  
+  return { totalSales, transactions, data };
+};
+
+// Existing dashboard functions kept for compatibility
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  const { data: invoices, error: invError } = await supabase.from('invoices').select('total, payment_status');
+  if (invError) throw invError;
+
+  const { count: customerCount, error: custError } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+  if (custError) throw custError;
+
+  const totalRevenue = (invoices || [])
+    .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
+    .reduce((sum, i) => sum + Number(i.total), 0);
+
+  const paidInvoices = (invoices || []).filter(i => i.payment_status === 'paid').length;
+  const successRate = invoices && invoices.length > 0 ? (paidInvoices / invoices.length) * 100 : 100;
+
+  return { totalRevenue, totalOrders: invoices?.length || 0, newCustomers: customerCount || 0, successRate };
 };
 
 export const getRecentSales = async (): Promise<RecentSale[]> => {
@@ -111,189 +220,95 @@ export const getRecentSales = async (): Promise<RecentSale[]> => {
   if (error) throw error;
 
   return (data || []).map(inv => {
-    const items = (inv.invoice_items as { products: { name?: string } | null }[] | null) || [];
-    const productName = items.length === 1
-      ? (items[0]?.products as { name?: string } | null)?.name || 'Item'
-      : `${items.length} items`;
+    const items = (inv.invoice_items as any[]) || [];
+    const productName = items.length === 1 ? (items[0]?.products?.name || 'Item') : `${items.length} items`;
     return {
       invoice_no: inv.invoice_no,
-      customer_name: (inv.customers as { name?: string } | null)?.name || '—',
+      customer_name: (inv.customers as any)?.name || '—',
       product_name: productName,
       total: Number(inv.total),
-      payment_status: inv.payment_status as 'paid' | 'partial' | 'unpaid',
+      payment_status: inv.payment_status as any,
       created_at: inv.created_at || '',
     };
   });
 };
 
-export const getProfitExpensesTimeline = async (): Promise<ProfitExpensePoint[]> => {
-  const { data: invoices, error } = await supabase
-    .from('invoices')
-    .select('total, payment_status, created_at')
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-
-  const monthMap: Record<string, { revenue: number; expenses: number }> = {};
-  (invoices || []).forEach(inv => {
-    if (!inv.created_at) return;
-    const d = new Date(inv.created_at);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthMap[key]) monthMap[key] = { revenue: 0, expenses: 0 };
-    if (inv.payment_status === 'paid' || inv.payment_status === 'partial') {
-      monthMap[key].revenue += Number(inv.total);
-    }
-  });
-
-  try {
-    const expData = await fetchExpenses();
-    expData.forEach((e: { amount: number; created_at: string }) => {
-      if (!e.created_at) return;
-      const d = new Date(e.created_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthMap[key]) monthMap[key] = { revenue: 0, expenses: 0 };
-      monthMap[key].expenses += Number(e.amount);
-    });
-  } catch (_) {}
-
-  return Object.entries(monthMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([key, { revenue, expenses }]) => {
-      const [year, month] = key.split('-');
-      const label = new Date(Number(year), Number(month) - 1).toLocaleString('default', { month: 'short' });
-      return { month: `${label} '${year.slice(2)}`, revenue, expenses, profit: revenue - expenses };
-    });
-};
-
-export const getDashboardStats = async (): Promise<DashboardStats> => {
-  const { data: invoices, error: invError } = await supabase
-    .from('invoices')
-    .select('total, payment_status');
-
-  if (invError) throw invError;
-
-  const { count: customerCount, error: custError } = await supabase
-    .from('customers')
-    .select('*', { count: 'exact', head: true });
-
-  if (custError) throw custError;
-
-  const totalRevenue = invoices
-    .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
-    .reduce((sum, i) => sum + Number(i.total), 0);
-
-  const paidInvoices = invoices.filter(i => i.payment_status === 'paid').length;
-  const successRate = invoices.length > 0 ? (paidInvoices / invoices.length) * 100 : 100;
-
-  return {
-    totalRevenue,
-    totalOrders: invoices.length,
-    newCustomers: customerCount || 0,
-    successRate
-  };
-};
-
-export const getProductMovement = async (): Promise<ProductMovement[]> => {
-  const { data, error } = await supabase
-    .from('invoice_items')
-    .select('product_id, cartons, pieces, products(name, pieces_per_carton)');
-
-  if (error) throw error;
-
-  // Aggregate by product
-  const movements: Record<string, { name: string; totalSold: number }> = {};
-  
-  data.forEach(item => {
-    const product = (item.products as { name?: string; pieces_per_carton?: number } | null);
-    const name = product?.name || 'Unknown';
-    const ppc = product?.pieces_per_carton || 1;
-    const totalPieces = item.cartons * ppc + item.pieces;
-    if (!movements[item.product_id]) {
-      movements[item.product_id] = { name, totalSold: 0 };
-    }
-    movements[item.product_id].totalSold += totalPieces;
-  });
-
-  const result = Object.values(movements)
-    .sort((a, b) => b.totalSold - a.totalSold)
-    .map((m, i, arr) => ({
-      ...m,
-      rank: i < arr.length / 2 ? ('fast' as const) : ('slow' as const)
-    }));
-
-  return result;
-};
-
 export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
-  const [invoiceResult, customerResult, stockResult, itemResult, batchResult] = await Promise.allSettled([
-    supabase.from('invoices').select('total, payment_status'),
-    supabase.from('customers').select('*', { count: 'exact', head: true }),
-    supabase.from('product_stock').select('cartons_in, pieces_in, cartons_sold, pieces_sold, carton_adj, piece_adj, pieces_per_carton'),
-    supabase.from('invoice_items').select('product_id, pieces, cartons, products(pieces_per_carton)'),
-    supabase.from('stock_batches').select('product_id, cost_per_piece'),
-  ]);
-
-  const invoices = invoiceResult.status === 'fulfilled' ? (invoiceResult.value.data || []) : [];
-  const revenue = invoices
-    .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
-    .reduce((sum, i) => sum + Number(i.total), 0);
-
-  const expData = await fetchExpenses();
-  const expenses = expData.reduce((sum, e) => sum + Number(e.amount), 0);
-
-  const customers = customerResult.status === 'fulfilled' ? (customerResult.value.count || 0) : 0;
-
-  const LOW_THRESHOLD = 10;
-  const stocks = stockResult.status === 'fulfilled' ? (stockResult.value.data || []) : [];
-  const lowStockCount = stocks.filter(s => {
-    const remaining =
-      (s.cartons_in + (s.carton_adj || 0) - s.cartons_sold) * s.pieces_per_carton +
-      (s.pieces_in + (s.piece_adj || 0) - s.pieces_sold);
-    return remaining <= LOW_THRESHOLD;
-  }).length;
-
-  const items = itemResult.status === 'fulfilled' ? (itemResult.value.data || []) : [];
-  const batches = batchResult.status === 'fulfilled' ? (batchResult.value.data || []) : [];
-
-  const costMap: Record<string, { total: number; count: number }> = {};
-  batches.forEach((b: { product_id: string; cost_per_piece: number | null }) => {
-    if (b.cost_per_piece) {
-      if (!costMap[b.product_id]) costMap[b.product_id] = { total: 0, count: 0 };
-      costMap[b.product_id].total += Number(b.cost_per_piece);
-      costMap[b.product_id].count++;
-    }
-  });
-
-  let cogs = 0;
-  items.forEach((item: { product_id: string; pieces: number; cartons: number; products: unknown }) => {
-    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 0;
-    const totalPieces = item.cartons * ppc + item.pieces;
-    const c = costMap[item.product_id];
-    if (c && c.count > 0) cogs += (c.total / c.count) * totalPieces;
-  });
+  const stats = await getProfitAndLoss();
+  const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+  const lowStock = await getLowStockReport();
 
   return {
-    revenue,
-    expenses,
-    customers,
-    lowStockCount,
-    cogs,
-    netProfit: revenue - cogs - expenses,
+    revenue: stats.revenue,
+    expenses: stats.expenses,
+    customers: customerCount || 0,
+    lowStockCount: lowStock.length,
+    cogs: stats.cogs,
+    netProfit: stats.netProfit
   };
 };
 
-export const getCategoryDistribution = async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('category');
-    
-    if (error) throw error;
-    
-    const dist: Record<string, number> = {};
-    data.forEach(p => {
-        dist[p.category] = (dist[p.category] || 0) + 1;
-    });
-    
-    return Object.entries(dist).map(([name, value]) => ({ name, value }));
+export const getTopPerformers = async (period: 'day' | 'month' | 'all' = 'month'): Promise<TopPerformer[]> => {
+  let from: string | undefined;
+  const now = new Date();
+  if (period === 'day') from = new Date(now.setHours(0,0,0,0)).toISOString();
+  if (period === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  let query = supabase.from('invoice_items').select('product_id, total, cartons, pieces, products(name, pieces_per_carton)');
+  if (from) query = query.gte('created_at', from);
+
+  const { data } = await query;
+  const map: Record<string, any> = {};
+
+  (data || []).forEach(item => {
+    const id = item.product_id;
+    const ppc = (item.products as any)?.pieces_per_carton || 1;
+    const qty = (item.cartons * ppc) + item.pieces;
+    if (!map[id]) map[id] = { product_id: id, name: (item.products as any)?.name, revenue: 0, unitsSold: 0 };
+    map[id].revenue += Number(item.total);
+    map[id].unitsSold += qty;
+  });
+
+  return Object.values(map)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 5)
+    .map((item, i) => ({ ...item, rank: i + 1 }));
+};
+
+export const getProfitExpensesTimeline = async (): Promise<ProfitExpensePoint[]> => {
+  const { data: invoices } = await supabase.from('invoices').select('total, created_at').in('payment_status', ['paid', 'partial']);
+  const { data: expenses } = await supabase.from('expenses').select('amount, created_at');
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const resMap: Record<string, ProfitExpensePoint> = {};
+
+  // Initialize last 6 months
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const m = months[d.getMonth()];
+    resMap[m] = { month: m, revenue: 0, expenses: 0, profit: 0 };
+  }
+
+  (invoices || []).forEach(inv => {
+    const m = months[new Date(inv.created_at).getMonth()];
+    if (resMap[m]) resMap[m].revenue += Number(inv.total);
+  });
+
+  (expenses || []).forEach(exp => {
+    const m = months[new Date(exp.created_at).getMonth()];
+    if (resMap[m]) resMap[m].expenses += Number(exp.amount);
+  });
+
+  return Object.values(resMap).map(pt => ({ ...pt, profit: pt.revenue - pt.expenses }));
+};
+
+export const getCategoryDistribution = async (): Promise<{ name: string; value: number }[]> => {
+  const { data } = await supabase.from('products').select('category');
+  const map: Record<string, number> = {};
+  (data || []).forEach(p => {
+    const cat = p.category || 'Other';
+    map[cat] = (map[cat] || 0) + 1;
+  });
+  return Object.entries(map).map(([name, value]) => ({ name, value }));
 };
