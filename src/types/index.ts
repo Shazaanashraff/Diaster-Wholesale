@@ -90,7 +90,6 @@ export interface Payment {
 export interface StockAdjustment {
   id: string;
   product_id: string;
-  adjustment_cartons: number;
   adjustment_pieces: number;
   reason: string;
   adjusted_by: string;

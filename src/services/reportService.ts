@@ -197,7 +197,7 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
 export const getProductMovement = async (): Promise<ProductMovement[]> => {
   const { data, error } = await supabase
     .from('invoice_items')
-    .select('product_id, cartons, pieces, products(name)');
+    .select('product_id, cartons, pieces, products(name, pieces_per_carton)');
 
   if (error) throw error;
 
@@ -205,8 +205,10 @@ export const getProductMovement = async (): Promise<ProductMovement[]> => {
   const movements: Record<string, { name: string; totalSold: number }> = {};
   
   data.forEach(item => {
-    const name = (item.products as any)?.name || 'Unknown';
-    const totalPieces = (item.cartons * 0) + item.pieces; // Simplify for now, just pieces sold
+    const product = (item.products as { name?: string; pieces_per_carton?: number } | null);
+    const name = product?.name || 'Unknown';
+    const ppc = product?.pieces_per_carton || 1;
+    const totalPieces = item.cartons * ppc + item.pieces;
     if (!movements[item.product_id]) {
       movements[item.product_id] = { name, totalSold: 0 };
     }

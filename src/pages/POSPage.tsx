@@ -33,7 +33,7 @@ export interface CartItem {
   quantityPieces: number;
 }
 
-type PayMethod = 'cash' | 'creditCard' | 'ewallet';
+type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
 
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
@@ -256,7 +256,11 @@ export const POSPage: React.FC = () => {
   const discount = subtotal > 50 ? 5.5 : 0;
   const total = subtotal - discount;
   const isBelowCost = subtotal - discount < estimatedCostFloor;
-  const canProcessTransaction = cart.length > 0 && !!selectedCustomerId && !isProcessing;
+  const canProcessTransaction =
+    cart.length > 0
+    && !!selectedCustomerId
+    && !isProcessing
+    && !isBelowCost;
 
   const processTransaction = async () => {
     if (!canProcessTransaction) return;
@@ -271,7 +275,11 @@ export const POSPage: React.FC = () => {
         subtotal,
         discount,
         total,
-        paymentMethod === 'cash' ? 'cash' : 'bank_transfer'
+        paymentMethod === 'credit'
+          ? 'credit'
+          : paymentMethod === 'cash'
+            ? 'cash'
+            : 'bank_transfer'
       );
 
       if (isInventoryEnforced) {
@@ -569,6 +577,10 @@ export const POSPage: React.FC = () => {
             <button type="button" className={cn(paymentMethod === 'ewallet' && 'active')} onClick={() => setPaymentMethod('ewallet')}>
               <QrCode size={16} />
               E-wallet
+            </button>
+            <button type="button" className={cn(paymentMethod === 'credit' && 'active')} onClick={() => setPaymentMethod('credit')}>
+              <CreditCard size={16} />
+              Credit
             </button>
           </div>
 

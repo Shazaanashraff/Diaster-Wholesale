@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { TopBar } from '../components/TopBar';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, SlidersHorizontal, Check, ArrowRight } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
@@ -106,10 +105,12 @@ export const InventoryPage: React.FC = () => {
       setAdjSaving(true);
       setAdjError(null);
 
+      const ppc = adjustRow.pieces_per_carton || 1;
+      const totalPieceDelta = cartonDelta * ppc + pieceDelta;
+
       await insertStockAdjustment({
         product_id: adjustRow.product_id,
-        adjustment_cartons: cartonDelta,
-        adjustment_pieces: pieceDelta,
+        adjustment_pieces: totalPieceDelta,
         reason: adjReason.trim(),
         adjusted_by: 'admin', // TODO: replace with auth user
       });
