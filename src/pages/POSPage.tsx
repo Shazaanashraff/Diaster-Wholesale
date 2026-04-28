@@ -190,10 +190,10 @@ export const POSPage: React.FC = () => {
     return products.filter((p) => {
       const categoryMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
       const searchMatch = !q || 
-        p.name.toLowerCase().includes(q) || 
-        p.item_code.toLowerCase().includes(q) || 
-        (p.model && p.model.toLowerCase().includes(q)) ||
-        (p.sku && p.sku.toLowerCase().includes(q));
+        (p.name?.toLowerCase().includes(q)) || 
+        (p.item_code?.toLowerCase().includes(q)) || 
+        (p.model?.toLowerCase().includes(q)) ||
+        (p.sku?.toLowerCase().includes(q));
       return categoryMatch && searchMatch;
     });
   }, [selectedCategory, searchQuery, products]);
@@ -279,20 +279,22 @@ export const POSPage: React.FC = () => {
   };
 
   const subtotal = cart.reduce((acc, item) => {
-    const pricePerPiece = isWholesale ? item.product.wholesale_price : item.product.retail_price;
-    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     return acc + pricePerPiece * totalPieces;
   }, 0);
 
   const estimatedCostFloor = cart.reduce((acc, item) => {
-    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     const avgCost = avgCostByProduct[item.product.id] ?? 0;
     return acc + avgCost * totalPieces;
   }, 0);
 
-  // MSP floor: minimum acceptable total based on per-product MSP
   const mspFloor = cart.reduce((acc, item) => {
-    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     const msp = item.product.msp ?? 0;
     return acc + msp * totalPieces;
   }, 0);
@@ -568,8 +570,9 @@ export const POSPage: React.FC = () => {
             {cart.length === 0 && <p className="pos-cart-empty">No items yet</p>}
             <AnimatePresence>
               {cart.map((item, index) => {
-                const pricePerPiece = isWholesale ? item.product.wholesale_price : item.product.retail_price;
-                const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+                const ppc = item.product.pieces_per_carton || 1;
+                const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
+                const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
 
                 return (
                   <motion.div 
