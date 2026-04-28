@@ -32,6 +32,7 @@ export interface CartItem {
   product: Product;
   quantityCartons: number;
   quantityPieces: number;
+  batchId?: string;
 }
 
 type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
@@ -79,6 +80,27 @@ export const POSPage: React.FC = () => {
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [approvalPin, setApprovalPin] = useState('');
   const [approvalError, setApprovalError] = useState('');
+
+  const [availableBatches, setAvailableBatches] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    const cartProductIds = [...new Set(cart.map(i => i.product.id))];
+    if (cartProductIds.length === 0) {
+      setAvailableBatches({});
+      return;
+    }
+    
+    import('../services/inventoryService').then(({ getBatchesForProducts }) => {
+      getBatchesForProducts(cartProductIds).then(batches => {
+        const batchMap: Record<string, any[]> = {};
+        for (const b of batches) {
+          if (!batchMap[b.product_id]) batchMap[b.product_id] = [];
+          batchMap[b.product_id].push(b);
+        }
+        setAvailableBatches(batchMap);
+      });
+    });
+  }, [cart.length]);
 
   useEffect(() => {
     let active = true;
@@ -164,10 +186,17 @@ export const POSPage: React.FC = () => {
   }, [products]);
 
   const categoryProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return products.filter((p) => {
-      return selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+      const categoryMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+      const searchMatch = !q || 
+        p.name.toLowerCase().includes(q) || 
+        p.item_code.toLowerCase().includes(q) || 
+        (p.model && p.model.toLowerCase().includes(q)) ||
+        (p.sku && p.sku.toLowerCase().includes(q));
+      return categoryMatch && searchMatch;
     });
-  }, [selectedCategory, products]);
+  }, [selectedCategory, searchQuery, products]);
 
   const getCartPiecesForProduct = (productId: string): number => {
     return cart
@@ -447,7 +476,8 @@ export const POSPage: React.FC = () => {
                 const exceedsStock = isInventoryEnforced && selectedPieces > remainingPieces;
                 const hasAmount = qtyCartons > 0 || qtyPieces > 0;
                 
-                const isSearchMatch = searchQuery === '' || product.name.toLowerCase().includes(searchQuery.toLowerCase());
+                // Search match is now handled in categoryProducts useMemo
+                const isSearchMatch = true;
 
                 return (
                   <motion.article 
@@ -563,9 +593,27 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
-                        <p>
+                        <p className="text-[10px] text-gray-500">
                           {item.quantityCartons} CTN x {item.quantityPieces} PCS
                         </p>
+                        <div className="mt-1">
+                          <select
+                            value={item.batchId || ''}
+                            onChange={(e) => {
+                              const newCart = [...cart];
+                              newCart[index].batchId = e.target.value || undefined;
+                              setCart(newCart);
+                            }}
+                            className="bg-[#1d222a] border border-[#2b313a] text-[9px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
+                          >
+                            <option value="">FIFO (Oldest First)</option>
+                            {(availableBatches[item.product.id] || []).map(b => (
+                              <option key={b.id} value={b.id}>
+                                Batch: {b.shipments?.reference || 'Direct'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <strong>LKR {(pricePerPiece * totalPieces).toFixed(2)}</strong>
                     </div>

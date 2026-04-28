@@ -214,3 +214,14 @@ export interface AuditLog {
   notes: string;
   created_at: string;
 }
+
+export interface Carton {
+  id: string;
+  purchase_id: string;
+  product_id: string;
+  carton_index: number;
+  carton_code: string;
+  status: 'in_stock' | 'sold' | 'damaged';
+  created_at: string;
+  products?: Product;
+}

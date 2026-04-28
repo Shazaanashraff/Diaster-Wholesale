@@ -120,3 +120,20 @@ export async function getAverageCostPerPiece(
 
   return averages;
 }
+
+/**
+ * Fetch all available stock batches for a list of products.
+ * Ordered by received_at (FIFO).
+ */
+export async function getBatchesForProducts(productIds: string[]): Promise<any[]> {
+  if (productIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('stock_batches')
+    .select('*, shipments(reference)')
+    .in('product_id', productIds)
+    .gt('cartons', 0)
+    .order('received_at', { ascending: true });
+  
+  if (error) throw new Error(error.message);
+  return data;
+}

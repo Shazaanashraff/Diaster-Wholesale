@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../components/Modal';
 import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
@@ -44,6 +45,8 @@ export const InventoryPage: React.FC = () => {
 
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
+
+  const { can } = usePermissions();
   const [rightCollapsed, setRightCollapsed] = useState(false);
 
   useEffect(() => {
@@ -401,12 +404,14 @@ export const InventoryPage: React.FC = () => {
                         </td>
                         <td className="px-8 py-6 text-right">
                           <div className="flex items-center gap-2 justify-end">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
-                              className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              Adjust
-                            </button>
+                            {can('manage_inventory') && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
+                                className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                Adjust
+                              </button>
+                            )}
                             <div className="p-3 rounded-2xl text-gray-500 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100 inline-flex">
                               <ChevronRight size={18} />
                             </div>

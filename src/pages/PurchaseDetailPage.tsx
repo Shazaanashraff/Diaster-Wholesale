@@ -15,7 +15,7 @@ import {
   finalizeCostingAndClose,
   type ReceiveItemInput,
 } from '../services/purchaseService';
-import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive } from '../types';
+import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton } from '../types';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -41,6 +41,7 @@ export const PurchaseDetailPage: React.FC = () => {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [costs, setCosts] = useState<PurchaseCost[]>([]);
   const [received, setReceived] = useState<PurchaseReceive[]>([]);
+  const [cartons, setCartons] = useState<Carton[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Toast
@@ -64,11 +65,12 @@ export const PurchaseDetailPage: React.FC = () => {
     if (!id) return;
     setLoading(true);
     try {
-      const { purchase: p, items: it, costs: co, received: re } = await getPurchaseById(id);
+      const { purchase: p, items: it, costs: co, received: re, cartons: ca } = await getPurchaseById(id);
       setPurchase(p);
       setItems(it);
       setCosts(co);
       setReceived(re);
+      setCartons(ca);
 
       // Init receive form from items
       const rf: typeof receiveForm = {};
@@ -448,7 +450,6 @@ export const PurchaseDetailPage: React.FC = () => {
           </div>
         </div>
       )}
-
       {/* ── RECEIVED: Show receive summary ───────────────────────── */}
       {(purchase.status === 'received' || purchase.status === 'closed') && received.length > 0 && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
@@ -487,6 +488,35 @@ export const PurchaseDetailPage: React.FC = () => {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── RECEIVED: Generated Cartons ─────────────────────────── */}
+      {(purchase.status === 'received' || purchase.status === 'closed') && cartons.length > 0 && (
+        <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[#2b313a]">
+            <h2 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+              <Package size={13} /> Generated Cartons
+            </h2>
+            <p className="text-[10px] text-gray-500 mt-0.5">Tracking codes for each received carton.</p>
+          </div>
+          <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {cartons.map((c) => (
+              <div key={c.id} className="bg-[#1d222a] border border-[#2b313a] rounded-lg p-2 flex flex-col gap-1">
+                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{(c.products as any)?.model || 'ITEM'}</p>
+                <p className="text-xs font-mono font-bold text-white">{c.carton_code}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className={cn(
+                    "text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest",
+                    c.status === 'in_stock' ? 'bg-green-500/10 text-green-400' : 'bg-gray-500/10 text-gray-400'
+                  )}>
+                    {c.status.replace('_', ' ')}
+                  </span>
+                  <span className="text-[8px] text-gray-600 font-mono">#{c.carton_index}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

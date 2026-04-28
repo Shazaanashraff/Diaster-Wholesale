@@ -80,11 +80,17 @@ export function can(permission: Permission, role?: Role): boolean {
   return ROLE_PERMISSIONS[r]?.includes(permission) ?? false;
 }
 
+export function canAny(permissions: Permission[], role?: Role): boolean {
+  const r = role ?? getCurrentRole();
+  return permissions.some(p => ROLE_PERMISSIONS[r]?.includes(p));
+}
+
 export function usePermissions() {
   const role = getCurrentRole();
   return {
     role,
     roleLabel: ROLE_LABELS[role],
     can: (permission: Permission) => can(permission, role),
+    canAny: (permissions: Permission[]) => canAny(permissions, role),
   };
 }

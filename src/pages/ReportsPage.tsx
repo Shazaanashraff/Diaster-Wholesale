@@ -29,6 +29,9 @@ import { StockValuationReport }       from './reports/StockValuationReport';
 import { DamageReport }               from './reports/DamageReport';
 import { SalesReturnReport }          from './reports/SalesReturnReport';
 import { PurchaseHistoryReport }      from './reports/PurchaseHistoryReport';
+import { CustomerLedgerAggregateReport } from './reports/CustomerLedgerAggregateReport';
+import { FastMovingReport }           from './reports/FastMovingReport';
+import { SlowMovingReport }           from './reports/SlowMovingReport';
 
 const CATEGORIES = [
   {
@@ -73,7 +76,7 @@ const CATEGORIES = [
     label: 'Customers',
     icon: Users,
     reports: [
-      { id: 'customer-ledger', label: 'Customer Ledger', comingSoon: true },
+      { id: 'customer-ledger', label: 'Customer Ledger', component: CustomerLedgerAggregateReport },
       { id: 'credit-report',   label: 'Credit Report',   comingSoon: true },
       { id: 'ar-aging',        label: 'AR Aging',        comingSoon: true },
     ],
@@ -101,8 +104,8 @@ const CATEGORIES = [
     label: 'Analytics',
     icon: TrendingUp,
     reports: [
-      { id: 'fast-moving', label: 'Fast Moving', comingSoon: true },
-      { id: 'slow-moving', label: 'Slow Moving', comingSoon: true },
+      { id: 'fast-moving', label: 'Fast Moving', component: FastMovingReport },
+      { id: 'slow-moving', label: 'Slow Moving', component: SlowMovingReport },
       { id: 'dead-stock',  label: 'Dead Stock',  comingSoon: true },
     ],
   },

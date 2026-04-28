@@ -7,7 +7,8 @@ import {
 import { getPurchases, createPurchase, deletePurchase } from '../services/purchaseService';
 import { getSuppliers } from '../services/supplierService';
 import { getProducts } from '../services/productService';
-import type { Purchase, Product } from '../types';
+import { getInventory, getMovementRates } from '../services/inventoryService';
+import type { Purchase, Product, ProductStock } from '../types';
 import type { SupplierWithBalance } from '../services/supplierService';
 import { cn } from '../lib/utils';
 
@@ -41,6 +42,8 @@ export const PurchasesPage: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [inventory, setInventory] = useState<ProductStock[]>([]);
+  const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -66,10 +69,18 @@ export const PurchasesPage: React.FC = () => {
   async function load() {
     setLoading(true);
     try {
-      const [p, s, pr] = await Promise.all([getPurchases(), getSuppliers(), getProducts()]);
+      const [p, s, pr, inv, mv] = await Promise.all([
+        getPurchases(), 
+        getSuppliers(), 
+        getProducts(),
+        getInventory(),
+        getMovementRates()
+      ]);
       setPurchases(p);
       setSuppliers(s);
       setProducts(pr);
+      setInventory(inv);
+      setMovementRates(mv);
     } catch (e: any) {
       showToast(e.message, false);
     } finally {
@@ -417,59 +428,103 @@ export const PurchasesPage: React.FC = () => {
                   {items.map((item, idx) => {
                     const lineLkr = item.quantity_units * item.unit_price_rmb * exchRate;
                     return (
-                      <div key={idx} className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 items-center">
-                        <select
-                          value={item.product_id}
-                          onChange={(e) => setItem(idx, { product_id: e.target.value })}
-                          className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
-                        >
-                          <option value="">Select product…</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.model} — {p.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.quantity_units || ''}
-                          onChange={(e) => setItem(idx, { quantity_units: parseInt(e.target.value) || 0 })}
-                          placeholder="0"
-                          className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.quantity_cartons || ''}
-                          onChange={(e) => setItem(idx, { quantity_cartons: parseInt(e.target.value) || 0 })}
-                          placeholder="0"
-                          className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
-                        />
-                        <div className="relative">
+                      <React.Fragment key={idx}>
+                        <div className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 items-center">
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={item.product_id}
+                              onChange={(e) => setItem(idx, { product_id: e.target.value })}
+                              className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
+                            >
+                              <option value="">Select product…</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.model} — {p.name}
+                                </option>
+                              ))}
+                            </select>
+                            <a
+                              href="#/products"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-500 hover:text-primary transition-colors p-1"
+                              title="Create new product (opens in new tab)"
+                            >
+                              <Plus size={14} />
+                            </a>
+                            <button
+                              onClick={(e) => { e.preventDefault(); getProducts().then(setProducts); }}
+                              className="text-gray-500 hover:text-primary transition-colors p-1"
+                              title="Refresh products list"
+                            >
+                              <RefreshCw size={12} />
+                            </button>
+                          </div>
                           <input
                             type="number"
                             min="0"
-                            step="0.0001"
-                            value={item.unit_price_rmb || ''}
-                            onChange={(e) => setItem(idx, { unit_price_rmb: parseFloat(e.target.value) || 0 })}
-                            placeholder="0.00"
-                            className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                            value={item.quantity_units || ''}
+                            onChange={(e) => setItem(idx, { quantity_units: parseInt(e.target.value) || 0 })}
+                            placeholder="0"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
                           />
-                          {lineLkr > 0 && (
-                            <span className="absolute -bottom-4 left-0 text-[8px] text-gray-600">
-                              ≈ {fmt(lineLkr)}
-                            </span>
-                          )}
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.quantity_cartons || ''}
+                            onChange={(e) => setItem(idx, { quantity_cartons: parseInt(e.target.value) || 0 })}
+                            placeholder="0"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                          />
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.0001"
+                              value={item.unit_price_rmb || ''}
+                              onChange={(e) => setItem(idx, { unit_price_rmb: parseFloat(e.target.value) || 0 })}
+                              placeholder="0.00"
+                              className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                            />
+                            {item.unit_price_rmb > 0 && exchRate > 0 && (
+                              <span className="absolute -bottom-3 left-0 text-[8px] font-bold text-gray-500 whitespace-nowrap">
+                                ≈ {fmt(lineLkr)}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeItemRow(idx)}
+                            disabled={items.length === 1}
+                            className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20"
+                          >
+                            <X size={13} />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => removeItemRow(idx)}
-                          disabled={items.length === 1}
-                          className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
+                        {item.product_id && (
+                          <div className="col-span-5 bg-[#1d222a]/50 p-2 rounded-lg mt-1 mb-2 border border-[#2b313a] flex items-center gap-4">
+                            {(() => {
+                              const stock = inventory.find(i => i.product_id === item.product_id);
+                              const movement = movementRates[item.product_id];
+                              const totalPieces = stock ? (stock.cartons_in * stock.pieces_per_carton + stock.pieces_in - stock.cartons_sold * stock.pieces_per_carton - stock.pieces_sold + stock.piece_adj) : 0;
+                              return (
+                                <>
+                                  <div className="text-[10px] text-gray-400">
+                                    Current Stock: <span className="font-bold text-white">{totalPieces} pcs</span>
+                                  </div>
+                                  <div className="w-px h-3 bg-[#2b313a]" />
+                                  <div className="text-[10px] text-gray-400">
+                                    30d Movement: <span className="font-bold text-emerald-400">{movement ? movement.units30d : 0} pcs</span>
+                                  </div>
+                                  <div className="w-px h-3 bg-[#2b313a]" />
+                                  <div className="text-[10px] text-gray-400">
+                                    Wholesale Price: <span className="font-bold text-white">LKR {stock?.wholesale_price.toFixed(2) || 0}</span>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </div>

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive } from '../types';
+import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton } from '../types';
 
 // ── List & fetch ──────────────────────────────────────────────────────────────
 
@@ -17,8 +17,9 @@ export async function getPurchaseById(id: string): Promise<{
   items: PurchaseItem[];
   costs: PurchaseCost[];
   received: PurchaseReceive[];
+  cartons: Carton[];
 }> {
-  const [{ data: purchase, error: pe }, { data: items }, { data: costs }, { data: received }] =
+  const [{ data: purchase, error: pe }, { data: items }, { data: costs }, { data: received }, { data: cartons }] =
     await Promise.all([
       supabase.from('purchases').select('*, suppliers(*)').eq('id', id).single(),
       supabase
@@ -30,6 +31,11 @@ export async function getPurchaseById(id: string): Promise<{
         .from('purchase_receive')
         .select('*, products(id, name, model)')
         .eq('purchase_id', id),
+      supabase
+        .from('cartons')
+        .select('*, products(id, name, model)')
+        .eq('purchase_id', id)
+        .order('carton_index', { ascending: true }),
     ]);
 
   if (pe) throw new Error(pe.message);
@@ -38,6 +44,7 @@ export async function getPurchaseById(id: string): Promise<{
     items: (items ?? []) as PurchaseItem[],
     costs: (costs ?? []) as PurchaseCost[],
     received: (received ?? []) as PurchaseReceive[],
+    cartons: (cartons ?? []) as Carton[],
   };
 }
 
@@ -148,6 +155,15 @@ export async function receivePurchase(
   purchaseId: string,
   items: ReceiveItemInput[]
 ): Promise<void> {
+  // Fetch purchase reference and product details
+  const { data: purchaseData, error: purchaseError } = await supabase
+    .from('purchases')
+    .select('reference')
+    .eq('id', purchaseId)
+    .single();
+  if (purchaseError) throw new Error(purchaseError.message);
+  const purchaseRef = purchaseData.reference;
+
   // Insert receive records
   const { error: re } = await supabase.from('purchase_receive').insert(
     items.map((i) => ({
@@ -161,19 +177,43 @@ export async function receivePurchase(
   );
   if (re) throw new Error(re.message);
 
-  // Add sellable stock to stock_batches (received - damaged)
+  // Add sellable stock to stock_batches (received - damaged) and generate cartons
   for (const item of items) {
     const sellableUnits = Math.max(0, item.received_units - item.damaged_units);
     if (sellableUnits > 0) {
-      const cartons = Math.floor(sellableUnits / item.pieces_per_carton);
+      const cartonsCount = Math.floor(sellableUnits / item.pieces_per_carton);
       const loosePieces = sellableUnits % item.pieces_per_carton;
+      
       await supabase.from('stock_batches').insert({
         product_id: item.product_id,
-        cartons,
+        cartons: cartonsCount,
         loose_pieces: loosePieces,
         notes: `Received from purchase (${purchaseId})`,
         received_at: new Date().toISOString(),
       });
+
+      // Generate cartons if any
+      if (cartonsCount > 0) {
+        // Fetch product model for carton indexing
+        const { data: prodData } = await supabase
+          .from('products')
+          .select('model')
+          .eq('id', item.product_id)
+          .single();
+        const model = prodData?.model || 'ITEM';
+
+        const cartonRows = [];
+        for (let i = 1; i <= cartonsCount; i++) {
+          cartonRows.push({
+            purchase_id: purchaseId,
+            product_id: item.product_id,
+            carton_index: i,
+            carton_code: `${purchaseRef}-${model}-${i}`,
+            status: 'in_stock'
+          });
+        }
+        await supabase.from('cartons').insert(cartonRows);
+      }
     }
   }
 

@@ -88,6 +88,7 @@ export interface SupplierLedger {
   total_purchased: number;
   total_paid: number;
   outstanding: number;
+  advance_balance: number;
 }
 
 export async function getSupplierLedger(supplierId: string): Promise<SupplierLedger> {
@@ -120,24 +121,40 @@ export async function getSupplierLedger(supplierId: string): Promise<SupplierLed
     payments: (payments ?? []) as SupplierPayment[],
     total_purchased,
     total_paid,
-    outstanding: total_purchased - total_paid,
+    outstanding: Math.max(0, total_purchased - total_paid),
+    advance_balance: Math.max(0, total_paid - total_purchased),
   };
 }
 
 export async function recordSupplierPayment(data: {
   supplier_id: string;
-  purchase_id?: string | null;
   amount: number;
   method: 'cash' | 'bank_transfer' | 'credit';
   notes?: string;
+  allocations?: Array<{ purchase_id: string; amount: number }>;
 }): Promise<void> {
-  const { error } = await supabase.from('supplier_payments').insert({
-    supplier_id: data.supplier_id,
-    purchase_id: data.purchase_id ?? null,
-    amount: data.amount,
-    method: data.method,
-    notes: data.notes ?? '',
-    paid_at: new Date().toISOString(),
-  });
-  if (error) throw new Error(error.message);
+  if (data.allocations && data.allocations.length > 0) {
+    // Insert multiple rows
+    const rows = data.allocations.map(a => ({
+      supplier_id: data.supplier_id,
+      purchase_id: a.purchase_id,
+      amount: a.amount,
+      method: data.method,
+      notes: data.notes ?? '',
+      paid_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('supplier_payments').insert(rows);
+    if (error) throw new Error(error.message);
+  } else {
+    // Insert single unallocated row
+    const { error } = await supabase.from('supplier_payments').insert({
+      supplier_id: data.supplier_id,
+      purchase_id: null,
+      amount: data.amount,
+      method: data.method,
+      notes: data.notes ?? '',
+      paid_at: new Date().toISOString(),
+    });
+    if (error) throw new Error(error.message);
+  }
 }

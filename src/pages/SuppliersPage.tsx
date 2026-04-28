@@ -47,7 +47,12 @@ export const SuppliersPage: React.FC = () => {
 
   // Payment modal
   const [payModalOpen, setPayModalOpen] = useState(false);
-  const [payForm, setPayForm] = useState({ amount: '', method: 'cash' as 'cash' | 'bank_transfer' | 'credit', notes: '' });
+  const [payForm, setPayForm] = useState({ 
+    amount: '', 
+    method: 'cash' as 'cash' | 'bank_transfer' | 'credit', 
+    notes: '',
+    allocations: {} as Record<string, string> // purchase_id -> amount
+  });
   const [paying, setPaying] = useState(false);
 
   // Toast
@@ -142,7 +147,12 @@ export const SuppliersPage: React.FC = () => {
   // ── Payment ──────────────────────────────────────────────────────
   function openPayment(s: SupplierWithBalance) {
     setDrawerSupplier(s);
-    setPayForm({ amount: '', method: 'cash', notes: '' });
+    setPayForm({ 
+      amount: '', 
+      method: 'cash', 
+      notes: '',
+      allocations: {}
+    });
     setPayModalOpen(true);
   }
 
@@ -150,6 +160,11 @@ export const SuppliersPage: React.FC = () => {
     if (!drawerSupplier) return;
     const amount = parseFloat(payForm.amount);
     if (!amount || amount <= 0) { showToast('Enter a valid amount', false); return; }
+    
+    const allocations = Object.entries(payForm.allocations)
+      .filter(([_, amt]) => parseFloat(amt) > 0)
+      .map(([id, amt]) => ({ purchase_id: id, amount: parseFloat(amt) }));
+
     setPaying(true);
     try {
       await recordSupplierPayment({
@@ -157,11 +172,12 @@ export const SuppliersPage: React.FC = () => {
         amount,
         method: payForm.method,
         notes: payForm.notes,
+        allocations: allocations.length > 0 ? allocations : undefined,
       });
       setPayModalOpen(false);
       showToast('Payment recorded');
       load();
-      if (drawerSupplier) openLedger({ ...drawerSupplier });
+      if (drawerSupplier) loadLedger(drawerSupplier.id);
     } catch (e: any) {
       showToast(e.message, false);
     } finally {
@@ -171,6 +187,7 @@ export const SuppliersPage: React.FC = () => {
 
   // ── Render ───────────────────────────────────────────────────────
   const totalOwed = suppliers.reduce((s, x) => s + x.outstanding, 0);
+  const totalAdvances = suppliers.reduce((s, x) => s + x.advance_balance, 0);
   const totalSuppliers = suppliers.length;
 
   return (
@@ -206,15 +223,16 @@ export const SuppliersPage: React.FC = () => {
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           { label: 'Total Suppliers', value: totalSuppliers, mono: false },
           { label: 'Total Outstanding', value: fmt(totalOwed), mono: true, red: totalOwed > 0 },
+          { label: 'Total Advances', value: fmt(totalAdvances), mono: true, green: totalAdvances > 0 },
           { label: 'Active Suppliers', value: suppliers.filter((s) => s.total_purchased > 0).length, mono: false },
         ].map((k) => (
           <div key={k.label} className="bg-[#1d222a] border border-[#2b313a] rounded-2xl p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{k.label}</p>
-            <p className={cn('text-xl font-bold mt-1', k.red ? 'text-red-400' : 'text-white', k.mono && 'font-mono text-base')}>
+            <p className={cn('text-xl font-bold mt-1', k.red ? 'text-red-400' : (k.green ? 'text-emerald-400' : 'text-white'), k.mono && 'font-mono text-base')}>
               {k.value}
             </p>
           </div>
@@ -242,7 +260,7 @@ export const SuppliersPage: React.FC = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#1d222a] border-b border-[#2b313a]">
-              {['Supplier', 'Country', 'Contact', 'Purchased', 'Paid', 'Outstanding', ''].map((h) => (
+              {['Supplier', 'Country', 'Contact', 'Purchased', 'Paid', 'Bal/Adv', ''].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 last:text-right">
                   {h}
                 </th>
@@ -274,9 +292,19 @@ export const SuppliersPage: React.FC = () => {
                 <td className="px-5 py-3.5 text-xs font-mono text-gray-300">{fmt(s.total_purchased)}</td>
                 <td className="px-5 py-3.5 text-xs font-mono text-green-400">{fmt(s.total_paid)}</td>
                 <td className="px-5 py-3.5">
-                  <span className={cn('text-xs font-mono font-bold', s.outstanding > 0 ? 'text-red-400' : 'text-gray-400')}>
-                    {fmt(s.outstanding)}
-                  </span>
+                  {s.outstanding > 0 ? (
+                    <span className="text-xs font-mono font-bold text-red-400">
+                      {fmt(s.outstanding)}
+                    </span>
+                  ) : s.advance_balance > 0 ? (
+                    <span className="text-xs font-mono font-bold text-emerald-400">
+                      Adv: {fmt(s.advance_balance)}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-mono font-bold text-gray-400">
+                      {fmt(0)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
@@ -328,11 +356,12 @@ export const SuppliersPage: React.FC = () => {
             </div>
 
             {/* Balance strip */}
-            <div className="grid grid-cols-3 gap-3 p-5 border-b border-[#2b313a]">
+            <div className="grid grid-cols-4 gap-3 p-5 border-b border-[#2b313a]">
               {[
                 { label: 'Total Purchased', val: fmt(drawerSupplier.total_purchased), cls: 'text-white' },
                 { label: 'Total Paid', val: fmt(drawerSupplier.total_paid), cls: 'text-green-400' },
                 { label: 'Outstanding', val: fmt(drawerSupplier.outstanding), cls: drawerSupplier.outstanding > 0 ? 'text-red-400' : 'text-gray-400' },
+                { label: 'Advance', val: fmt(drawerSupplier.advance_balance), cls: drawerSupplier.advance_balance > 0 ? 'text-emerald-400' : 'text-gray-400' },
               ].map((k) => (
                 <div key={k.label} className="bg-[#1d222a] rounded-xl p-3">
                   <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{k.label}</p>
@@ -493,7 +522,7 @@ export const SuppliersPage: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm" onClick={() => setPayModalOpen(false)} />
           <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
-            <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-sm shadow-2xl" style={{ animation: 'posFadeIn 180ms ease' }}>
+            <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden" style={{ animation: 'posFadeIn 180ms ease' }}>
               <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
                 <h3 className="font-bold text-white">Record Payment — {drawerSupplier.name}</h3>
                 <button onClick={() => setPayModalOpen(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors">
@@ -537,6 +566,35 @@ export const SuppliersPage: React.FC = () => {
                         <m.icon size={14} />{m.label}
                       </button>
                     ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Allocate to Purchases (Optional)</label>
+                  <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                    {ledger?.purchases.filter(p => p.status !== 'draft').map(p => {
+                      const allocated = payForm.allocations[p.id] || '';
+                      return (
+                        <div key={p.id} className="flex items-center gap-3 bg-[#1d222a] border border-[#2b313a] rounded-xl p-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-mono font-bold text-white truncate">{p.reference}</p>
+                            <p className="text-[9px] text-gray-500">Total: {fmt(p.total_lkr)}</p>
+                          </div>
+                          <input
+                            type="number"
+                            placeholder="0.00"
+                            value={allocated}
+                            onChange={(e) => setPayForm(prev => ({
+                              ...prev,
+                              allocations: { ...prev.allocations, [p.id]: e.target.value }
+                            }))}
+                            className="w-24 bg-[#171c23] border border-[#2b313a] text-xs text-primary font-mono rounded-lg px-2 py-1 outline-none focus:border-primary/40"
+                          />
+                        </div>
+                      );
+                    })}
+                    {ledger?.purchases.filter(p => p.status !== 'draft').length === 0 && (
+                      <p className="text-[10px] text-gray-600 italic">No confirmed/received purchases to allocate.</p>
+                    )}
                   </div>
                 </div>
                 <div>

@@ -24,7 +24,7 @@ interface NavItem {
   label: string;
   path: string;
   section?: string;
-  requires?: Permission;
+  requires?: Permission | Permission[];
 }
 
 interface SidebarProps {
@@ -41,14 +41,14 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: RotateCcw,         label: 'Returns',     path: '/returns',   requires: 'manage_returns' },
   { icon: BarChart3,         label: 'Reports',     path: '/reports',   requires: 'view_reports' },
   { icon: ShoppingCart,      label: 'Procurement', path: '/purchases', requires: 'manage_procurement', section: 'Procurement' },
-  { icon: Building2,         label: 'Suppliers',   path: '/suppliers', requires: 'manage_suppliers',   section: 'Procurement' },
+  { icon: Building2,         label: 'Suppliers',   path: '/suppliers', requires: ['manage_suppliers', 'manage_payments'],   section: 'Procurement' },
   { icon: Upload,            label: 'Bulk Import', path: '/import',    requires: 'bulk_import',        section: 'Admin' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const role = getCurrentRole();
   const navItems = ALL_NAV_ITEMS.filter(
-    (item) => !item.requires || can(item.requires, role)
+    (item) => !item.requires || (Array.isArray(item.requires) ? item.requires.some(r => can(r, role)) : can(item.requires, role))
   );
 
   const handleLogout = () => {
