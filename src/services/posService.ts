@@ -129,6 +129,21 @@ export const checkout = async (
       }
     }
 
+    // 5. FIFO stock deduction per product
+    for (const item of cart) {
+      const piecesPerCarton = item.product.pieces_per_carton || 1;
+      const totalPieces = item.quantityCartons * piecesPerCarton + item.quantityPieces;
+      if (totalPieces > 0) {
+        const { error: fifoError } = await supabase.rpc('deduct_stock_fifo', {
+          p_product_id: item.product.id,
+          p_units: totalPieces,
+        });
+        if (fifoError) {
+          console.warn('FIFO deduction warning:', fifoError.message);
+        }
+      }
+    }
+
     return invoiceId;
   } catch (error) {
     console.error('Checkout Error:', error);

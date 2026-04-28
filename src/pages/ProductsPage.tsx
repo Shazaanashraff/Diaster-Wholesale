@@ -25,6 +25,19 @@ export const ProductsPage: React.FC = () => {
   const wholesaleRef = useRef<HTMLInputElement>(null);
   const retailRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const piecesPerCartonRef = useRef<HTMLInputElement>(null);
+  const marginPctRef = useRef<HTMLInputElement>(null);
+
+  // Auto-generate a unique 6-digit SKU
+  async function generateSKU(): Promise<string> {
+    const existing = new Set(products.map((p) => p.item_code));
+    let sku = '';
+    for (let attempts = 0; attempts < 20; attempts++) {
+      sku = String(Math.floor(100000 + Math.random() * 900000));
+      if (!existing.has(sku)) break;
+    }
+    return sku;
+  }
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,56 +96,41 @@ export const ProductsPage: React.FC = () => {
 
   const handleSubmit = async () => {
     const name = nameRef.current?.value.trim() || '';
-    const item_code = itemCodeRef.current?.value.trim() || '';
     const model = modelRef.current?.value.trim() || '';
     const wholesale_price = parseFloat(wholesaleRef.current?.value || '0');
     const retail_price = parseFloat(retailRef.current?.value || '0');
     const description = descriptionRef.current?.value.trim() || '';
+    const pieces_per_carton = parseInt(piecesPerCartonRef.current?.value || '1') || 1;
+    const margin_pct = parseFloat(marginPctRef.current?.value || '20') || 20;
 
-    if (!name || !item_code) return;
+    if (!name) return;
 
     try {
       setSaving(true);
 
-      // ── Duplicate check (only when creating) ──
-      if (!editingProduct) {
-        const duplicates = await checkDuplicate(model, name);
-        if (duplicates.length > 0) {
-          setDuplicateWarning(
-            `A product with name "${name}" and model "${model}" already exists (${duplicates[0].item_code}). Are you sure?`
-          );
-          // If warning is shown for the first time, stop and let user click again to confirm
-          if (!duplicateWarning) {
-            setSaving(false);
-            return;
-          }
-        }
-      }
-
       if (editingProduct) {
         // ── UPDATE ──
         const updated = await updateProduct(editingProduct.id, {
-          name,
-          item_code,
-          model,
-          wholesale_price,
-          retail_price,
-          description,
+          name, model, wholesale_price, retail_price,
+          description, pieces_per_carton, margin_pct,
         });
-        setProducts((prev) =>
-          prev.map((p) => (p.id === updated.id ? updated : p))
-        );
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
-        // ── CREATE ──
+        // ── Duplicate check ──
+        const duplicates = await checkDuplicate(model, name);
+        if (duplicates.length > 0) {
+          setDuplicateWarning(
+            `"${name}" (${model}) already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
+          );
+          if (!duplicateWarning) { setSaving(false); return; }
+        }
+
+        // ── Auto-generate 6-digit SKU ──
+        const item_code = itemCodeRef.current?.value.trim() || (await generateSKU());
+
         const created = await createProduct({
-          name,
-          item_code,
-          model,
-          wholesale_price,
-          retail_price,
-          description,
-          category: 'general',
-          pieces_per_carton: 1,
+          name, item_code, model, wholesale_price, retail_price,
+          description, category: 'general', pieces_per_carton, margin_pct,
         });
         setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       }
@@ -345,7 +343,14 @@ export const ProductsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-16">
+                    <div className="flex items-center gap-10">
+                      {(product.cost_price ?? 0) > 0 && (
+                        <div className="text-right">
+                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost / MSP</p>
+                          <p className="text-sm font-bold text-amber-400 font-mono">LKR {product.cost_price!.toFixed(2)}</p>
+                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {product.msp!.toFixed(2)}</p>
+                        </div>
+                      )}
                       <div className="text-right">
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Wholesale</p>
                         <p className="text-xl font-bold text-gray-300 tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
@@ -418,14 +423,15 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Hash size={12} className="text-primary" /> Item Code
+                <Hash size={12} className="text-primary" /> SKU / Item Code
               </label>
-              <input 
+              <input
                 ref={itemCodeRef}
-                type="text" 
+                type="text"
                 defaultValue={editingProduct?.item_code || ''}
-                placeholder="e.g. SOFT-PS-001" 
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+                placeholder={editingProduct ? editingProduct.item_code : 'Auto-generated'}
+                disabled={!!editingProduct}
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -434,11 +440,11 @@ export const ProductsPage: React.FC = () => {
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
               <Package size={12} className="text-primary" /> Model / Version
             </label>
-            <input 
+            <input
               ref={modelRef}
-              type="text" 
+              type="text"
               defaultValue={editingProduct?.model || ''}
-              placeholder="e.g. 2024 Pro Edition" 
+              placeholder="e.g. A616"
               className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
             />
           </div>
@@ -448,11 +454,11 @@ export const ProductsPage: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Tag size={12} className="text-primary" /> Wholesale Price (LKR)
               </label>
-              <input 
+              <input
                 ref={wholesaleRef}
-                type="number" 
+                type="number"
                 defaultValue={editingProduct?.wholesale_price || ''}
-                placeholder="0.00" 
+                placeholder="0.00"
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
               />
             </div>
@@ -460,12 +466,42 @@ export const ProductsPage: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Tag size={12} className="text-primary" /> Retail Price (LKR)
               </label>
-              <input 
+              <input
                 ref={retailRef}
-                type="number" 
+                type="number"
                 defaultValue={editingProduct?.retail_price || ''}
-                placeholder="0.00" 
+                placeholder="0.00"
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Package size={12} className="text-primary" /> Units per Carton
+              </label>
+              <input
+                ref={piecesPerCartonRef}
+                type="number"
+                min="1"
+                defaultValue={editingProduct?.pieces_per_carton || 1}
+                placeholder="1"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Tag size={12} className="text-primary" /> Default Margin %
+              </label>
+              <input
+                ref={marginPctRef}
+                type="number"
+                min="0"
+                step="0.5"
+                defaultValue={editingProduct?.margin_pct ?? 20}
+                placeholder="20"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
               />
             </div>
           </div>

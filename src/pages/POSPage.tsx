@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { getProducts } from '../services/productService';
 import { getCustomers } from '../services/customerService';
+import { getRolePin } from '../utils/permissions';
 import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
 import { checkout } from '../services/posService';
 import type { Product, Customer } from '../types';
@@ -71,6 +72,13 @@ export const POSPage: React.FC = () => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
   const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  // Discount & approval
+  const [discountAmt, setDiscountAmt] = useState(0);
+  const [discountApproved, setDiscountApproved] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [approvalPin, setApprovalPin] = useState('');
+  const [approvalError, setApprovalError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -253,14 +261,44 @@ export const POSPage: React.FC = () => {
     return acc + avgCost * totalPieces;
   }, 0);
 
-  const discount = subtotal > 50 ? 5.5 : 0;
+  // MSP floor: minimum acceptable total based on per-product MSP
+  const mspFloor = cart.reduce((acc, item) => {
+    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const msp = item.product.msp ?? 0;
+    return acc + msp * totalPieces;
+  }, 0);
+
+  const discount = discountApproved ? discountAmt : 0;
   const total = subtotal - discount;
-  const isBelowCost = subtotal - discount < estimatedCostFloor;
+  const isBelowCost = total < estimatedCostFloor;
+  const isBelowMSP = mspFloor > 0 && total < mspFloor;
+  const needsApproval = discountAmt > 0 && !discountApproved;
   const canProcessTransaction =
     cart.length > 0
     && !!selectedCustomerId
     && btnPhase === 'idle'
-    && !isBelowCost;
+    && !isBelowCost
+    && !isBelowMSP
+    && !needsApproval;
+
+  function handleDiscountChange(val: string) {
+    const num = parseFloat(val) || 0;
+    setDiscountAmt(num);
+    setDiscountApproved(false);
+  }
+
+  function handleApproveDiscount() {
+    const adminPin = getRolePin('admin');
+    if (approvalPin === adminPin) {
+      setDiscountApproved(true);
+      setApprovalModalOpen(false);
+      setApprovalPin('');
+      setApprovalError('');
+    } else {
+      setApprovalError('Incorrect admin PIN');
+      setApprovalPin('');
+    }
+  }
 
   const processTransaction = async () => {
     if (!canProcessTransaction) return;
@@ -542,9 +580,43 @@ export const POSPage: React.FC = () => {
               <span>Subtotal</span>
               <strong>LKR <AnimatedNumber value={subtotal} /></strong>
             </div>
-            <div>
+            <div style={{ alignItems: 'center' }}>
               <span>Discount</span>
-              <strong>- LKR <AnimatedNumber value={discount} /></strong>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={discountAmt || ''}
+                  onChange={e => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                  style={{
+                    width: 80, background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '3px 8px',
+                    color: '#f1f5f9', fontSize: 12, fontFamily: 'monospace',
+                    outline: 'none',
+                  }}
+                />
+                {discountAmt > 0 && !discountApproved && (
+                  <button
+                    type="button"
+                    onClick={() => { setApprovalModalOpen(true); setApprovalError(''); setApprovalPin(''); }}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                      borderRadius: 6, cursor: 'pointer',
+                      background: 'rgba(251,191,36,0.15)',
+                      border: '1px solid rgba(251,191,36,0.3)',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    Approve
+                  </button>
+                )}
+                {discountApproved && discountAmt > 0 && (
+                  <span style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>✓ Approved</span>
+                )}
+              </div>
             </div>
             <div className="total">
               <span>Total</span>
@@ -552,7 +624,89 @@ export const POSPage: React.FC = () => {
             </div>
           </div>
 
-          {isBelowCost && (
+          {/* Discount approval modal */}
+          {approvalModalOpen && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{
+                background: '#171c23', border: '1px solid #2b313a',
+                borderRadius: 20, padding: 28, width: 320,
+                display: 'flex', flexDirection: 'column', gap: 16,
+              }}>
+                <div>
+                  <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Admin Approval Required</p>
+                  <p style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
+                    Discount of LKR {discountAmt.toFixed(2)} requires admin authorisation.
+                  </p>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>
+                    Admin PIN
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={approvalPin}
+                    onChange={e => { setApprovalPin(e.target.value); setApprovalError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleApproveDiscount()}
+                    placeholder="••••"
+                    autoFocus
+                    style={{
+                      width: '100%', background: '#1d222a',
+                      border: approvalError ? '1px solid #ef4444' : '1px solid #2b313a',
+                      borderRadius: 12, padding: '10px 14px',
+                      color: '#f1f5f9', fontSize: 18, letterSpacing: '0.3em',
+                      outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                  {approvalError && (
+                    <p style={{ color: '#f87171', fontSize: 11, marginTop: 6, textAlign: 'center' }}>{approvalError}</p>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setApprovalModalOpen(false); setApprovalPin(''); setApprovalError(''); }}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 12,
+                      background: '#1d222a', border: '1px solid #2b313a',
+                      color: '#9ca3af', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApproveDiscount}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 12,
+                      background: '#7c3aed', border: 'none',
+                      color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {needsApproval && (
+            <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+              Discount requires admin approval before checkout
+            </div>
+          )}
+
+          {isBelowMSP && (
+            <div className="pos-warning" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}>
+              ❌ Below MSP — minimum total: LKR {mspFloor.toFixed(2)}
+            </div>
+          )}
+
+          {!isBelowMSP && isBelowCost && (
             <div className="pos-warning">Below cost floor: LKR {estimatedCostFloor.toFixed(2)}</div>
           )}
 

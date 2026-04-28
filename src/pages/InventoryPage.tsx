@@ -4,7 +4,7 @@ import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Pack
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment } from '../services/inventoryService';
+import { getInventory, insertStockAdjustment, getMovementRates } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -20,6 +20,7 @@ function readThreshold(): number {
 
 export const InventoryPage: React.FC = () => {
   const [inventory, setInventory] = useState<ProductStock[]>([]);
+  const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +29,7 @@ export const InventoryPage: React.FC = () => {
 
   // ── Stock adjustment modal ──
   const [adjustRow, setAdjustRow] = useState<ProductStock | null>(null);
+  const [adjType, setAdjType] = useState<'damage' | 'recount' | 'return' | 'other'>('recount');
   const [adjCartons, setAdjCartons] = useState('0');
   const [adjPieces, setAdjPieces] = useState('0');
   const [adjReason, setAdjReason] = useState('');
@@ -64,8 +66,9 @@ export const InventoryPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getInventory();
+      const [data, rates] = await Promise.all([getInventory(), getMovementRates()]);
       setInventory(data);
+      setMovementRates(rates);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
@@ -77,6 +80,7 @@ export const InventoryPage: React.FC = () => {
   // ── Open adjustment modal for a specific row ──
   function openAdjustModal(row: ProductStock) {
     setAdjustRow(row);
+    setAdjType('recount');
     setAdjCartons('0');
     setAdjPieces('0');
     setAdjReason('');
@@ -118,8 +122,8 @@ export const InventoryPage: React.FC = () => {
       await insertStockAdjustment({
         product_id: adjustRow.product_id,
         adjustment_pieces: totalPieceDelta,
-        reason: adjReason.trim(),
-        adjusted_by: 'admin', // TODO: replace with auth user
+        reason: `[${adjType.toUpperCase()}] ${adjReason.trim()}`,
+        adjusted_by: 'admin',
       });
 
       closeAdjustModal();
@@ -318,6 +322,7 @@ export const InventoryPage: React.FC = () => {
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Retail</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Margin</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">30d Sales</th>
                     <th className="px-8 py-6"></th>
                   </tr>
                 </thead>
@@ -383,6 +388,16 @@ export const InventoryPage: React.FC = () => {
                               {row.wholesale_price > 0 ? Math.round(((row.retail_price - row.wholesale_price) / row.wholesale_price) * 100) : 0}%
                             </span>
                           </div>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          {movementRates[row.product_id] ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-bold text-emerald-400">{movementRates[row.product_id].units30d}</span>
+                              <span className="text-[10px] font-semibold text-gray-500">{movementRates[row.product_id].perDay}/day</span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-600">—</span>
+                          )}
                         </td>
                         <td className="px-8 py-6 text-right">
                           <div className="flex items-center gap-2 justify-end">
@@ -496,6 +511,39 @@ export const InventoryPage: React.FC = () => {
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Pieces</p>
                 <p className="text-lg font-bold text-primary mt-1">{computeStock(adjustRow).totalPieces}</p>
               </div>
+            </div>
+
+            {/* Adjustment type */}
+            <div>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Adjustment Type</label>
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { key: 'recount',  label: 'Recount',  color: 'blue'   },
+                  { key: 'damage',   label: 'Damage',   color: 'red'    },
+                  { key: 'return',   label: 'Return',   color: 'green'  },
+                  { key: 'other',    label: 'Other',    color: 'gray'   },
+                ] as const).map(t => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setAdjType(t.key)}
+                    className={cn(
+                      'py-2 rounded-xl text-[11px] font-bold border transition-all',
+                      adjType === t.key
+                        ? t.key === 'damage'  ? 'bg-red-900/30 text-red-400 border-red-900/50'
+                        : t.key === 'return'  ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50'
+                        : t.key === 'recount' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50'
+                        : 'bg-[#2b313a] text-white border-[#3a424f]'
+                        : 'bg-[#1d222a] text-gray-500 border-[#2b313a] hover:text-gray-300'
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {adjType === 'damage' && (
+                <p className="text-[10px] text-red-400 font-semibold mt-2">Use a negative delta to remove damaged units from stock.</p>
+              )}
             </div>
 
             {/* Delta inputs */}

@@ -28,6 +28,7 @@ import { SalesByCustomerReport }      from './reports/SalesByCustomerReport';
 import { StockValuationReport }       from './reports/StockValuationReport';
 import { DamageReport }               from './reports/DamageReport';
 import { SalesReturnReport }          from './reports/SalesReturnReport';
+import { PurchaseHistoryReport }      from './reports/PurchaseHistoryReport';
 
 const CATEGORIES = [
   {
@@ -82,8 +83,8 @@ const CATEGORIES = [
     label: 'Supplier',
     icon: Truck,
     reports: [
-      { id: 'supplier-ledger',       label: 'Supplier Ledger', comingSoon: true },
-      { id: 'outstanding-payables',  label: 'Payables',        comingSoon: true },
+      { id: 'purchase-history',      label: 'Purchase History', component: PurchaseHistoryReport },
+      { id: 'outstanding-payables',  label: 'Payables',         comingSoon: true },
     ],
   },
   {

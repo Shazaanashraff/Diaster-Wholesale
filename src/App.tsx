@@ -11,6 +11,9 @@ import { BulkImportPage } from './pages/BulkImportPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ReturnsPage } from './pages/ReturnsPage';
 import { PinAuthPage } from './pages/PinAuthPage';
+import { SuppliersPage } from './pages/SuppliersPage';
+import { PurchasesPage } from './pages/PurchasesPage';
+import { PurchaseDetailPage } from './pages/PurchaseDetailPage';
 
 const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter;
 
@@ -36,6 +39,9 @@ const App: React.FC = () => {
           <Route path="/import" element={<BulkImportPage />} />
           <Route path="/returns" element={<ReturnsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/purchases" element={<PurchasesPage />} />
+          <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

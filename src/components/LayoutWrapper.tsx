@@ -12,8 +12,12 @@ interface LayoutWrapperProps {
 export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPosRoute = location.pathname === '/pos' || location.pathname === '/' || location.pathname === '/inventory' || location.pathname === '/products' || location.pathname === '/customers' || location.pathname === '/reports';
-  const isProductsRoute = location.pathname === '/products' || location.pathname === '/customers' || location.pathname === '/reports';
+  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+  );
+  const isProductsRoute = ['/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+  );
   const [hydrated, setHydrated] = useState(false);
   const [isSessionCollapsed, setIsSessionCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
