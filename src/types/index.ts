@@ -6,6 +6,7 @@
 export interface Product {
   id: string;
   item_code: string;
+  sku?: string;
   name: string;
   model: string;
   description: string;
@@ -13,6 +14,9 @@ export interface Product {
   wholesale_price: number;
   retail_price: number;
   pieces_per_carton: number;
+  margin_pct?: number;
+  cost_price?: number;
+  msp?: number;
   created_at: string;
   updated_at: string;
 }
@@ -119,4 +123,94 @@ export interface ComputedStock {
   totalPieces: number;
   availCartons: number;
   availLoose: number;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Procurement & Supplier types
+// ────────────────────────────────────────────────────────────────
+
+export interface Supplier {
+  id: string;
+  name: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  country: string;
+  notes: string;
+  created_at: string;
+}
+
+export type PurchaseStatus = 'draft' | 'confirmed' | 'in_transit' | 'received' | 'closed';
+
+export interface Purchase {
+  id: string;
+  reference: string;
+  supplier_id: string;
+  status: PurchaseStatus;
+  exchange_rate: number;
+  total_rmb: number;
+  total_lkr: number;
+  cost_finalized: boolean;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  suppliers?: Supplier;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchase_id: string;
+  product_id: string;
+  quantity_units: number;
+  quantity_cartons: number;
+  unit_price_rmb: number;
+  created_at: string;
+  products?: Product;
+}
+
+export type PurchaseCostType = 'shipping' | 'clearing' | 'tax' | 'other';
+
+export interface PurchaseCost {
+  id: string;
+  purchase_id: string;
+  cost_type: PurchaseCostType;
+  amount_lkr: number;
+  notes: string;
+  created_at: string;
+}
+
+export interface PurchaseReceive {
+  id: string;
+  purchase_id: string;
+  product_id: string;
+  ordered_units: number;
+  received_units: number;
+  damaged_units: number;
+  notes: string;
+  received_at: string;
+  products?: Product;
+}
+
+export interface SupplierPayment {
+  id: string;
+  supplier_id: string;
+  purchase_id: string | null;
+  amount: number;
+  method: 'cash' | 'bank_transfer' | 'credit';
+  notes: string;
+  paid_at: string;
+  created_at: string;
+  purchases?: Pick<Purchase, 'reference'>;
+}
+
+export interface AuditLog {
+  id: string;
+  table_name: string;
+  record_id: string;
+  action: string;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
+  user_label: string;
+  notes: string;
+  created_at: string;
 }

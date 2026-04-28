@@ -6,6 +6,7 @@ import { ReportKPICard } from './shared/ReportKPICard';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { ReportTable } from './shared/ReportTable';
+import { ReportSkeleton } from './shared/ReportSkeleton';
 
 export const ProfitLossReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
@@ -23,7 +24,7 @@ export const ProfitLossReport: React.FC = () => {
     load();
   }, [period]);
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Loading P&L Data...</div>;
+  if (loading) return <ReportSkeleton kpis={4} rows={5} />;
 
   const rows = [
     ['Total Revenue', fmtCurrency(data.revenue)],
