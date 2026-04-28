@@ -39,10 +39,10 @@ type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
 
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
-  'bg-[#e6d3f0]',
+  'bg-[#dbeafe]',
   'bg-[#d4e8f8]',
   'bg-[#d9dcf6]',
-  'bg-[#f2c8de]',
+  'bg-[#f0e7f5]',
   'bg-[#ece7ec]',
   'bg-[#f0d0db]',
   'bg-[#cbe8df]',
@@ -871,8 +871,8 @@ export const POSPage: React.FC = () => {
               className={cn(
                 'py-4 rounded-xl border text-sm font-semibold transition-colors',
                 selectedOrderType === type
-                  ? 'bg-[#e6d3f0] border-[#d7bde6] text-[#312e81]'
-                  : 'bg-[#d7e5e8] border-[#c4d7db] text-[#1f2937]'
+                  ? 'bg-[#f8fafc] border-[#f8fafc] text-[#0f172a]'
+                  : 'bg-[#1d222a] border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33]'
               )}
             >
               {type}
@@ -888,7 +888,7 @@ export const POSPage: React.FC = () => {
           <button
             type="button"
             onClick={resetAfterSuccess}
-            className="w-full py-3 rounded-xl bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] font-semibold hover:bg-[#dcc4ed] transition-colors"
+            className="w-full py-3 rounded-xl bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] font-semibold hover:bg-[#e2e8f0] transition-colors"
           >
             Back to POS
           </button>

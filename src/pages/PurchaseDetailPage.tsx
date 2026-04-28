@@ -16,6 +16,7 @@ import {
   type ReceiveItemInput,
 } from '../services/purchaseService';
 import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton } from '../types';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -60,6 +61,7 @@ export const PurchaseDetailPage: React.FC = () => {
   // Cost form state
   const [costForm, setCostForm] = useState({ cost_type: 'shipping' as typeof COST_TYPES[number], amount_lkr: '', notes: '' });
   const [addingCost, setAddingCost] = useState(false);
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -162,7 +164,6 @@ export const PurchaseDetailPage: React.FC = () => {
 
   async function handleFinalize() {
     if (!purchase) return;
-    if (!window.confirm('Finalize costing and close this purchase? This will update product cost prices and MSP. This action cannot be undone.')) return;
     setActionLoading(true);
     try {
       await finalizeCostingAndClose(purchase.id, items, received, costs, purchase.exchange_rate);
@@ -274,7 +275,7 @@ export const PurchaseDetailPage: React.FC = () => {
           )}
           {purchase.status === 'received' && (
             <button
-              onClick={handleFinalize}
+              onClick={() => setFinalizeConfirmOpen(true)}
               disabled={actionLoading || costs.length === 0}
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors disabled:opacity-50"
               title={costs.length === 0 ? 'Add at least one cost first' : ''}
@@ -676,6 +677,16 @@ export const PurchaseDetailPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* ── Confirm Finalize ────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={finalizeConfirmOpen}
+        onClose={() => setFinalizeConfirmOpen(false)}
+        onConfirm={handleFinalize}
+        title="Finalize Costing?"
+        message="This will close the purchase, update product cost prices and MSP based on the added costs. This action cannot be undone."
+        confirmText="Finalize & Close"
+        variant="warning"
+      />
     </div>
   );
 };

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Phone, CreditCard, Mail, MapPin, User, Hash, AlertCircle, Trash2, AlertTriangle, Loader2, Search, Filter, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
-import { getCustomers, createCustomer, deleteCustomer } from '../services/customerService';
+import { archiveCustomer, getCustomers, createCustomer } from '../services/customerService';
 import type { Customer } from '../types';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedNumber } from '../components/AnimatedNumber';
@@ -13,8 +14,8 @@ export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -90,15 +91,15 @@ export const CustomersPage: React.FC = () => {
   };
 
   const handleDeleteCustomer = async () => {
-    if (!customerToDelete) return;
+    if (!deleteTarget) return;
     try {
       setFormLoading(true);
-      await deleteCustomer(customerToDelete.id);
-      setIsDeleteModalOpen(false);
-      setCustomerToDelete(null);
+      setDeleteError(null);
+      await archiveCustomer(deleteTarget.id);
+      setDeleteTarget(null);
       await loadCustomers();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to delete customer');
+      setDeleteError(err.message || 'Failed to archive customer');
     } finally {
       setFormLoading(false);
     }
@@ -250,8 +251,8 @@ export const CustomersPage: React.FC = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          setCustomerToDelete(customer);
-                          setIsDeleteModalOpen(true);
+                          setDeleteTarget(customer);
+                          setDeleteError(null);
                         }}
                         className="p-1.5 rounded-lg bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-500/20 border border-[#2b313a] transition-all duration-300"
                       >
@@ -408,14 +409,14 @@ export const CustomersPage: React.FC = () => {
             <button 
               disabled={formLoading}
               onClick={() => setIsAddModalOpen(false)}
-              className="w-full py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all disabled:opacity-50"
+              className="w-full py-4 rounded-2xl border border-[#2b313a] bg-[#1d222a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all disabled:opacity-50"
             >
               CANCEL
             </button>
             <button 
               disabled={formLoading}
               onClick={handleRegister}
-              className="w-full h-[56px] bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] rounded-2xl font-bold text-sm hover:bg-[#dcc4ed] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+              className="w-full h-[56px] bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-[#e2e8f0] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 {formLoading ? (
@@ -433,51 +434,18 @@ export const CustomersPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* DELETE CONFIRMATION MODAL */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="Delete Customer"
-      >
-        <div className="space-y-6">
-          <div className="p-6 bg-red-50 rounded-[2rem] flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-red-500 mb-4 shadow-sm border border-red-100">
-              <AlertTriangle size={32} />
-            </div>
-            <h4 className="text-xl font-bold text-dark mb-2">Are you sure?</h4>
-            <p className="text-sm text-gray-500 font-semibold leading-relaxed">
-              You are about to delete <span className="text-red-500 font-bold">{customerToDelete?.name}</span>. 
-              This action will permanently remove the customer and all associated ledger history. This cannot be undone.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all"
-            >
-              CANCEL
-            </button>
-            <button
-              onClick={handleDeleteCustomer}
-              disabled={formLoading}
-              className="w-full h-[56px] bg-[#f2c8de] text-[#7a284f] border border-[#e7aacb] rounded-2xl font-bold text-sm hover:bg-[#efbad5] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
-            >
-              <AnimatePresence mode="wait">
-                {formLoading ? (
-                  <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
-                    <Loader2 size={20} className="animate-spin" />
-                  </motion.div>
-                ) : (
-                  <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
-                    YES, DELETE
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* ARCHIVE CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleDeleteCustomer}
+        title="Archive Customer"
+        message={`Are you sure you want to archive "${deleteTarget?.name}"? They will no longer appear in POS or active lists, but their history will be preserved.`}
+        confirmText="Archive Customer"
+        variant="warning"
+        isLoading={formLoading}
+        error={deleteError}
+      />
     </div>
   );
 };

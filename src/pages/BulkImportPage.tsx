@@ -638,7 +638,7 @@ export const BulkImportPage: React.FC = () => {
             </button>
             <button
               onClick={handleRollback}
-              className="flex-1 py-4 bg-[#f2c8de] text-[#7a284f] border border-[#e7aacb] rounded-2xl text-sm font-bold hover:bg-[#efbad5] transition-all active:scale-[0.98]"
+              className="flex-1 py-4 bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-[#e2e8f0] transition-all active:scale-[0.98]"
               id="rollback-confirm-btn"
             >
               Yes, Rollback

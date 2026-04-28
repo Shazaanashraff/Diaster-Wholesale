@@ -10,6 +10,7 @@ import { getProducts } from '../services/productService';
 import { getInventory, getMovementRates } from '../services/inventoryService';
 import type { Purchase, Product, ProductStock } from '../types';
 import type { SupplierWithBalance } from '../services/supplierService';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -58,6 +59,9 @@ export const PurchasesPage: React.FC = () => {
   const [items, setItems] = useState<NewItemRow[]>([{ ...EMPTY_ITEM }]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Confirm delete
+  const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -162,15 +166,21 @@ export const PurchasesPage: React.FC = () => {
     }
   }
 
-  async function handleDelete(p: Purchase, e: React.MouseEvent) {
+  function handleDeleteRequest(p: Purchase, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!window.confirm(`Delete ${p.reference}? This cannot be undone.`)) return;
+    setDeleteTarget(p);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
     try {
-      await deletePurchase(p.id);
-      showToast(`${p.reference} deleted`);
+      await deletePurchase(deleteTarget.id);
+      showToast(`${deleteTarget.reference} deleted`);
       load();
     } catch (err: any) {
       showToast(err.message, false);
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -328,7 +338,7 @@ export const PurchasesPage: React.FC = () => {
                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                       {p.status === 'draft' && (
                         <button
-                          onClick={(e) => handleDelete(p, e)}
+                          onClick={(e) => handleDeleteRequest(p, e)}
                           className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         >
                           <Trash2 size={12} />
@@ -561,6 +571,15 @@ export const PurchasesPage: React.FC = () => {
           </div>
         </>
       )}
+      {/* ── Confirm Delete ────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete Purchase Order"
+        message={`Are you sure you want to delete "${deleteTarget?.reference}"? This action cannot be undone.`}
+        confirmText="Delete Purchase"
+      />
     </div>
   );
 };

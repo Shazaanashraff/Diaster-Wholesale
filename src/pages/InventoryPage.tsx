@@ -608,14 +608,14 @@ export const InventoryPage: React.FC = () => {
               <button
                 onClick={closeAdjustModal}
                 disabled={adjSaving}
-                className="flex-1 px-6 py-3.5 bg-[#d7e5e8] text-[#1f2937] border border-[#c4d7db] rounded-2xl font-bold text-sm hover:bg-[#cbe0e4] transition-all disabled:opacity-50"
+                className="flex-1 px-6 py-3.5 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-2xl text-sm font-bold hover:text-white hover:bg-[#252a33] transition-all disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAdjustSubmit}
                 disabled={adjSaving}
-                className="flex-1 h-[56px] bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] rounded-2xl font-bold text-sm hover:bg-[#dcc4ed] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden active:scale-[0.98]"
+                className="flex-1 h-[56px] bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-[#e2e8f0] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden active:scale-[0.98]"
               >
                 <AnimatePresence mode="wait">
                   {adjSaving ? (

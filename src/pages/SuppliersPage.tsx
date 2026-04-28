@@ -5,11 +5,12 @@ import {
   Trash2, Edit2,
 } from 'lucide-react';
 import {
-  getSuppliers, createSupplier, updateSupplier, deleteSupplier,
+  getSuppliers, createSupplier, updateSupplier, archiveSupplier,
   getSupplierLedger, recordSupplierPayment,
   type SupplierWithBalance, type SupplierLedger,
 } from '../services/supplierService';
 import type { Supplier } from '../types';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -57,6 +58,10 @@ export const SuppliersPage: React.FC = () => {
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+
+  // Confirm delete
+  const [deleteTarget, setDeleteTarget] = useState<SupplierWithBalance | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 2800);
@@ -133,14 +138,24 @@ export const SuppliersPage: React.FC = () => {
     }
   }
 
-  async function handleDelete(s: SupplierWithBalance) {
-    if (!window.confirm(`Delete "${s.name}"? This cannot be undone.`)) return;
+  function handleDeleteRequest(s: SupplierWithBalance) {
+    setDeleteTarget(s);
+    setDeleteError(null);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setSaving(true);
+    setDeleteError(null);
     try {
-      await deleteSupplier(s.id);
-      showToast('Supplier deleted');
+      await archiveSupplier(deleteTarget.id);
+      showToast('Supplier archived');
       load();
+      setDeleteTarget(null);
     } catch (e: any) {
-      showToast(e.message, false);
+      setDeleteError(e.message || 'Failed to archive supplier');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -177,7 +192,7 @@ export const SuppliersPage: React.FC = () => {
       setPayModalOpen(false);
       showToast('Payment recorded');
       load();
-      if (drawerSupplier) loadLedger(drawerSupplier.id);
+      if (drawerSupplier) openLedger(drawerSupplier);
     } catch (e: any) {
       showToast(e.message, false);
     } finally {
@@ -317,7 +332,10 @@ export const SuppliersPage: React.FC = () => {
                     <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors">
                       <Edit2 size={12} />
                     </button>
-                    <button onClick={() => handleDelete(s)} className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteRequest(s); }}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
                       <Trash2 size={12} />
                     </button>
                     <ChevronRight size={14} className="text-gray-600" />
@@ -624,6 +642,19 @@ export const SuppliersPage: React.FC = () => {
           </div>
         </>
       )}
+
+      {/* ── Confirm Delete ────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleDelete}
+        title="Archive Supplier"
+        message={`Are you sure you want to archive "${deleteTarget?.name}"? They will no longer appear in active lists, but all historical transactions will be preserved.`}
+        confirmText="Archive Supplier"
+        variant="warning"
+        isLoading={saving}
+        error={deleteError}
+      />
     </div>
   );
 };

@@ -10,7 +10,7 @@ export interface SupplierWithBalance extends Supplier {
 export async function getSuppliers(): Promise<SupplierWithBalance[]> {
   const [{ data: suppliers }, { data: purchaseTotals }, { data: paymentTotals }] =
     await Promise.all([
-      supabase.from('suppliers').select('*').order('name', { ascending: true }),
+      supabase.from('suppliers').select('*').eq('is_active', true).order('name', { ascending: true }),
       supabase.from('purchases').select('supplier_id, total_lkr').neq('status', 'draft'),
       supabase.from('supplier_payments').select('supplier_id, amount'),
     ]);
@@ -70,6 +70,14 @@ export async function updateSupplier(
 
 export async function deleteSupplier(id: string): Promise<void> {
   const { error } = await supabase.from('suppliers').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function archiveSupplier(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('suppliers')
+    .update({ is_active: false })
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 

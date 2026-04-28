@@ -3,16 +3,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #8b5cf6;
-  --color-secondary: #c4b5fd;
-  --color-accent: #f5f3ff;
-  --color-dark: #1e1b4b;
-  --color-border: #eef2ff;
+  --color-primary: #3b82f6;
+  --color-secondary: #93c5fd;
+  --color-accent: #eff6ff;
+  --color-dark: #0f172a;
+  --color-border: #e2e8f0;
   
-  --color-card-purple: #8b5cf610;
-  --color-card-violet: #c4b5fd20;
-  --color-card-gold: #faf5ff;
-  --color-card-fuchsia: #fdf4ff;
+  --color-card-blue: #3b82f610;
+  --color-card-sky: #93c5fd20;
+  --color-card-slate: #f8fafc;
+  --color-card-zinc: #f4f4f5;
 
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
@@ -53,7 +53,7 @@
   }
 
   .app-cosy .text-primary {
-    color: #f0c6dc !important;
+    color: #93c5fd !important;
   }
 
   .app-cosy .bg-accent {
@@ -653,7 +653,7 @@
   }
 
   .pos-standard-page .text-primary {
-    color: #f1c3db !important;
+    color: #93c5fd !important;
   }
 
   .pos-standard-page [class*='shadow-violet-100'],

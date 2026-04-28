@@ -5,6 +5,7 @@ export const getCustomers = async (): Promise<Customer[]> => {
   const { data, error } = await supabase
     .from('customers')
     .select('*')
+    .eq('is_active', true)
     .order('name', { ascending: true });
 
   if (error) throw error;
@@ -149,6 +150,15 @@ export const deleteCustomer = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('customers')
     .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export const archiveCustomer = async (id: string): Promise<void> => {
+  const { error } = await supabase
+    .from('customers')
+    .update({ is_active: false })
     .eq('id', id);
 
   if (error) throw error;

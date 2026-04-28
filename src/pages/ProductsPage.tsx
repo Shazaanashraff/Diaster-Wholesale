@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, deleteProduct } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct } from '../services/productService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -14,9 +15,13 @@ export const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Confirm delete ──
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+
   // ── Form submission state ──
   const [saving, setSaving] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Form refs ──
   const nameRef = useRef<HTMLInputElement>(null);
@@ -139,6 +144,26 @@ export const ProductsPage: React.FC = () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Operation failed';
       setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRequest = (product: Product) => {
+    setDeleteTarget(product);
+    setDeleteError(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setSaving(true);
+      setDeleteError(null);
+      await archiveProduct(deleteTarget.id);
+      setProducts(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to archive product');
     } finally {
       setSaving(false);
     }
@@ -367,12 +392,7 @@ export const ProductsPage: React.FC = () => {
                           <Edit2 size={20} />
                         </button>
                         <button 
-                          onClick={async () => {
-                            if (confirm('Are you sure you want to delete this product?')) {
-                              await deleteProduct(product.id);
-                              setProducts(prev => prev.filter(p => p.id !== product.id));
-                            }
-                          }}
+                          onClick={() => handleDeleteRequest(product)}
                           className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
                           <Trash2 size={20} />
                         </button>
@@ -522,14 +542,14 @@ export const ProductsPage: React.FC = () => {
           <div className="pt-4 grid grid-cols-2 gap-4">
             <button 
               onClick={closeModal}
-              className="w-full py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all"
+              className="w-full py-4 rounded-2xl border border-[#2b313a] bg-[#1d222a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all"
             >
               CANCEL
             </button>
             <button 
               onClick={handleSubmit}
               disabled={saving}
-              className="w-full h-[56px] bg-[#e6d3f0] text-[#312e81] border border-[#d7bde6] rounded-2xl font-bold text-sm hover:bg-[#dcc4ed] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+              className="w-full h-[56px] bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-[#e2e8f0] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 {saving ? (
@@ -546,6 +566,19 @@ export const ProductsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ── Confirm Archive ────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleDelete}
+        title="Archive Product"
+        message={`Are you sure you want to archive "${deleteTarget?.name}"? It will be hidden from the catalog and POS, but historical records will remain.`}
+        confirmText="Archive Product"
+        variant="warning"
+        isLoading={saving}
+        error={deleteError}
+      />
     </div>
   );
 };
