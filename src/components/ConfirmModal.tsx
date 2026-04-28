@@ -80,10 +80,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 onClick={onConfirm}
                 disabled={isLoading}
                 className={cn(
-                  "flex-1 py-3 text-white rounded-2xl text-xs font-bold transition-all active:scale-95 shadow-lg",
-                  variant === 'danger' ? "bg-red-600 hover:bg-red-700 shadow-red-900/20" :
-                  variant === 'warning' ? "bg-amber-600 hover:bg-amber-700 shadow-amber-900/20" :
-                  "bg-primary hover:bg-primary/90 shadow-primary/20"
+                  "flex-1 py-3 rounded-2xl text-xs font-bold transition-all active:scale-95 shadow-lg",
+                  variant === 'danger' ? "bg-red-600 hover:bg-red-700 text-white shadow-red-900/20" :
+                  variant === 'warning' ? "bg-amber-600 hover:bg-amber-700 text-white shadow-amber-900/20" :
+                  "bg-[#f8fafc] hover:bg-white text-black shadow-white/10"
                 )}
               >
                 {isLoading ? <Loader2 size={16} className="animate-spin mx-auto" /> : confirmText}

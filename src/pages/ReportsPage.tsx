@@ -155,7 +155,7 @@ export const ReportsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex overflow-hidden" style={{ height: '100vh' }}>
+    <div className="pos-standard-page flex overflow-hidden" style={{ height: '100vh' }}>
 
       {/* ── Left nav ── */}
       <aside className="w-64 shrink-0 flex flex-col border-r border-[#1f242c] bg-[#0d1016] overflow-hidden">
@@ -193,7 +193,7 @@ export const ReportsPage: React.FC = () => {
                 <cat.icon size={11} className="text-gray-600" />
                 <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{cat.label}</span>
               </div>
-              <div className="space-y-px">
+              <div className="space-y-1.5">
                 {cat.reports.map(rep => {
                   const isActive = activeReportId === rep.id;
                   return (

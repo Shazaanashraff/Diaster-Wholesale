@@ -27,11 +27,11 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   accountant: [
     'manage_costs', 'manage_payments', 'view_reports',
-    'view_customers', 'view_inventory',
+    'view_customers', 'view_inventory', 'manage_returns',
   ],
   officer: [
     'manage_products', 'manage_procurement', 'manage_suppliers',
-    'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import',
+    'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import', 'manage_returns',
   ],
   pos_operator: [
     'pos', 'view_customers', 'manage_returns',

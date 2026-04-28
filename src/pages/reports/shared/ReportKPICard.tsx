@@ -13,6 +13,7 @@ interface ReportKPICardProps {
   isUp?: boolean;
   color?: string;
   className?: string;
+  animate?: boolean;
 }
 
 const COLOR_MAP: Record<string, { bg: string; text: string }> = {
@@ -33,9 +34,14 @@ export const ReportKPICard: React.FC<ReportKPICardProps> = ({
   trend,
   isUp,
   color = 'bg-purple-600',
+  animate = true,
   className,
 }) => {
   const palette = COLOR_MAP[color] ?? { bg: 'bg-primary/15', text: 'text-primary' };
+
+  const displayValue = typeof value === 'number' 
+    ? (animate ? <AnimatedNumber value={value} /> : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    : value;
 
   return (
     <div className={cn(
@@ -59,9 +65,7 @@ export const ReportKPICard: React.FC<ReportKPICardProps> = ({
       <div>
         <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{label}</p>
         <h4 className="text-2xl font-bold text-white mt-1 tracking-tight">
-          {prefix}
-          {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
-          {suffix}
+          {prefix}{displayValue}{suffix}
         </h4>
       </div>
     </div>

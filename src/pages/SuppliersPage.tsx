@@ -21,7 +21,7 @@ const STATUS_BADGE: Record<string, string> = {
   confirmed:  'text-blue-400 bg-blue-500/10 border border-blue-500/20',
   in_transit: 'text-amber-400 bg-amber-500/10 border border-amber-500/20',
   received:   'text-green-400 bg-green-500/10 border border-green-500/20',
-  closed:     'text-purple-400 bg-purple-500/10 border border-purple-500/20',
+  closed:     'text-slate-400 bg-slate-500/10 border border-slate-500/20',
 };
 
 const EMPTY_FORM = {
@@ -206,7 +206,7 @@ export const SuppliersPage: React.FC = () => {
   const totalSuppliers = suppliers.length;
 
   return (
-    <div className="p-6 space-y-6 relative">
+    <div className="pos-standard-page p-6 space-y-6 relative">
       {/* Toast */}
       {toast && (
         <div
@@ -389,14 +389,14 @@ export const SuppliersPage: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-[#2b313a]">
+            <div className="flex p-1 bg-[#1d222a] border-b border-[#2b313a] gap-1">
               {(['purchases', 'payments'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setLedgerTab(t)}
                   className={cn(
-                    'flex-1 py-3 text-xs font-bold capitalize transition-colors',
-                    ledgerTab === t ? 'text-primary border-b-2 border-primary' : 'text-gray-500 hover:text-gray-300'
+                    'flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all',
+                    ledgerTab === t ? 'bg-[#f8fafc] text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'
                   )}
                 >
                   {t}
@@ -425,7 +425,7 @@ export const SuppliersPage: React.FC = () => {
                       <tr key={p.id} className="hover:bg-[#1d222a] transition-colors">
                         <td className="px-4 py-3 text-xs font-mono font-bold text-white">{p.reference}</td>
                         <td className="px-4 py-3">
-                          <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase', STATUS_BADGE[p.status])}>
+                          <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide', STATUS_BADGE[p.status])}>
                             {p.status.replace('_', ' ')}
                           </span>
                         </td>
@@ -463,7 +463,7 @@ export const SuppliersPage: React.FC = () => {
             <div className="p-4 border-t border-[#2b313a]">
               <button
                 onClick={() => openPayment(drawerSupplier)}
-                className="w-full py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors"
+                className="w-full py-4 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] transition-colors"
               >
                 Record Payment
               </button>
@@ -632,7 +632,7 @@ export const SuppliersPage: React.FC = () => {
                 <button
                   onClick={handlePay}
                   disabled={paying}
-                  className="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-4 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {paying && <Loader2 size={12} className="animate-spin" />}
                   Record Payment

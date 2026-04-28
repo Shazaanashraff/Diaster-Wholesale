@@ -39,12 +39,12 @@ type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
 
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
-  'bg-[#dbeafe]',
+  'bg-[#e2e8f0]',
   'bg-[#d4e8f8]',
-  'bg-[#d9dcf6]',
-  'bg-[#f0e7f5]',
-  'bg-[#ece7ec]',
-  'bg-[#f0d0db]',
+  'bg-[#cbd5e1]',
+  'bg-[#f1f5f9]',
+  'bg-[#f8fafc]',
+  'bg-[#e5e7eb]',
   'bg-[#cbe8df]',
 ];
 
@@ -871,7 +871,7 @@ export const POSPage: React.FC = () => {
               className={cn(
                 'py-4 rounded-xl border text-sm font-semibold transition-colors',
                 selectedOrderType === type
-                  ? 'bg-[#f8fafc] border-[#f8fafc] text-[#0f172a]'
+                  ? 'bg-[#f8fafc] border-[#f8fafc] text-black'
                   : 'bg-[#1d222a] border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33]'
               )}
             >
@@ -883,12 +883,12 @@ export const POSPage: React.FC = () => {
 
       <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Success">
         <div className="text-center py-6 space-y-4">
-          <h3 className="text-2xl font-bold text-slate-900">Payment Completed</h3>
-          <p className="text-sm text-slate-500">Total received: LKR {total.toFixed(2)}</p>
+          <h3 className="text-2xl font-bold text-white">Payment Completed</h3>
+          <p className="text-sm text-gray-400">Total received: LKR {total.toFixed(2)}</p>
           <button
             type="button"
             onClick={resetAfterSuccess}
-            className="w-full py-3 rounded-xl bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] font-semibold hover:bg-[#e2e8f0] transition-colors"
+            className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
           >
             Back to POS
           </button>

@@ -3,11 +3,11 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #3b82f6;
-  --color-secondary: #93c5fd;
-  --color-accent: #eff6ff;
+  --color-primary: #f8fafc;
+  --color-secondary: #e2e8f0;
+  --color-accent: #1d222a;
   --color-dark: #0f172a;
-  --color-border: #e2e8f0;
+  --color-border: #2b313a;
   
   --color-card-blue: #3b82f610;
   --color-card-sky: #93c5fd20;
@@ -22,7 +22,7 @@
 
 @layer base {
   body {
-    @apply bg-[#f8f9fa] text-[var(--color-dark)] antialiased overflow-x-hidden;
+    @apply bg-[#f8f9fa] text-black antialiased overflow-x-hidden;
     font-family: 'Urbanist', system-ui, -apple-system, sans-serif;
   }
 }
@@ -53,7 +53,7 @@
   }
 
   .app-cosy .text-primary {
-    color: #93c5fd !important;
+    color: #f8fafc !important;
   }
 
   .app-cosy .bg-accent {
@@ -183,20 +183,20 @@
   }
   
   .premium-card {
-    @apply bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300;
+    @apply bg-[#f8fafc] rounded-3xl p-6 border border-gray-100 shadow-sm hover:bg-white transition-all duration-300;
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:text-white font-medium relative;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:text-black font-medium relative;
   }
   
   .sidebar-link.active {
-    @apply text-white bg-white/10 shadow-lg;
+    @apply text-black bg-[#f8fafc] shadow-lg;
   }
   
   .sidebar-link.active::after {
     content: '';
-    @apply absolute -left-2 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-white rounded-r-full;
+    @apply absolute -left-2 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-black rounded-r-full;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -313,11 +313,11 @@
   }
 
   .pos-content-standard {
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .pos-content-pos {
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .pos-standard-surface {
@@ -422,7 +422,7 @@
     height: 1.35rem;
     border-radius: 999px;
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     font-size: 0.7rem;
     font-weight: 700;
     display: inline-flex;
@@ -474,6 +474,10 @@
     font-weight: 700;
     font-size: 0.9rem;
     padding: 0.62rem 0.8rem;
+  }
+
+  .pos-standard-page {
+    padding-bottom: 3rem !important;
   }
 
   .pos-standard-page > .p-10 {
@@ -528,7 +532,7 @@
   .pos-standard-page button.bg-primary,
   .pos-standard-page button[class*='bg-primary'] {
     background: #f8fafc !important;
-    color: #111315 !important;
+    color: #000000 !important;
     border-color: #f8fafc !important;
   }
 
@@ -653,7 +657,7 @@
   }
 
   .pos-standard-page .text-primary {
-    color: #93c5fd !important;
+    color: #f8fafc !important;
   }
 
   .pos-standard-page [class*='shadow-violet-100'],
@@ -904,7 +908,7 @@
   .pos-nav-link.active .pos-nav-icon,
   .pos-nav-link:hover .pos-nav-icon {
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     border-color: #f8fafc;
   }
 
@@ -947,8 +951,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #d8d6ff;
-    color: #111315;
+    background: #f8fafc;
+    color: #000000;
     font-size: 0.75rem;
     font-weight: 700;
   }
@@ -1020,7 +1024,7 @@
 
   .pos-mode-toggle button.active {
     background: #f8fafc;
-    color: #0f172a;
+    color: #000000;
   }
 
   .pos-tile-grid {
@@ -1034,7 +1038,7 @@
     text-align: left;
     border-radius: 12px;
     padding: 0.7rem;
-    color: #111315;
+    color: #000000;
     min-height: 110px;
     display: flex;
     flex-direction: column;
@@ -1141,7 +1145,7 @@
     margin-top: 0.1rem;
     border-radius: 8px;
     background: #f6c6dd;
-    color: #111315;
+    color: #000000;
     font-size: 0.8rem;
     font-weight: 700;
     padding: 0.4rem 0.5rem;
@@ -1417,14 +1421,14 @@
 
   .pos-pay-grid button.active {
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     border-color: #f8fafc;
   }
 
   .pos-submit {
     border-radius: 999px;
     background: #f8fafc;
-    color: #0f172a;
+    color: #000000;
     font-weight: 700;
     font-size: 0.95rem;
     padding: 0.6rem;

@@ -549,7 +549,7 @@ export const ProductsPage: React.FC = () => {
             <button 
               onClick={handleSubmit}
               disabled={saving}
-              className="w-full h-[56px] bg-[#f8fafc] text-[#0f172a] border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-[#e2e8f0] transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+              className="w-full h-[56px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 {saving ? (

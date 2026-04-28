@@ -29,7 +29,7 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.El
   confirmed:  { label: 'Confirmed',  cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20',   icon: CheckCircle2 },
   in_transit: { label: 'In Transit', cls: 'text-amber-400 bg-amber-500/10 border border-amber-500/20', icon: Truck },
   received:   { label: 'Received',   cls: 'text-green-400 bg-green-500/10 border border-green-500/20', icon: Package },
-  closed:     { label: 'Closed',     cls: 'text-purple-400 bg-purple-500/10 border border-purple-500/20', icon: Lock },
+  closed:     { label: 'Closed',     cls: 'text-slate-400 bg-slate-500/10 border border-slate-500/20', icon: Lock },
 };
 
 const COST_TYPES = ['shipping', 'clearing', 'tax', 'other'] as const;
@@ -211,7 +211,7 @@ export const PurchaseDetailPage: React.FC = () => {
   const stepIdx = STEPS.indexOf(purchase.status);
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
+    <div className="pos-standard-page p-6 space-y-6 max-w-4xl mx-auto">
       {/* Toast */}
       {toast && (
         <div
@@ -257,9 +257,9 @@ export const PurchaseDetailPage: React.FC = () => {
             <button
               onClick={handleConfirm}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={13} />}
+              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={14} />}
               Confirm Order
             </button>
           )}
@@ -267,9 +267,9 @@ export const PurchaseDetailPage: React.FC = () => {
             <button
               onClick={handleMarkInTransit}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Truck size={13} />}
+              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Truck size={14} />}
               Mark In Transit
             </button>
           )}
@@ -277,10 +277,10 @@ export const PurchaseDetailPage: React.FC = () => {
             <button
               onClick={() => setFinalizeConfirmOpen(true)}
               disabled={actionLoading || costs.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
               title={costs.length === 0 ? 'Add at least one cost first' : ''}
             >
-              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={13} />}
+              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={14} />}
               Finalize & Close
             </button>
           )}
@@ -443,9 +443,9 @@ export const PurchaseDetailPage: React.FC = () => {
             <button
               onClick={handleReceive}
               disabled={actionLoading}
-              className="w-full py-2.5 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Package size={13} />}
+              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Package size={14} />}
               Confirm Receipt & Update Stock
             </button>
           </div>
@@ -635,9 +635,9 @@ export const PurchaseDetailPage: React.FC = () => {
 
       {/* ── CLOSED: Cost breakdown ───────────────────────────────── */}
       {purchase.status === 'closed' && (
-        <div className="bg-[#171c23] border border-purple-500/20 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-[#2b313a] bg-purple-500/5">
-            <h2 className="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
+        <div className="bg-[#171c23] border border-[#f8fafc]/20 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#f8fafc]/5">
+            <h2 className="text-xs font-bold text-[#f8fafc] uppercase tracking-widest flex items-center gap-2">
               <TrendingUp size={13} /> Final Cost Breakdown
             </h2>
           </div>

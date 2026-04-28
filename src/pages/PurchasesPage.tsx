@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   confirmed:  { label: 'Confirmed',  cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' },
   in_transit: { label: 'In Transit', cls: 'text-amber-400 bg-amber-500/10 border border-amber-500/20' },
   received:   { label: 'Received',   cls: 'text-green-400 bg-green-500/10 border border-green-500/20' },
-  closed:     { label: 'Closed',     cls: 'text-purple-400 bg-purple-500/10 border border-purple-500/20' },
+  closed:     { label: 'Closed',     cls: 'text-slate-400 bg-slate-500/10 border border-slate-500/20' },
 };
 
 const ALL_STATUSES = ['all', 'draft', 'confirmed', 'in_transit', 'received', 'closed'] as const;
@@ -190,7 +190,7 @@ export const PurchasesPage: React.FC = () => {
   const inTransit = purchases.filter((p) => p.status === 'in_transit').length;
 
   return (
-    <div className="p-6 space-y-6 relative">
+    <div className="pos-standard-page p-6 space-y-6 relative">
       {/* Toast */}
       {toast && (
         <div
@@ -286,12 +286,12 @@ export const PurchasesPage: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
+      <div className="bg-[#171c23] border border-[#f8fafc]/20 rounded-2xl overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-[#1d222a] border-b border-[#2b313a]">
+            <tr className="bg-[#f8fafc]/5 border-b border-[#2b313a]">
               {['Reference', 'Supplier', 'Status', 'Exchange Rate', 'Total RMB', 'Total LKR', 'Date', ''].map((h) => (
-                <th key={h} className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 last:text-right">
+                <th key={h} className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 last:text-right">
                   {h}
                 </th>
               ))}
@@ -299,12 +299,12 @@ export const PurchasesPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-[#2b313a]">
             {loading ? (
-              <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-gray-600">Loading…</td></tr>
+              <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-600">Loading…</td></tr>
             ) : visible.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-5 py-12 text-center">
-                  <Package size={28} className="mx-auto text-gray-700 mb-2" />
-                  <p className="text-sm text-gray-600 font-semibold">No purchases found.</p>
+                  <Package size={28} className="mx-auto text-slate-700 mb-2" />
+                  <p className="text-sm text-slate-600 font-semibold">No purchases found.</p>
                 </td>
               </tr>
             ) : visible.map((p, i) => {
@@ -318,20 +318,20 @@ export const PurchasesPage: React.FC = () => {
                   onClick={() => navigate(`/purchases/${p.id}`)}
                 >
                   <td className="px-5 py-3.5">
-                    <span className="text-sm font-mono font-bold text-white">{p.reference}</span>
+                    <span className="text-sm font-mono font-bold text-slate-100">{p.reference}</span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs text-gray-300">{supplier}</td>
+                  <td className="px-5 py-3.5 text-xs text-slate-300">{supplier}</td>
                   <td className="px-5 py-3.5">
                     <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide', cfg.cls)}>
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-400">
+                  <td className="px-5 py-3.5 text-xs font-mono text-slate-400">
                     1 RMB = {Number(p.exchange_rate).toFixed(2)} LKR
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">{fmtRmb(p.total_rmb)}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-white">{fmt(p.total_lkr)}</td>
-                  <td className="px-5 py-3.5 text-xs text-gray-500">
+                  <td className="px-5 py-3.5 text-xs font-mono text-slate-300">{fmtRmb(p.total_rmb)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-slate-100">{fmt(p.total_lkr)}</td>
+                  <td className="px-5 py-3.5 text-xs text-slate-500">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-5 py-3.5 text-right">
@@ -339,12 +339,12 @@ export const PurchasesPage: React.FC = () => {
                       {p.status === 'draft' && (
                         <button
                           onClick={(e) => handleDeleteRequest(p, e)}
-                          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                         >
                           <Trash2 size={12} />
                         </button>
                       )}
-                      <ChevronRight size={14} className="text-gray-600" />
+                      <ChevronRight size={14} className="text-slate-600" />
                     </div>
                   </td>
                 </tr>
@@ -364,8 +364,8 @@ export const PurchasesPage: React.FC = () => {
           >
             {/* Panel header */}
             <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
-              <h2 className="font-bold text-white">New Purchase Order</h2>
-              <button onClick={() => setPanelOpen(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors">
+              <h2 className="font-bold text-slate-100">New Purchase Order</h2>
+              <button onClick={() => setPanelOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#2b313a] transition-colors">
                 <X size={15} />
               </button>
             </div>
@@ -380,11 +380,11 @@ export const PurchasesPage: React.FC = () => {
               {/* Supplier + rate */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Supplier *</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
                   <select
                     value={form.supplier_id}
                     onChange={(e) => setForm((p) => ({ ...p, supplier_id: e.target.value }))}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
                   >
                     <option value="">Select supplier…</option>
                     {suppliers.map((s) => (
@@ -393,35 +393,35 @@ export const PurchasesPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Exchange Rate (1 RMB → LKR) *</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Exchange Rate (1 RMB → LKR) *</label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
                     value={form.exchange_rate}
                     onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40 font-mono"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40 font-mono"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Notes</label>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Notes</label>
                 <input
                   value={form.notes}
                   onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
                   placeholder="Optional notes…"
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
                 />
               </div>
 
               {/* Items */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Items *</label>
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Items *</label>
                   <button
                     onClick={addItemRow}
-                    className="flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                    className="flex items-center gap-1 text-[10px] font-bold text-slate-100 hover:text-slate-300 transition-colors"
                   >
                     <Plus size={11} /> Add Row
                   </button>
@@ -431,7 +431,7 @@ export const PurchasesPage: React.FC = () => {
                   {/* Column headers */}
                   <div className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 px-1">
                     {['Product', 'Units', 'Cartons', 'Price (RMB)', ''].map((h) => (
-                      <span key={h} className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</span>
+                      <span key={h} className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{h}</span>
                     ))}
                   </div>
 

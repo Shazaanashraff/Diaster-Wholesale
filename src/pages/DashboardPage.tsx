@@ -38,7 +38,7 @@ import type {
   ProfitExpensePoint,
 } from '../services/reportService';
 
-const CAT_COLORS = ['#d4e8f8', '#f2c8de', '#d4f0e4', '#fde8c8', '#e6d3f0', '#d7e5e8', '#f8d4d4', '#d4d8f8'];
+const CAT_COLORS = ['#d4e8f8', '#bfdbfe', '#d4f0e4', '#fde8c8', '#cbd5e1', '#d7e5e8', '#f8d4d4', '#e2e8f0'];
 
 type PeriodFilter = 'day' | 'month' | 'all';
 
@@ -118,7 +118,7 @@ export const DashboardPage: React.FC = () => {
         <div className="pos-tile-grid pb-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
           {([
             { label: 'Revenue',          value: metrics?.revenue ?? 0,       icon: DollarSign,    color: 'bg-[#d4e8f8]', currency: true,  decimals: 2, to: '/reports' },
-            { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#f2c8de]', currency: true,  decimals: 2, to: '/reports' },
+            { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#fde8c8]', currency: true,  decimals: 2, to: '/reports' },
             { label: 'Customers',        value: metrics?.customers ?? 0,     icon: Users,         color: 'bg-[#d7e5e8]', currency: false, decimals: 0, to: '/customers' },
             { label: 'Low Stock Alerts', value: metrics?.lowStockCount ?? 0, icon: AlertTriangle, color: 'bg-[#fde8c8]', currency: false, decimals: 0, to: '/inventory' },
             {

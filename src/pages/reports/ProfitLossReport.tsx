@@ -45,10 +45,10 @@ export const ProfitLossReport: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <ReportKPICard label="Revenue" value={data.revenue} prefix="LKR " icon={DollarSign} color="bg-blue-600" />
-        <ReportKPICard label="Gross Profit" value={data.grossProfit} prefix="LKR " icon={TrendingUp} color="bg-green-600" />
-        <ReportKPICard label="Expenses" value={data.expenses} prefix="LKR " icon={Activity} color="bg-red-600" />
-        <ReportKPICard label="Net Profit" value={data.netProfit} prefix="LKR " icon={PieChart} color="bg-purple-600" />
+        <ReportKPICard label="Revenue" value={data.revenue} prefix="LKR " icon={DollarSign} color="bg-blue-600" animate={false} />
+        <ReportKPICard label="Gross Profit" value={data.grossProfit} prefix="LKR " icon={TrendingUp} color="bg-green-600" animate={false} />
+        <ReportKPICard label="Expenses" value={data.expenses} prefix="LKR " icon={Activity} color="bg-red-600" animate={false} />
+        <ReportKPICard label="Net Profit" value={data.netProfit} prefix="LKR " icon={PieChart} color="bg-purple-600" animate={false} />
       </div>
 
       <ReportTable

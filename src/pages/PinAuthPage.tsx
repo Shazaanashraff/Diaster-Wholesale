@@ -21,9 +21,6 @@ interface PinAuthPageProps {
 }
 
 export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
-  const [step, setStep]           = useState<'role' | 'pin'>('role');
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-
   const [pin, setPin]             = useState('');
   const [attempts, setAttempts]   = useState(0);
   const [error, setError]         = useState('');
@@ -31,6 +28,7 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
   const [locked, setLocked]       = useState(false);
   const [success, setSuccess]     = useState(false);
   const [exitFade, setExitFade]   = useState(false);
+  const [identifiedRole, setIdentifiedRole] = useState<Role | null>(null);
 
   const triggerShake = () => {
     setShake(true);
@@ -38,12 +36,21 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
   };
 
   const submitPin = useCallback((entered: string) => {
-    if (!selectedRole) return;
-    const correctPin = getRolePin(selectedRole);
+    // Check which role this PIN belongs to
+    const roles: Role[] = ['admin', 'accountant', 'officer', 'pos_operator'];
+    let matchingRole: Role | null = null;
 
-    if (entered === correctPin) {
+    for (const r of roles) {
+      if (entered === getRolePin(r)) {
+        matchingRole = r;
+        break;
+      }
+    }
+
+    if (matchingRole) {
       sessionStorage.setItem('pin_auth', '1');
-      sessionStorage.setItem('user_role', selectedRole);
+      sessionStorage.setItem('user_role', matchingRole);
+      setIdentifiedRole(matchingRole);
       setSuccess(true);
       setTimeout(() => setExitFade(true), 1600);
       setTimeout(() => onSuccess(), 2000);
@@ -60,10 +67,10 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
       setError(`Incorrect PIN. ${MAX_ATTEMPTS - next} attempt${MAX_ATTEMPTS - next === 1 ? '' : 's'} remaining.`);
     }
     setPin('');
-  }, [attempts, onSuccess, selectedRole]);
+  }, [attempts, onSuccess]);
 
   const handleDigit = useCallback((digit: string) => {
-    if (locked || success || step !== 'pin') return;
+    if (locked || success) return;
     setError('');
     setPin(prev => {
       if (prev.length >= PIN_LENGTH) return prev;
@@ -71,40 +78,24 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
       if (next.length === PIN_LENGTH) setTimeout(() => submitPin(next), 80);
       return next;
     });
-  }, [locked, success, step, submitPin]);
+  }, [locked, success, submitPin]);
 
   const handleBackspace = useCallback(() => {
-    if (locked || success || step !== 'pin') return;
+    if (locked || success) return;
     setError('');
     setPin(prev => prev.slice(0, -1));
-  }, [locked, success, step]);
+  }, [locked, success]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (step !== 'pin') return;
       if (e.key >= '0' && e.key <= '9') handleDigit(e.key);
       else if (e.key === 'Backspace' || e.key === 'Delete') handleBackspace();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleDigit, handleBackspace, step]);
+  }, [handleDigit, handleBackspace]);
 
-  function selectRole(role: Role) {
-    setSelectedRole(role);
-    setPin('');
-    setAttempts(0);
-    setError('');
-    setLocked(false);
-    setStep('pin');
-  }
-
-  function backToRoles() {
-    setStep('role');
-    setPin('');
-    setError('');
-    setAttempts(0);
-    setLocked(false);
-  }
+  // Helper methods removed
 
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
 
@@ -141,74 +132,17 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
               Access Granted
             </p>
             <p style={{ color: 'rgba(52,211,153,0.55)', fontSize: 13, marginTop: 6, fontFamily: 'Urbanist, sans-serif', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              {selectedRole ? ROLE_LABELS[selectedRole] : 'Welcome back'}
+              {identifiedRole ? ROLE_LABELS[identifiedRole] : 'Welcome back'}
             </p>
           </div>
         </div>
       )}
-
-      {/* ── Step 1: Role selection ── */}
-      {step === 'role' && !success && (
-        <div className="flex flex-col items-center gap-8 select-none" style={{ animation: 'text-rise 0.3s ease' }}>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-white tracking-wide" style={{ fontFamily: 'Urbanist, sans-serif' }}>Diastar</div>
-            <div className="text-sm text-purple-300 mt-1 tracking-widest uppercase">Wholesale ERP</div>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-purple-300 font-semibold">Select your role to continue</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {ROLES.map((role) => (
-              <button
-                key={role}
-                onClick={() => selectRole(role)}
-                style={{
-                  width: 160,
-                  padding: '20px 16px',
-                  borderRadius: 20,
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(167,139,250,0.2)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 10,
-                  transition: 'background 0.15s, border-color 0.15s, transform 0.1s',
-                  fontFamily: 'Urbanist, sans-serif',
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)';
-                  (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167,139,250,0.5)';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)';
-                  (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167,139,250,0.2)';
-                }}
-                onMouseDown={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(0.96)'; }}
-                onMouseUp={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
-              >
-                <span style={{ fontSize: 28 }}>{ROLE_ICONS[role]}</span>
-                <span style={{ color: '#f1f5f9', fontSize: 13, fontWeight: 700 }}>{ROLE_LABELS[role]}</span>
-                <span style={{ color: 'rgba(167,139,250,0.6)', fontSize: 10, textAlign: 'center', lineHeight: 1.4 }}>
-                  {ROLE_DESCRIPTIONS[role]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 2: PIN entry ── */}
-      {step === 'pin' && !success && selectedRole && (
+      {/* ── PIN entry ── */}
+      {!success && (
         <div
           className="flex flex-col items-center gap-8 select-none"
           style={{
             transition: 'opacity 0.2s ease, transform 0.2s ease',
-            opacity: success ? 0 : 1,
-            transform: success ? 'scale(0.95)' : 'scale(1)',
-            pointerEvents: success ? 'none' : 'auto',
             animation: 'text-rise 0.25s ease',
           }}
         >
@@ -217,26 +151,6 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
             <div className="text-3xl font-bold text-white tracking-wide" style={{ fontFamily: 'Urbanist, sans-serif' }}>Diastar</div>
             <div className="text-sm text-purple-300 mt-1 tracking-widest uppercase">Wholesale ERP</div>
           </div>
-
-          {/* Role badge */}
-          <button
-            onClick={backToRoles}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 16px', borderRadius: 50,
-              background: 'rgba(139,92,246,0.15)',
-              border: '1px solid rgba(167,139,250,0.3)',
-              color: '#a78bfa', fontSize: 12, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'Urbanist, sans-serif',
-              transition: 'background 0.12s',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.25)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(139,92,246,0.15)'; }}
-          >
-            <span>{ROLE_ICONS[selectedRole]}</span>
-            <span>{ROLE_LABELS[selectedRole]}</span>
-            <span style={{ opacity: 0.5 }}>← change</span>
-          </button>
 
           {/* Lock icon */}
           <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
