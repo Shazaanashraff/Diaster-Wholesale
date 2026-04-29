@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment } from '../services/inventoryService';
+import { getInventory, insertStockAdjustment, getMovementRates } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -20,6 +21,7 @@ function readThreshold(): number {
 
 export const InventoryPage: React.FC = () => {
   const [inventory, setInventory] = useState<ProductStock[]>([]);
+  const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,14 +30,24 @@ export const InventoryPage: React.FC = () => {
 
   // ── Stock adjustment modal ──
   const [adjustRow, setAdjustRow] = useState<ProductStock | null>(null);
+  const [adjType, setAdjType] = useState<'damage' | 'recount' | 'return' | 'other'>('recount');
   const [adjCartons, setAdjCartons] = useState('0');
   const [adjPieces, setAdjPieces] = useState('0');
   const [adjReason, setAdjReason] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
   const [adjError, setAdjError] = useState<string | null>(null);
 
+  // ── Search & filter ──
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterLowStock, setFilterLowStock] = useState(false);
+  const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces' | 'margin'>('name');
+
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
+
+  const { can } = usePermissions();
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   useEffect(() => {
     fetchInventory();
@@ -57,8 +69,9 @@ export const InventoryPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await getInventory();
+      const [data, rates] = await Promise.all([getInventory(), getMovementRates()]);
       setInventory(data);
+      setMovementRates(rates);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
@@ -70,6 +83,7 @@ export const InventoryPage: React.FC = () => {
   // ── Open adjustment modal for a specific row ──
   function openAdjustModal(row: ProductStock) {
     setAdjustRow(row);
+    setAdjType('recount');
     setAdjCartons('0');
     setAdjPieces('0');
     setAdjReason('');
@@ -105,12 +119,14 @@ export const InventoryPage: React.FC = () => {
       setAdjSaving(true);
       setAdjError(null);
 
+      const ppc = adjustRow.pieces_per_carton || 1;
+      const totalPieceDelta = cartonDelta * ppc + pieceDelta;
+
       await insertStockAdjustment({
         product_id: adjustRow.product_id,
-        adjustment_cartons: cartonDelta,
-        adjustment_pieces: pieceDelta,
-        reason: adjReason.trim(),
-        adjusted_by: 'admin', // TODO: replace with auth user
+        adjustment_pieces: totalPieceDelta,
+        reason: `[${adjType.toUpperCase()}] ${adjReason.trim()}`,
+        adjusted_by: 'admin',
       });
 
       closeAdjustModal();
@@ -124,23 +140,131 @@ export const InventoryPage: React.FC = () => {
     }
   }
 
+  const visibleInventory = inventory
+    .filter(row => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q) || (row.model || '').toLowerCase().includes(q);
+      const matchesFilter = !filterLowStock || computeStock(row).totalPieces < threshold;
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'cartons') return computeStock(b).availCartons - computeStock(a).availCartons;
+      if (sortBy === 'pieces')  return computeStock(b).totalPieces  - computeStock(a).totalPieces;
+      if (sortBy === 'margin')  return (b.retail_price - b.wholesale_price) - (a.retail_price - a.wholesale_price);
+      return a.name.localeCompare(b.name);
+    });
+
+  const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '';
+  const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); };
+
   return (
-    <div className="pos-page-grid">
+    <div className={cn("pos-page-grid", rightCollapsed && "right-collapsed")}>
       <section className="pos-main">
         <div className="pos-main-head">
           <label className="pos-search">
             <Search size={18} />
-            <input 
-              type="text" 
-              placeholder="Search stock..." 
+            <input
+              type="text"
+              placeholder="Search stock..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </label>
           <div className="pos-mode-toggle">
-            <button className="active flex items-center gap-2">
-              <Filter size={14} /> Filter
+            <button
+              className={cn('flex items-center gap-2', (filterOpen || hasActiveFilters) && 'active')}
+              onClick={() => setFilterOpen(p => !p)}
+            >
+              <Filter size={14} />
+              Filter
+              {hasActiveFilters && (
+                <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] font-black flex items-center justify-center">
+                  {[filterLowStock, sortBy !== 'name', searchQuery !== ''].filter(Boolean).length}
+                </span>
+              )}
             </button>
           </div>
         </div>
+
+        {/* ── Filter Panel ── */}
+        {filterOpen && (
+          <div className="mx-3 mb-3 rounded-2xl border border-[#2b313a] bg-[#13181f] overflow-hidden" style={{ animation: 'posFadeIn 180ms ease' }}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2b313a]">
+              <div className="flex items-center gap-4">
+                {/* Stock level */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Stock</span>
+                  <div className="flex gap-1">
+                    {([
+                      { key: false, label: 'All' },
+                      { key: true,  label: 'Low Stock' },
+                    ] as const).map(opt => (
+                      <button
+                        key={String(opt.key)}
+                        onClick={() => setFilterLowStock(opt.key)}
+                        className={cn(
+                          'px-3 py-1 rounded-lg text-[11px] font-bold transition-all',
+                          filterLowStock === opt.key
+                            ? 'bg-[#f8fafc] text-[#111315]'
+                            : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="w-px h-5 bg-[#2b313a]" />
+
+                {/* Sort */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    <ArrowUpDown size={12} className="inline mr-1 -translate-y-px" />Sort
+                  </span>
+                  <div className="flex gap-1">
+                    {([
+                      { key: 'name',    label: 'Name' },
+                      { key: 'cartons', label: 'Cartons' },
+                      { key: 'pieces',  label: 'Pieces' },
+                      { key: 'margin',  label: 'Margin' },
+                    ] as const).map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setSortBy(s.key)}
+                        className={cn(
+                          'px-3 py-1 rounded-lg text-[11px] font-bold transition-all',
+                          sortBy === s.key
+                            ? 'bg-[#f8fafc] text-[#111315]'
+                            : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-gray-500">
+                  {visibleInventory.length} of {inventory.length}
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-900/20 text-red-400 text-[11px] font-bold hover:bg-red-900/30 transition-all border border-red-900/30"
+                  >
+                    <X size={11} /> Clear
+                  </button>
+                )}
+                <button onClick={() => setFilterOpen(false)} className="text-gray-600 hover:text-gray-300 transition-colors">
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Loading State ── */}
         {loading && (
@@ -186,7 +310,7 @@ export const InventoryPage: React.FC = () => {
           <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block">
             <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full min-w-[1000px] text-left border-collapse">
+                <table className="w-full min-w-[1000px] text-left border-collapse" id="inventory-table">
                   <thead>
                     <tr className="bg-[#1d222a] border-b border-[#2b313a]">
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Item Code</th>
@@ -201,12 +325,13 @@ export const InventoryPage: React.FC = () => {
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Retail</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Margin</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">30d Sales</th>
                     <th className="px-8 py-6"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2b313a]">
                   <AnimatePresence>
-                    {inventory.map((row) => {
+                    {visibleInventory.map((row) => {
                       const stock = computeStock(row);
                       const isLowStock = stock.totalPieces < threshold;
 
@@ -268,13 +393,25 @@ export const InventoryPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-8 py-6 text-right">
+                          {movementRates[row.product_id] ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-sm font-bold text-emerald-400">{movementRates[row.product_id].units30d}</span>
+                              <span className="text-[10px] font-semibold text-gray-500">{movementRates[row.product_id].perDay}/day</span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-6 text-right">
                           <div className="flex items-center gap-2 justify-end">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
-                              className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
-                            >
-                              Adjust
-                            </button>
+                            {can('manage_inventory') && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
+                                className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                Adjust
+                              </button>
+                            )}
                             <div className="p-3 rounded-2xl text-gray-500 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100 inline-flex">
                               <ChevronRight size={18} />
                             </div>
@@ -293,6 +430,17 @@ export const InventoryPage: React.FC = () => {
       </section>
 
       <aside className="pos-bill">
+        <button
+          type="button"
+          onClick={() => setRightCollapsed((prev) => !prev)}
+          className="pos-bill-collapse-toggle"
+          aria-label={rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}
+          title={rightCollapsed ? 'Expand panel' : 'Collapse panel'}
+        >
+          {rightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
+        </button>
+
+        <div className="pos-bill-inner">
         <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
           <h2 className="text-xl font-bold tracking-tight">Stock Control</h2>
           <p className="text-xs font-semibold text-gray-500">Configure global rules</p>
@@ -311,7 +459,10 @@ export const InventoryPage: React.FC = () => {
               }}
               className="flex-1 text-sm font-bold text-white bg-[#171c23] rounded-xl px-4 py-3 outline-none border border-[#2b313a] focus:border-primary/50 transition-all"
             />
-            <button className="p-3 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-xl hover:text-white hover:bg-[#2b313a] transition-all">
+            <button
+              onClick={() => setToast(`Low stock threshold set to ${threshold} units`)}
+              className="p-3 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-xl hover:text-white hover:bg-[#2b313a] transition-all"
+            >
               <Check size={18} />
             </button>
           </div>
@@ -324,7 +475,10 @@ export const InventoryPage: React.FC = () => {
             <p className="text-xs text-gray-400 leading-relaxed">
               You have {inventory.filter(i => computeStock(i).totalPieces < threshold).length} items currently sitting below your safe threshold of {threshold}.
             </p>
-            <button className="mt-3 text-[11px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors">
+            <button
+              onClick={() => { setFilterLowStock(true); document.getElementById('inventory-table')?.scrollIntoView({ behavior: 'smooth' }); }}
+              className="mt-3 text-[11px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors"
+            >
               Review flagged stock <ArrowRight size={14} className="inline ml-1" />
             </button>
           </div>
@@ -334,6 +488,7 @@ export const InventoryPage: React.FC = () => {
            <button type="button" className="pos-submit" onClick={() => fetchInventory()}>
              Refresh Inventory
            </button>
+        </div>
         </div>
       </aside>
 
@@ -361,6 +516,39 @@ export const InventoryPage: React.FC = () => {
                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Pieces</p>
                 <p className="text-lg font-bold text-primary mt-1">{computeStock(adjustRow).totalPieces}</p>
               </div>
+            </div>
+
+            {/* Adjustment type */}
+            <div>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Adjustment Type</label>
+              <div className="grid grid-cols-4 gap-2">
+                {([
+                  { key: 'recount',  label: 'Recount',  color: 'blue'   },
+                  { key: 'damage',   label: 'Damage',   color: 'red'    },
+                  { key: 'return',   label: 'Return',   color: 'green'  },
+                  { key: 'other',    label: 'Other',    color: 'gray'   },
+                ] as const).map(t => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setAdjType(t.key)}
+                    className={cn(
+                      'py-2 rounded-xl text-[11px] font-bold border transition-all',
+                      adjType === t.key
+                        ? t.key === 'damage'  ? 'bg-red-900/30 text-red-400 border-red-900/50'
+                        : t.key === 'return'  ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50'
+                        : t.key === 'recount' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50'
+                        : 'bg-[#2b313a] text-white border-[#3a424f]'
+                        : 'bg-[#1d222a] text-gray-500 border-[#2b313a] hover:text-gray-300'
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {adjType === 'damage' && (
+                <p className="text-[10px] text-red-400 font-semibold mt-2">Use a negative delta to remove damaged units from stock.</p>
+              )}
             </div>
 
             {/* Delta inputs */}
@@ -420,14 +608,14 @@ export const InventoryPage: React.FC = () => {
               <button
                 onClick={closeAdjustModal}
                 disabled={adjSaving}
-                className="flex-1 px-6 py-3.5 bg-accent text-dark rounded-2xl font-bold text-sm hover:bg-gray-100 transition-all disabled:opacity-50"
+                className="flex-1 px-6 py-3.5 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-2xl text-sm font-bold hover:text-white hover:bg-[#252a33] transition-all disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAdjustSubmit}
                 disabled={adjSaving}
-                className="flex-1 h-[56px] bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100/10 hover:bg-violet-600 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden active:scale-[0.98]"
+                className="flex-1 h-[56px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden active:scale-[0.98]"
               >
                 <AnimatePresence mode="wait">
                   {adjSaving ? (

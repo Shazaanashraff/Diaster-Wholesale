@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { UpdateBanner } from './UpdateBanner';
@@ -11,8 +11,13 @@ interface LayoutWrapperProps {
 
 export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const location = useLocation();
-  const isPosRoute = location.pathname === '/pos' || location.pathname === '/' || location.pathname === '/inventory' || location.pathname === '/products' || location.pathname === '/customers' || location.pathname === '/reports';
-  const isProductsRoute = location.pathname === '/products' || location.pathname === '/customers' || location.pathname === '/reports';
+  const navigate = useNavigate();
+  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+  );
+  const isProductsRoute = ['/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+  );
   const [hydrated, setHydrated] = useState(false);
   const [isSessionCollapsed, setIsSessionCollapsed] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -88,7 +93,7 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
                       <div><span>Mode</span><strong>Live</strong></div>
                       <div><span>Panel</span><strong>Unified POS</strong></div>
                     </div>
-                    <button className="pos-standard-right-btn">Open POS Style Controls</button>
+                    <button className="pos-standard-right-btn" onClick={() => navigate('/pos')}>Open POS Style Controls</button>
                   </>
                 )}
               </aside>

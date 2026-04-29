@@ -3,16 +3,16 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #8b5cf6;
-  --color-secondary: #c4b5fd;
-  --color-accent: #f5f3ff;
-  --color-dark: #1e1b4b;
-  --color-border: #eef2ff;
+  --color-primary: #f8fafc;
+  --color-secondary: #e2e8f0;
+  --color-accent: #1d222a;
+  --color-dark: #0f172a;
+  --color-border: #2b313a;
   
-  --color-card-purple: #8b5cf610;
-  --color-card-violet: #c4b5fd20;
-  --color-card-gold: #faf5ff;
-  --color-card-fuchsia: #fdf4ff;
+  --color-card-blue: #3b82f610;
+  --color-card-sky: #93c5fd20;
+  --color-card-slate: #f8fafc;
+  --color-card-zinc: #f4f4f5;
 
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
@@ -22,7 +22,7 @@
 
 @layer base {
   body {
-    @apply bg-[#f8f9fa] text-[var(--color-dark)] antialiased overflow-x-hidden;
+    @apply bg-[#f8f9fa] text-black antialiased overflow-x-hidden;
     font-family: 'Urbanist', system-ui, -apple-system, sans-serif;
   }
 }
@@ -53,7 +53,7 @@
   }
 
   .app-cosy .text-primary {
-    color: #f0c6dc !important;
+    color: #f8fafc !important;
   }
 
   .app-cosy .bg-accent {
@@ -183,20 +183,20 @@
   }
   
   .premium-card {
-    @apply bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-gray-200/40 transition-all duration-300;
+    @apply bg-[#f8fafc] rounded-3xl p-6 border border-gray-100 shadow-sm hover:bg-white transition-all duration-300;
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:text-white font-medium relative;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-gray-400 hover:text-black font-medium relative;
   }
   
   .sidebar-link.active {
-    @apply text-white bg-white/10 shadow-lg;
+    @apply text-black bg-[#f8fafc] shadow-lg;
   }
   
   .sidebar-link.active::after {
     content: '';
-    @apply absolute -left-2 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-white rounded-r-full;
+    @apply absolute -left-2 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-black rounded-r-full;
   }
 
   .custom-scrollbar::-webkit-scrollbar {
@@ -299,8 +299,9 @@
     background: #111315;
     color: #f5f7fa;
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr) 350px;
+    grid-template-columns: 220px minmax(0, 1fr) 330px;
     overflow: hidden;
+    transition: grid-template-columns 200ms ease;
   }
 
   .pos-frame-2col {
@@ -313,11 +314,11 @@
   }
 
   .pos-content-standard {
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .pos-content-pos {
-    overflow: hidden;
+    overflow-y: auto;
   }
 
   .pos-standard-surface {
@@ -358,6 +359,15 @@
     overflow: hidden;
     min-width: 330px;
     transition: all 180ms ease;
+  }
+
+  @media (max-width: 1440px) {
+    .pos-standard-right {
+      min-width: 280px;
+    }
+    .pos-standard-layout {
+      grid-template-columns: minmax(0, 1fr) 280px;
+    }
   }
 
   .pos-standard-right.collapsed {
@@ -422,7 +432,7 @@
     height: 1.35rem;
     border-radius: 999px;
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     font-size: 0.7rem;
     font-weight: 700;
     display: inline-flex;
@@ -476,6 +486,28 @@
     padding: 0.62rem 0.8rem;
   }
 
+  .pos-standard-page {
+    padding-bottom: 2rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+
+  @media (max-width: 1440px) {
+    .pos-standard-page {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    .pos-standard-page .px-8,
+    .pos-standard-page .p-8 {
+      padding-left: 1.25rem !important;
+      padding-right: 1.25rem !important;
+    }
+    .pos-standard-page .py-7 {
+      padding-top: 1rem !important;
+      padding-bottom: 1rem !important;
+    }
+  }
+
   .pos-standard-page > .p-10 {
     padding: 1.25rem;
   }
@@ -499,6 +531,18 @@
     font-weight: 650 !important;
     letter-spacing: -0.02em !important;
     margin: 0;
+  }
+
+  @media (max-width: 1440px) {
+    .pos-standard-page .pos-page-header h1 {
+      font-size: 1.5rem !important;
+    }
+    .pos-standard-page h1 {
+      font-size: 1.5rem !important;
+    }
+    .pos-standard-page h2 {
+      font-size: 1.25rem !important;
+    }
   }
 
   .pos-standard-page .pos-page-header p {
@@ -528,7 +572,7 @@
   .pos-standard-page button.bg-primary,
   .pos-standard-page button[class*='bg-primary'] {
     background: #f8fafc !important;
-    color: #111315 !important;
+    color: #000000 !important;
     border-color: #f8fafc !important;
   }
 
@@ -605,9 +649,9 @@
   .pos-standard-page [class*='py-5'],
   .pos-standard-page [class*='h-[56px]'],
   .pos-standard-page [class*='h-[60px]'] {
-    min-height: 46px;
-    padding-top: 0.6rem !important;
-    padding-bottom: 0.6rem !important;
+    min-height: 44px;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
   }
 
   .pos-standard-page .text-3xl {
@@ -653,7 +697,7 @@
   }
 
   .pos-standard-page .text-primary {
-    color: #f1c3db !important;
+    color: #f8fafc !important;
   }
 
   .pos-standard-page [class*='shadow-violet-100'],
@@ -689,8 +733,42 @@
 
   .pos-page-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 350px;
+    grid-template-columns: minmax(0, 1fr) 330px;
     min-height: 100%;
+    transition: grid-template-columns 160ms cubic-bezier(0.2, 0, 0, 1);
+    will-change: grid-template-columns;
+  }
+
+  @media (max-width: 1440px) {
+    .pos-page-grid {
+      grid-template-columns: minmax(0, 1fr) 280px;
+    }
+  }
+
+  .pos-page-grid.right-collapsed {
+    grid-template-columns: minmax(0, 1fr) 56px;
+  }
+
+  .pos-page-grid.right-collapsed .pos-bill {
+    padding: 0.8rem 0.45rem;
+  }
+
+  .pos-bill-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    flex: 1;
+    min-height: 0;
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0, 0, 1);
+    will-change: opacity, transform;
+  }
+
+  .pos-page-grid.right-collapsed .pos-bill-inner {
+    opacity: 0;
+    transform: translateX(8px);
+    pointer-events: none;
   }
 
   .pos-frame-ready .pos-sidebar,
@@ -876,7 +954,7 @@
   .pos-nav-link.active .pos-nav-icon,
   .pos-nav-link:hover .pos-nav-icon {
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     border-color: #f8fafc;
   }
 
@@ -919,8 +997,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #d8d6ff;
-    color: #111315;
+    background: #f8fafc;
+    color: #000000;
     font-size: 0.75rem;
     font-weight: 700;
   }
@@ -992,12 +1070,12 @@
 
   .pos-mode-toggle button.active {
     background: #f8fafc;
-    color: #0f172a;
+    color: #000000;
   }
 
   .pos-tile-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.45rem;
     margin-bottom: 0.7rem;
   }
@@ -1006,7 +1084,7 @@
     text-align: left;
     border-radius: 12px;
     padding: 0.7rem;
-    color: #111315;
+    color: #000000;
     min-height: 110px;
     display: flex;
     flex-direction: column;
@@ -1035,7 +1113,7 @@
 
   .pos-product-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 0.5rem;
   }
 
@@ -1113,7 +1191,7 @@
     margin-top: 0.1rem;
     border-radius: 8px;
     background: #f6c6dd;
-    color: #111315;
+    color: #000000;
     font-size: 0.8rem;
     font-weight: 700;
     padding: 0.4rem 0.5rem;
@@ -1139,6 +1217,36 @@
     min-height: 0;
     height: 100vh;
     overflow: hidden;
+    transition: all 200ms ease;
+  }
+
+  @media (max-width: 1440px) {
+    .pos-bill {
+      padding: 0.75rem;
+      min-width: 280px;
+    }
+    .pos-bill-head h2 {
+      font-size: 1.5rem !important;
+    }
+  }
+
+  .pos-bill-collapse-toggle {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: 1px solid #2b313a;
+    background: #1d222a;
+    color: #c2c9d3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    transition: all 160ms ease;
+  }
+
+  .pos-bill-collapse-toggle:hover {
+    background: #2a2f36;
+    color: #ffffff;
   }
 
   .pos-bill-head {
@@ -1198,7 +1306,8 @@
 
   .pos-cart-item {
     position: relative;
-    overflow: visible;
+    overflow: hidden;
+    border-radius: 10px;
   }
 
   .pos-cart-item-front {
@@ -1272,13 +1381,15 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 160ms ease, background-color 150ms ease;
-    z-index: 1;
+    z-index: 4;
+    transform: translateX(-6px);
   }
 
   .pos-cart-item:hover .pos-cart-delete,
   .pos-cart-item:focus-within .pos-cart-delete {
     opacity: 1;
     pointer-events: auto;
+    transform: translateX(0);
   }
 
   .pos-cart-delete:hover,
@@ -1367,14 +1478,14 @@
 
   .pos-pay-grid button.active {
     background: #f8fafc;
-    color: #111315;
+    color: #000000;
     border-color: #f8fafc;
   }
 
   .pos-submit {
     border-radius: 999px;
     background: #f8fafc;
-    color: #0f172a;
+    color: #000000;
     font-weight: 700;
     font-size: 0.95rem;
     padding: 0.6rem;
@@ -1478,7 +1589,7 @@
 
 @media (max-width: 1350px) {
   .pos-frame {
-    grid-template-columns: 84px minmax(0, 1fr) 330px;
+    grid-template-columns: 84px minmax(0, 1fr) 280px;
   }
 
   .pos-brand-meta,
@@ -1553,3 +1664,44 @@
   }
 }
 
+/* Reporting Module Styles */
+.pos-shell aside {
+  animation: posFadeIn 300ms ease-out both;
+}
+
+.pos-shell main {
+  animation: posFadeIn 400ms ease-out both;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2f3742;
+  border-radius: 10px;
+}
+
+.report-table {
+  @apply border border-[#2b313a] rounded-xl overflow-hidden;
+}
+
+.report-table th {
+  @apply bg-[#1d222a] text-gray-500 text-[10px] uppercase tracking-widest font-bold px-4 py-3 border-b border-[#2b313a];
+}
+
+.report-table td {
+  @apply px-4 py-3 text-sm text-gray-300 border-b border-[#2b313a];
+}
+
+.report-table tr:last-child td {
+  @apply border-b-0;
+}
+
+.report-table tr:hover {
+  @apply bg-[#1f2630];
+}

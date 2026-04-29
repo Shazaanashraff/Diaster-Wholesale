@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, deleteProduct } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct } from '../services/productService';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -14,9 +15,13 @@ export const ProductsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Confirm delete ──
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+
   // ── Form submission state ──
   const [saving, setSaving] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Form refs ──
   const nameRef = useRef<HTMLInputElement>(null);
@@ -25,6 +30,44 @@ export const ProductsPage: React.FC = () => {
   const wholesaleRef = useRef<HTMLInputElement>(null);
   const retailRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const piecesPerCartonRef = useRef<HTMLInputElement>(null);
+  const marginPctRef = useRef<HTMLInputElement>(null);
+
+  // Auto-generate a unique 6-digit SKU
+  async function generateSKU(): Promise<string> {
+    const existing = new Set(products.map((p) => p.item_code));
+    let sku = '';
+    for (let attempts = 0; attempts < 20; attempts++) {
+      sku = String(Math.floor(100000 + Math.random() * 900000));
+      if (!existing.has(sku)) break;
+    }
+    return sku;
+  }
+
+  // ── Search & filter ──
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail' | 'margin'>('name');
+
+  const categories = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+
+  const visibleProducts = products
+    .filter(p => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q) || (p.model || '').toLowerCase().includes(q);
+      const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'wholesale') return a.wholesale_price - b.wholesale_price;
+      if (sortBy === 'retail')    return a.retail_price   - b.retail_price;
+      if (sortBy === 'margin')    return (b.retail_price - b.wholesale_price) - (a.retail_price - a.wholesale_price);
+      return a.name.localeCompare(b.name);
+    });
+
+  const hasActiveFilters = filterCategory !== 'all' || sortBy !== 'name' || searchQuery !== '';
+  const clearFilters = () => { setFilterCategory('all'); setSortBy('name'); setSearchQuery(''); };
 
   // ── Fetch products on mount ──
   useEffect(() => {
@@ -58,56 +101,41 @@ export const ProductsPage: React.FC = () => {
 
   const handleSubmit = async () => {
     const name = nameRef.current?.value.trim() || '';
-    const item_code = itemCodeRef.current?.value.trim() || '';
     const model = modelRef.current?.value.trim() || '';
     const wholesale_price = parseFloat(wholesaleRef.current?.value || '0');
     const retail_price = parseFloat(retailRef.current?.value || '0');
     const description = descriptionRef.current?.value.trim() || '';
+    const pieces_per_carton = parseInt(piecesPerCartonRef.current?.value || '1') || 1;
+    const margin_pct = parseFloat(marginPctRef.current?.value || '20') || 20;
 
-    if (!name || !item_code) return;
+    if (!name) return;
 
     try {
       setSaving(true);
 
-      // ── Duplicate check (only when creating) ──
-      if (!editingProduct) {
-        const duplicates = await checkDuplicate(model, name);
-        if (duplicates.length > 0) {
-          setDuplicateWarning(
-            `A product with name "${name}" and model "${model}" already exists (${duplicates[0].item_code}). Are you sure?`
-          );
-          // If warning is shown for the first time, stop and let user click again to confirm
-          if (!duplicateWarning) {
-            setSaving(false);
-            return;
-          }
-        }
-      }
-
       if (editingProduct) {
         // ── UPDATE ──
         const updated = await updateProduct(editingProduct.id, {
-          name,
-          item_code,
-          model,
-          wholesale_price,
-          retail_price,
-          description,
+          name, model, wholesale_price, retail_price,
+          description, pieces_per_carton, margin_pct,
         });
-        setProducts((prev) =>
-          prev.map((p) => (p.id === updated.id ? updated : p))
-        );
+        setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
-        // ── CREATE ──
+        // ── Duplicate check ──
+        const duplicates = await checkDuplicate(model, name);
+        if (duplicates.length > 0) {
+          setDuplicateWarning(
+            `"${name}" (${model}) already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
+          );
+          if (!duplicateWarning) { setSaving(false); return; }
+        }
+
+        // ── Auto-generate 6-digit SKU ──
+        const item_code = itemCodeRef.current?.value.trim() || (await generateSKU());
+
         const created = await createProduct({
-          name,
-          item_code,
-          model,
-          wholesale_price,
-          retail_price,
-          description,
-          category: 'general',
-          pieces_per_carton: 1,
+          name, item_code, model, wholesale_price, retail_price,
+          description, category: 'general', pieces_per_carton, margin_pct,
         });
         setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       }
@@ -121,37 +149,146 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteRequest = (product: Product) => {
+    setDeleteTarget(product);
+    setDeleteError(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setSaving(true);
+      setDeleteError(null);
+      await archiveProduct(deleteTarget.id);
+      setProducts(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err: any) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to archive product');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-transparent">
       <section className="pos-main flex-1 border-r-0 max-w-full">
         <div className="pos-main-head w-full max-w-7xl mx-auto px-3">
           <label className="pos-search">
             <Search size={18} />
-            <input 
-              type="text" 
-              placeholder="Search catalog..." 
+            <input
+              type="text"
+              placeholder="Search catalog..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </label>
           <div className="pos-mode-toggle">
-            <button 
+            <button
               onClick={() => fetchProducts()}
               className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#1d222a] rounded-lg transition-colors border border-transparent hover:border-[#2b313a] text-gray-400 hover:text-white"
             >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
-            <div className="w-[1px] h-4 bg-[#2b313a] mx-1"></div>
-            <button className="flex items-center gap-2">
-              <Filter size={14} /> Filter
+            <div className="w-[1px] h-4 bg-[#2b313a] mx-1" />
+            <button
+              onClick={() => setFilterOpen(p => !p)}
+              className={`flex items-center gap-2 ${(filterOpen || hasActiveFilters) ? 'active' : ''}`}
+            >
+              <Filter size={14} />
+              Filter
+              {hasActiveFilters && (
+                <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] font-black flex items-center justify-center">
+                  {[filterCategory !== 'all', sortBy !== 'name', searchQuery !== ''].filter(Boolean).length}
+                </span>
+              )}
             </button>
-            <button 
+            <button
               onClick={() => { setIsAddModalOpen(true); setDuplicateWarning(null); }}
-              className="active flex items-center gap-2 text-primary ml-2 hover:opacity-80 transition-opacity whitespace-nowrap"
+              className="active flex items-center gap-2 text-[#111315] ml-2 hover:opacity-80 transition-opacity whitespace-nowrap"
             >
               <Plus size={16} strokeWidth={3} />
               <span className="text-xs font-bold uppercase tracking-widest">New</span>
             </button>
           </div>
         </div>
+
+        {/* ── Filter Panel ── */}
+        {filterOpen && (
+          <div className="mx-3 mb-3 rounded-2xl border border-[#2b313a] bg-[#13181f] overflow-hidden" style={{ animation: 'posFadeIn 180ms ease' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[#2b313a]">
+              <div className="flex flex-wrap items-center gap-4">
+
+                {/* Category chips */}
+                {categories.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Category</span>
+                    <div className="flex flex-wrap gap-1">
+                      {categories.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setFilterCategory(cat)}
+                          className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                            filterCategory === cat
+                              ? 'bg-[#f8fafc] text-[#111315]'
+                              : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                          }`}
+                        >
+                          {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {categories.length > 1 && <div className="w-px h-5 bg-[#2b313a]" />}
+
+                {/* Sort */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                    <ArrowUpDown size={12} className="inline mr-1 -translate-y-px" />Sort
+                  </span>
+                  <div className="flex gap-1">
+                    {([
+                      { key: 'name',      label: 'Name' },
+                      { key: 'wholesale', label: 'Wholesale ↑' },
+                      { key: 'retail',    label: 'Retail ↑' },
+                      { key: 'margin',    label: 'Margin ↓' },
+                    ] as const).map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setSortBy(s.key)}
+                        className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                          sortBy === s.key
+                            ? 'bg-[#f8fafc] text-[#111315]'
+                            : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-gray-500">
+                  {visibleProducts.length} of {products.length}
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-900/20 text-red-400 text-[11px] font-bold hover:bg-red-900/30 transition-all border border-red-900/30"
+                  >
+                    <X size={11} /> Clear
+                  </button>
+                )}
+                <button onClick={() => setFilterOpen(false)} className="text-gray-600 hover:text-gray-300 transition-colors">
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Loading State ── */}
         {loading && (
@@ -199,7 +336,7 @@ export const ProductsPage: React.FC = () => {
           <div className="px-3 overflow-y-auto pb-8 custom-scrollbar">
             <div className="grid grid-cols-1 gap-6 w-full mt-2 max-w-7xl mx-auto">
               <AnimatePresence>
-                {products.map((product) => (
+                {visibleProducts.map((product) => (
                   <motion.div 
                     layout
                     initial={{ opacity: 0, y: 10 }}
@@ -231,7 +368,14 @@ export const ProductsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-16">
+                    <div className="flex items-center gap-10">
+                      {(product.cost_price ?? 0) > 0 && (
+                        <div className="text-right">
+                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost / MSP</p>
+                          <p className="text-sm font-bold text-amber-400 font-mono">LKR {product.cost_price!.toFixed(2)}</p>
+                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {product.msp!.toFixed(2)}</p>
+                        </div>
+                      )}
                       <div className="text-right">
                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Wholesale</p>
                         <p className="text-xl font-bold text-gray-300 tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
@@ -248,17 +392,12 @@ export const ProductsPage: React.FC = () => {
                           <Edit2 size={20} />
                         </button>
                         <button 
-                          onClick={async () => {
-                            if (confirm('Are you sure you want to delete this product?')) {
-                              await deleteProduct(product.id);
-                              setProducts(prev => prev.filter(p => p.id !== product.id));
-                            }
-                          }}
+                          onClick={() => handleDeleteRequest(product)}
                           className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
                           <Trash2 size={20} />
                         </button>
                         <div className="w-px h-8 bg-[#2b313a]"></div>
-                        <button className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center">
+                        <button onClick={() => handleEdit(product)} className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center" title="More options">
                           <MoreVertical size={20} />
                         </button>
                       </div>
@@ -304,14 +443,15 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Hash size={12} className="text-primary" /> Item Code
+                <Hash size={12} className="text-primary" /> SKU / Item Code
               </label>
-              <input 
+              <input
                 ref={itemCodeRef}
-                type="text" 
+                type="text"
                 defaultValue={editingProduct?.item_code || ''}
-                placeholder="e.g. SOFT-PS-001" 
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+                placeholder={editingProduct ? editingProduct.item_code : 'Auto-generated'}
+                disabled={!!editingProduct}
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -320,11 +460,11 @@ export const ProductsPage: React.FC = () => {
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
               <Package size={12} className="text-primary" /> Model / Version
             </label>
-            <input 
+            <input
               ref={modelRef}
-              type="text" 
+              type="text"
               defaultValue={editingProduct?.model || ''}
-              placeholder="e.g. 2024 Pro Edition" 
+              placeholder="e.g. A616"
               className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
             />
           </div>
@@ -334,11 +474,11 @@ export const ProductsPage: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Tag size={12} className="text-primary" /> Wholesale Price (LKR)
               </label>
-              <input 
+              <input
                 ref={wholesaleRef}
-                type="number" 
+                type="number"
                 defaultValue={editingProduct?.wholesale_price || ''}
-                placeholder="0.00" 
+                placeholder="0.00"
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
               />
             </div>
@@ -346,12 +486,42 @@ export const ProductsPage: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Tag size={12} className="text-primary" /> Retail Price (LKR)
               </label>
-              <input 
+              <input
                 ref={retailRef}
-                type="number" 
+                type="number"
                 defaultValue={editingProduct?.retail_price || ''}
-                placeholder="0.00" 
+                placeholder="0.00"
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Package size={12} className="text-primary" /> Units per Carton
+              </label>
+              <input
+                ref={piecesPerCartonRef}
+                type="number"
+                min="1"
+                defaultValue={editingProduct?.pieces_per_carton || 1}
+                placeholder="1"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Tag size={12} className="text-primary" /> Default Margin %
+              </label>
+              <input
+                ref={marginPctRef}
+                type="number"
+                min="0"
+                step="0.5"
+                defaultValue={editingProduct?.margin_pct ?? 20}
+                placeholder="20"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
               />
             </div>
           </div>
@@ -372,14 +542,14 @@ export const ProductsPage: React.FC = () => {
           <div className="pt-4 grid grid-cols-2 gap-4">
             <button 
               onClick={closeModal}
-              className="w-full py-4 rounded-2xl border-2 border-border/50 text-sm font-bold text-gray-400 hover:text-dark hover:border-dark/20 transition-all"
+              className="w-full py-4 rounded-2xl border border-[#2b313a] bg-[#1d222a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all"
             >
               CANCEL
             </button>
             <button 
               onClick={handleSubmit}
               disabled={saving}
-              className="w-full h-[56px] bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100/10 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+              className="w-full h-[56px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 {saving ? (
@@ -396,6 +566,19 @@ export const ProductsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* ── Confirm Archive ────────────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleDelete}
+        title="Archive Product"
+        message={`Are you sure you want to archive "${deleteTarget?.name}"? It will be hidden from the catalog and POS, but historical records will remain.`}
+        confirmText="Archive Product"
+        variant="warning"
+        isLoading={saving}
+        error={deleteError}
+      />
     </div>
   );
 };

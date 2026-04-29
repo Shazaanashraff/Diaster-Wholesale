@@ -631,14 +631,14 @@ export const BulkImportPage: React.FC = () => {
           <div className="flex gap-4 pt-2">
             <button
               onClick={() => setShowRollbackConfirm(false)}
-              className="flex-1 py-4 bg-[#1d222a] border border-[#2b313a] rounded-2xl text-sm font-bold text-gray-400 hover:bg-[#2b313a] hover:text-white transition-all"
+              className="flex-1 py-4 bg-[#d7e5e8] border border-[#c4d7db] rounded-2xl text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all"
               id="rollback-cancel-btn"
             >
               Cancel
             </button>
             <button
               onClick={handleRollback}
-              className="flex-1 py-4 bg-red-900/50 text-red-400 border border-red-900/50 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all active:scale-[0.98]"
+              className="flex-1 py-4 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98]"
               id="rollback-confirm-btn"
             >
               Yes, Rollback

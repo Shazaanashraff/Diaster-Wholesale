@@ -1,274 +1,259 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  TrendingUp,
+  BarChart3,
   DollarSign,
-  ShoppingBag,
+  Package,
+  ShoppingCart,
   Users,
-  Calendar,
-  AlertTriangle,
+  Truck,
+  TrendingUp,
+  AlertCircle,
+  Clock,
+  ChevronRight,
   Search,
-  ArrowUpRight,
 } from 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
-import { getDashboardStats } from '../services/reportService';
-import type { DashboardStats } from '../services/reportService';
 import { cn } from '../lib/utils';
-import { AnimatedNumber } from '../components/AnimatedNumber';
 
-const revenueData = [
-  { name: 'Jan', value: 320 },
-  { name: 'Feb', value: 480 },
-  { name: 'Mar', value: 380 },
-  { name: 'Apr', value: 620 },
-  { name: 'May', value: 550 },
-  { name: 'Jun', value: 780 },
-  { name: 'Jul', value: 690 },
-  { name: 'Aug', value: 920 },
-];
+import { ProfitLossReport }           from './reports/ProfitLossReport';
+import { SalesProfitReport }          from './reports/SalesProfitReport';
+import { BatchProfitReport }          from './reports/BatchProfitReport';
+import { ExpenseReport }              from './reports/ExpenseReport';
+import { CashFlowReport }             from './reports/CashFlowReport';
+import { CurrentStockReport }         from './reports/CurrentStockReport';
+import { LowStockReport }             from './reports/LowStockReport';
+import { InventoryAdjustmentReport }  from './reports/InventoryAdjustmentReport';
+import { DailySalesReport }           from './reports/DailySalesReport';
+import { SalesByProductReport }       from './reports/SalesByProductReport';
+import { SalesByCustomerReport }      from './reports/SalesByCustomerReport';
+import { StockValuationReport }       from './reports/StockValuationReport';
+import { DamageReport }               from './reports/DamageReport';
+import { SalesReturnReport }          from './reports/SalesReturnReport';
+import { PurchaseHistoryReport }      from './reports/PurchaseHistoryReport';
+import { CustomerLedgerAggregateReport } from './reports/CustomerLedgerAggregateReport';
+import { FastMovingReport }           from './reports/FastMovingReport';
+import { SlowMovingReport }           from './reports/SlowMovingReport';
 
-const tileConfig = [
-  { label: 'Total Revenue', prefix: 'LKR ', suffix: '', icon: DollarSign, color: 'bg-[#f2c8de]', trend: '+12.5%', isUp: true },
-  { label: 'Order Count',   prefix: '',     suffix: '', icon: ShoppingBag, color: 'bg-[#d7e5e8]', trend: '+8.2%',  isUp: true },
-  { label: 'Customers',     prefix: '',     suffix: '', icon: Users,       color: 'bg-[#e6d3f0]', trend: '+2.4%',  isUp: true },
-  { label: 'Success Rate',  prefix: '',     suffix: '%',icon: TrendingUp,  color: 'bg-[#d4e8f8]', trend: '+0.5%',  isUp: true },
+const CATEGORIES = [
+  {
+    id: 'financial',
+    label: 'Financial',
+    icon: DollarSign,
+    reports: [
+      { id: 'pl',           label: 'Profit & Loss',   component: ProfitLossReport },
+      { id: 'sales-profit', label: 'Sales Profit',    component: SalesProfitReport },
+      { id: 'batch-profit', label: 'Batch Profit',    component: BatchProfitReport },
+      { id: 'expense',      label: 'Expenses',        component: ExpenseReport },
+      { id: 'cash-flow',    label: 'Cash Flow',       component: CashFlowReport },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    icon: Package,
+    reports: [
+      { id: 'current-stock',   label: 'Current Stock',       component: CurrentStockReport },
+      { id: 'stock-valuation', label: 'Stock Valuation',     component: StockValuationReport },
+      { id: 'low-stock',       label: 'Low Stock',           component: LowStockReport },
+      { id: 'adjustment',      label: 'Stock Adjustment',    component: InventoryAdjustmentReport },
+      { id: 'stock-aging',     label: 'Stock Aging',         comingSoon: true },
+      { id: 'movement',        label: 'Inventory Movement',  comingSoon: true },
+    ],
+  },
+  {
+    id: 'sales',
+    label: 'Sales',
+    icon: ShoppingCart,
+    reports: [
+      { id: 'daily-sales',        label: 'Daily Sales',         component: DailySalesReport },
+      { id: 'sales-by-product',   label: 'By Product',          component: SalesByProductReport },
+      { id: 'sales-by-customer',  label: 'By Customer',         component: SalesByCustomerReport },
+      { id: 'sales-by-mode',      label: 'Wholesale vs Retail', comingSoon: true },
+      { id: 'invoice-report',     label: 'Invoice Report',      comingSoon: true },
+    ],
+  },
+  {
+    id: 'customer',
+    label: 'Customers',
+    icon: Users,
+    reports: [
+      { id: 'customer-ledger', label: 'Customer Ledger', component: CustomerLedgerAggregateReport },
+      { id: 'credit-report',   label: 'Credit Report',   comingSoon: true },
+      { id: 'ar-aging',        label: 'AR Aging',        comingSoon: true },
+    ],
+  },
+  {
+    id: 'supplier',
+    label: 'Supplier',
+    icon: Truck,
+    reports: [
+      { id: 'purchase-history',      label: 'Purchase History', component: PurchaseHistoryReport },
+      { id: 'outstanding-payables',  label: 'Payables',         comingSoon: true },
+    ],
+  },
+  {
+    id: 'returns',
+    label: 'Returns & Damage',
+    icon: AlertCircle,
+    reports: [
+      { id: 'sales-return',   label: 'Sales Return',   component: SalesReturnReport },
+      { id: 'damage-report',  label: 'Damage Report',  component: DamageReport },
+    ],
+  },
+  {
+    id: 'analytics',
+    label: 'Analytics',
+    icon: TrendingUp,
+    reports: [
+      { id: 'fast-moving', label: 'Fast Moving', component: FastMovingReport },
+      { id: 'slow-moving', label: 'Slow Moving', component: SlowMovingReport },
+      { id: 'dead-stock',  label: 'Dead Stock',  comingSoon: true },
+    ],
+  },
 ];
 
 export const ReportsPage: React.FC = () => {
-  const [stats, setStats]           = useState<DashboardStats | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
-  const [activeTab, setActiveTab]   = useState('Overview');
+  const [activeCategoryId, setActiveCategoryId] = useState(CATEGORIES[0].id);
+  const [activeReportId, setActiveReportId]     = useState(CATEGORIES[0].reports[0].id);
+  const [searchQuery, setSearchQuery]           = useState('');
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const s = await getDashboardStats();
-        setStats(s);
-      } catch (err) {
-        console.error('Error loading reports:', err);
-        setError('Failed to load analytics data.');
-      } finally {
-        setLoading(false);
-      }
+  const q = searchQuery.toLowerCase();
+  const filteredCategories = CATEGORIES.map(cat => ({
+    ...cat,
+    reports: cat.reports.filter(r => !q || r.label.toLowerCase().includes(q)),
+  })).filter(cat => !q || cat.reports.length > 0);
+
+  const activeReport = CATEGORIES
+    .flatMap(c => c.reports)
+    .find(r => r.id === activeReportId);
+
+  const renderReport = () => {
+    if (!activeReport) return null;
+
+    if (activeReport.comingSoon) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center" style={{ animation: 'posFadeIn 300ms ease' }}>
+          <div className="w-20 h-20 rounded-2xl bg-[#1d222a] border border-[#2b313a] flex items-center justify-center mb-5">
+            <Clock size={34} className="text-gray-500" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">{activeReport.label}</h3>
+          <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
+            This report module is under development and will be available in the next system update.
+          </p>
+          <span className="mt-4 px-3 py-1 rounded-full bg-[#1d222a] border border-[#2b313a] text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            Coming Soon
+          </span>
+        </div>
+      );
     }
-    load();
-  }, []);
 
-  /* ── Loading skeleton ── */
-  if (loading) {
-    return (
-      <div className="pos-page-grid">
-        <div className="pos-skeleton-main">
-          <div className="pos-skeleton-search skeleton" />
-          <div className="pos-skeleton-grid">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="pos-skeleton-tile skeleton" style={{ animationDelay: `${i * 80}ms` }} />
-            ))}
-          </div>
-          <div className="mt-4 block space-y-4">
-            <div className="w-full h-[360px] rounded-xl skeleton" />
-            <div className="w-full h-[260px] rounded-xl skeleton" />
-          </div>
-        </div>
-        <div className="pos-skeleton-panel" />
+    const Component = (activeReport as any).component;
+    return Component ? (
+      <div style={{ animation: 'posFadeIn 220ms ease' }}>
+        <Component />
       </div>
-    );
-  }
-
-  /* ── Error state ── */
-  if (error) {
-    return (
-      <div className="pos-page-grid">
-        <div className="pos-main flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4" style={{ animation: 'posFadeIn 380ms ease' }}>
-            <div className="w-16 h-16 rounded-full bg-red-900/20 flex items-center justify-center border border-red-900/50">
-              <AlertTriangle size={28} className="text-red-400" />
-            </div>
-            <p className="text-sm font-semibold text-red-400">{error}</p>
-          </div>
-        </div>
-        <div className="pos-bill" />
-      </div>
-    );
-  }
-
-  const tiles = [
-    { ...tileConfig[0], value: stats?.totalRevenue  ?? 0 },
-    { ...tileConfig[1], value: stats?.totalOrders   ?? 0 },
-    { ...tileConfig[2], value: stats?.newCustomers  ?? 0 },
-    { ...tileConfig[3], value: stats?.successRate   ?? 0 },
-  ];
-
-  const successRate = stats?.successRate ?? 92;
-  const liveGauge = [
-    { name: 'Done',      value: successRate,       color: '#f8fafc' },
-    { name: 'Remaining', value: 100 - successRate, color: '#1d222a' },
-  ];
+    ) : null;
+  };
 
   return (
-    <div className="pos-page-grid">
+    <div className="pos-standard-page flex overflow-hidden" style={{ height: '100vh' }}>
 
-      {/* ── LEFT MAIN ── */}
-      <section className="pos-main">
+      {/* ── Left nav ── */}
+      <aside className="w-64 shrink-0 flex flex-col border-r border-[#1f242c] bg-[#0d1016] overflow-hidden">
 
-        {/* header row */}
-        <div className="pos-main-head">
-          <label className="pos-search">
-            <Search size={18} />
-            <input placeholder="Search reports..." />
+        {/* Header */}
+        <div className="px-5 py-5 border-b border-[#1f242c]">
+          <div className="flex items-center gap-2.5 mb-0.5">
+            <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
+              <BarChart3 size={15} className="text-primary" />
+            </div>
+            <h1 className="text-base font-bold text-white tracking-tight">Reports</h1>
+          </div>
+          <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold pl-9">Business Intelligence</p>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 py-3 border-b border-[#1f242c]">
+          <label className="flex items-center gap-2 bg-[#171c23] border border-[#2b313a] rounded-xl px-3 py-2 focus-within:border-primary/40 transition-all">
+            <Search size={13} className="text-gray-600 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search reports..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="bg-transparent text-xs text-gray-300 placeholder-gray-600 outline-none w-full"
+            />
           </label>
-          <div className="pos-mode-toggle">
-            <button type="button" className={cn(activeTab === 'Overview' && 'active')} onClick={() => setActiveTab('Overview')}>
-              Overview
-            </button>
-            <button type="button" className={cn(activeTab === 'Detailed' && 'active')} onClick={() => setActiveTab('Detailed')}>
-              Detailed
-            </button>
-          </div>
         </div>
 
-        {/* stat tiles */}
-        <div className="pos-tile-grid pb-2">
-          {tiles.map((t, i) => (
-            <button
-              key={i}
-              type="button"
-              className={cn('pos-tile transition-all', t.color)}
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              <t.icon size={18} />
-              <h3>{t.label}</h3>
-              <p>{t.prefix}<AnimatedNumber value={t.value} />{t.suffix}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* scrollable content */}
-        <div className="px-3 overflow-y-auto pb-8 custom-scrollbar block space-y-6">
-
-          {/* area chart */}
-          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '200ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <p className="text-gray-400 text-xs mb-1">Monthly Snapshot</p>
-                <h4 className="text-xl font-bold text-white tracking-tight">Revenue Stream</h4>
-                <strong className="text-2xl mt-1 block">
-                  LKR <AnimatedNumber value={stats?.totalRevenue ?? 0} />
-                </strong>
+        {/* Nav list */}
+        <nav className="flex-1 overflow-y-auto custom-scrollbar py-3 px-3 space-y-5">
+          {filteredCategories.map(cat => (
+            <div key={cat.id}>
+              <div className="flex items-center gap-1.5 px-2 mb-1.5">
+                <cat.icon size={11} className="text-gray-600" />
+                <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{cat.label}</span>
               </div>
-              <div className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] px-3 py-1.5 rounded-xl cursor-pointer">
-                <span className="text-[11px] font-bold text-gray-400">All Time</span>
-                <ArrowUpRight size={14} className="text-gray-500" />
+              <div className="space-y-1.5">
+                {cat.reports.map(rep => {
+                  const isActive = activeReportId === rep.id;
+                  return (
+                    <button
+                      key={rep.id}
+                      onClick={() => {
+                        setActiveCategoryId(cat.id);
+                        setActiveReportId(rep.id);
+                      }}
+                      className={cn(
+                        'w-full text-left px-3 py-2 rounded-xl text-[11px] font-semibold transition-all flex items-center justify-between group',
+                        isActive
+                          ? 'bg-primary/10 text-primary border border-primary/20'
+                          : 'text-gray-500 hover:bg-[#171c23] hover:text-gray-200 border border-transparent'
+                      )}
+                    >
+                      <span className="truncate">{rep.label}</span>
+                      <span className="shrink-0 flex items-center gap-1.5 ml-2">
+                        {(rep as any).comingSoon && (
+                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-600 bg-[#1d222a] px-1.5 py-0.5 rounded-md">
+                            Soon
+                          </span>
+                        )}
+                        {isActive && <ChevronRight size={12} className="text-primary" />}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient id="rpGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#f8fafc" stopOpacity={0.1} />
-                      <stop offset="95%" stopColor="#f8fafc" stopOpacity={0}   />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#2b313a" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #2b313a', background: '#1c2026', padding: '8px 12px' }}
-                    itemStyle={{ color: '#fff' }}
-                    cursor={{ stroke: '#f8fafc', strokeWidth: 1.5, strokeDasharray: '4 4' }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="#f8fafc" strokeWidth={3} fillOpacity={1} fill="url(#rpGrad)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ── RIGHT BILL PANEL ── */}
-      <aside className="pos-bill">
-
-        <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
-          <h2 className="text-xl font-bold tracking-tight">Performance</h2>
-          <p className="text-xs font-semibold text-gray-500">Real-time KPI gauge</p>
-        </div>
-
-        {/* gauge */}
-        <div className="flex-1 flex flex-col items-center justify-center relative mt-6">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={liveGauge}
-                cx="50%" cy="100%"
-                startAngle={180} endAngle={0}
-                innerRadius={80} outerRadius={110}
-                paddingAngle={0}
-                dataKey="value"
-                stroke="none"
-              >
-                {liveGauge.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute top-[65%] flex flex-col items-center">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Success Rate</p>
-            <p className="text-4xl font-bold text-white tracking-tighter">
-              <AnimatedNumber value={successRate} />
-              <span className="text-lg text-gray-400">%</span>
-            </p>
-          </div>
-        </div>
-
-        {/* mini KPI tiles */}
-        <div className="grid grid-cols-3 gap-2 mt-auto mb-6 px-2">
-          {[
-            { label: 'Revenue', value: stats?.totalRevenue ? `${(stats.totalRevenue / 1000).toFixed(1)}k` : '—', color: 'bg-[#f2c8de]' },
-            { label: 'Orders',  value: String(stats?.totalOrders  ?? '—'), color: 'bg-[#d7e5e8]' },
-            { label: 'Clients', value: String(stats?.newCustomers ?? '—'), color: 'bg-[#e6d3f0]' },
-          ].map((item, i) => (
-            <div key={i} className="text-center bg-[#161a20] rounded-xl border border-[#1f242c] py-3 cursor-default">
-              <div className="flex items-center justify-center gap-1.5 mb-1">
-                <div className={cn('w-2 h-2 rounded-full', item.color)} />
-              </div>
-              <p className="text-[14px] font-bold text-white">{item.value}</p>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500">{item.label}</span>
             </div>
           ))}
-        </div>
 
-        {/* date range picker placeholder */}
-        <div className="px-1 mb-4">
-          <button className="w-full flex items-center justify-between px-4 py-3 bg-[#1d222a] border border-[#2b313a] rounded-xl hover:border-gray-500/50 transition-all">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-gray-400" />
-              <span className="text-xs font-bold text-gray-400">All Time</span>
-            </div>
-            <ArrowUpRight size={14} className="text-gray-600" />
-          </button>
-        </div>
-
-        <button type="button" className="pos-submit mt-auto mb-4">
-          Generate Full Report
-        </button>
-
+          {filteredCategories.length === 0 && (
+            <p className="text-center text-xs text-gray-600 py-8">No reports match "{searchQuery}"</p>
+          )}
+        </nav>
       </aside>
+
+      {/* ── Main content ── */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#111315]">
+        {/* Breadcrumb bar */}
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-8 py-4 border-b border-[#1f242c] bg-[#111315]/90 backdrop-blur-sm">
+          <span className="text-[11px] font-bold text-gray-600 uppercase tracking-widest">
+            {CATEGORIES.find(c => c.id === activeCategoryId)?.label}
+          </span>
+          <ChevronRight size={12} className="text-gray-700" />
+          <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">
+            {activeReport?.label}
+          </span>
+          {activeReport && (activeReport as any).comingSoon && (
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-[#1d222a] border border-[#2b313a] text-[9px] font-bold uppercase tracking-widest text-gray-500">
+              Coming Soon
+            </span>
+          )}
+        </div>
+
+        <div className="px-8 py-7 max-w-6xl mx-auto">
+          {renderReport()}
+        </div>
+      </main>
     </div>
   );
 };

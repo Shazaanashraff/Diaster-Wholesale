@@ -150,28 +150,36 @@ export const ReturnsPage: React.FC = () => {
                     className={cn(
                       'w-full text-left rounded-2xl p-4 border transition-all',
                       selectedInvoiceId === invoice.id
-                        ? 'border-primary bg-indigo-900/20'
+                        ? 'border-primary bg-primary'
                         : 'border-[#2b313a] bg-[#1d222a] hover:border-primary/50'
                     )}
                     style={{ animation: 'posFadeIn 400ms ease both', animationDelay: `${idx * 40}ms` }}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-bold text-white truncate">{invoice.invoice_no}</p>
+                      <p className={cn('text-sm font-bold truncate', selectedInvoiceId === invoice.id ? 'text-black' : 'text-white')}>
+                        {invoice.invoice_no}
+                      </p>
                       <span className={cn(
                         'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
                         invoice.is_returned
                           ? 'bg-red-900/30 text-red-400'
-                          : 'bg-green-900/30 text-green-400'
+                          : selectedInvoiceId === invoice.id 
+                            ? 'bg-green-500/20 text-green-700'
+                            : 'bg-green-900/30 text-green-400'
                       )}>
                         {invoice.is_returned ? 'Returned' : 'Returnable'}
                       </span>
                     </div>
-                    <p className="text-xs font-semibold text-gray-500 mt-1 truncate">{invoice.customer_name}</p>
+                    <p className={cn('text-xs font-semibold mt-1 truncate', selectedInvoiceId === invoice.id ? 'text-slate-600' : 'text-gray-500')}>
+                      {invoice.customer_name}
+                    </p>
                     <div className="flex items-center justify-between mt-3">
-                      <p className="text-[11px] font-bold text-gray-500">
+                      <p className={cn('text-[11px] font-bold', selectedInvoiceId === invoice.id ? 'text-slate-500' : 'text-gray-500')}>
                         {new Date(invoice.created_at).toLocaleString()}
                       </p>
-                      <p className="text-sm font-bold text-primary">LKR {invoice.total.toFixed(2)}</p>
+                      <p className={cn('text-sm font-bold', selectedInvoiceId === invoice.id ? 'text-black' : 'text-primary')}>
+                        LKR {invoice.total.toFixed(2)}
+                      </p>
                     </div>
                   </button>
                 ))
@@ -268,7 +276,7 @@ export const ReturnsPage: React.FC = () => {
                     'w-full py-4 rounded-2xl font-bold text-sm tracking-widest transition-all',
                     processing || selectedInvoice.is_returned
                       ? 'bg-[#1d222a] text-gray-500 cursor-not-allowed border border-[#2b313a]'
-                      : 'bg-primary text-white hover:bg-violet-600 border border-primary/20'
+                      : 'bg-primary text-black hover:bg-white/90 border border-primary/20'
                   )}
                 >
                   {selectedInvoice.is_returned ? 'ALREADY RETURNED' : 'PROCESS RETURN'}
@@ -294,7 +302,7 @@ export const ReturnsPage: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={() => setShowConfirm(false)}
-              className="flex-1 py-3 rounded-xl bg-[#1d222a] border border-[#2b313a] text-sm font-bold text-gray-400 hover:bg-[#2b313a] hover:text-white transition-all"
+              className="flex-1 py-3 rounded-xl bg-[#1d222a] border border-[#2b313a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all"
             >
               Cancel
             </button>
@@ -302,8 +310,10 @@ export const ReturnsPage: React.FC = () => {
               onClick={handleProcessReturn}
               disabled={processing}
               className={cn(
-                'flex-1 h-[48px] rounded-xl text-sm font-bold text-white transition-all border border-primary/20 relative overflow-hidden flex items-center justify-center',
-                processing ? 'bg-indigo-900/50 cursor-not-allowed text-indigo-400' : 'bg-primary hover:bg-violet-600'
+                'flex-1 h-[48px] rounded-xl text-sm font-bold transition-all border relative overflow-hidden flex items-center justify-center',
+                processing
+                  ? 'bg-[#1d222a] text-gray-500 border-[#2b313a] cursor-not-allowed'
+                  : 'bg-[#f8fafc] text-black border-[#f8fafc] hover:bg-white'
               )}
             >
               <AnimatePresence mode="wait">
@@ -324,6 +334,3 @@ export const ReturnsPage: React.FC = () => {
     </div>
   );
 };
-
-
-

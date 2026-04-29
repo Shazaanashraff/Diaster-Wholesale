@@ -94,7 +94,7 @@ export const CustomerDetailPage: React.FC = () => {
     return (
       <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
         <TopBar />
-        <div className="p-10 pos-page-body w-full">
+        <div className="p-4 md:p-10 pos-page-body w-full">
           <div className="flex items-center gap-4 mb-8">
             <div className="w-12 h-12 rounded-full skeleton"></div>
             <div className="w-48 h-10 rounded-xl skeleton"></div>
@@ -129,7 +129,7 @@ export const CustomerDetailPage: React.FC = () => {
     <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
       <TopBar />
       
-      <div className="p-10 pos-page-body w-full">
+      <div className="p-4 md:p-10 pos-page-body w-full">
         {/* Header Section */}
         <div className="pos-page-header flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4" style={{ animation: 'posFadeIn 380ms ease both' }}>
           <div className="flex items-center gap-4">
@@ -141,7 +141,7 @@ export const CustomerDetailPage: React.FC = () => {
             </button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-white tracking-tight">{customer.name}</h1>
+                <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">{customer.name}</h1>
                 <span className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent",
                   customer.type === 'wholesale' ? "bg-purple-900/30 text-purple-400 border-purple-900/50" : "bg-indigo-900/30 text-indigo-400 border-indigo-900/50"
@@ -154,7 +154,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
           <button 
             onClick={openPaymentModal}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-3xl font-bold text-sm hover:bg-violet-600 transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-primary text-black rounded-2xl md:rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
           >
             <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
           </button>
@@ -220,34 +220,34 @@ export const CustomerDetailPage: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-[#2b313a]">
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">No.</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Total</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Status</th>
+                  <tr className="border-b border-[#2b313a]">
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">No.</th>
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Total</th>
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-[#2b313a]">
                   {invoices.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-sm text-gray-500 font-semibold">No invoices found</td>
+                      <td colSpan={4} className="py-12 text-center text-sm text-gray-500 font-semibold italic">No invoices found</td>
                     </tr>
                   ) : (
                     invoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-[#2b313a] hover:bg-[#1d222a] transition-colors">
-                        <td className="py-4 text-sm font-bold text-white">{inv.invoice_no}</td>
-                        <td className="py-4 text-sm font-semibold text-gray-400">
+                      <tr key={inv.id} className="hover:bg-[#1d222a]/50 transition-colors">
+                        <td className="py-4 text-sm font-mono font-bold text-white">{inv.invoice_no}</td>
+                        <td className="py-4 text-xs font-semibold text-gray-500">
                           {new Date(inv.created_at).toLocaleDateString()}
                         </td>
-                        <td className="py-4 text-sm font-bold text-white text-right">
-                          Rs. {(inv.total || 0).toLocaleString()}
+                        <td className="py-4 text-sm font-mono font-bold text-white text-right">
+                          Rs. {(inv.total || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-4 text-center">
+                        <td className="py-4 text-right">
                           <span className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                            inv.payment_status === 'paid' ? "bg-green-900/30 text-green-400" :
-                            inv.payment_status === 'partial' ? "bg-indigo-900/30 text-indigo-400" :
-                            "bg-red-900/30 text-red-400"
+                            "px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest inline-block",
+                            inv.payment_status === 'paid' ? "bg-green-500/10 text-green-400" :
+                            inv.payment_status === 'partial' ? "bg-amber-500/10 text-amber-400" :
+                            "bg-red-500/10 text-red-400"
                           )}>
                             {inv.payment_status}
                           </span>
@@ -272,23 +272,24 @@ export const CustomerDetailPage: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b-2 border-[#2b313a]">
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Linked To</th>
-                    <th className="pb-4 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Amount</th>
+                  <tr className="border-b border-[#2b313a]">
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Linked To</th>
+                    <th className="py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-[#2b313a]">
                   {payments.length === 0 ? (
                     <tr>
-                      <td colSpan={3} className="py-8 text-center text-sm text-gray-500 font-semibold">No payments found</td>
+                      <td colSpan={3} className="py-12 text-center text-sm text-gray-500 font-semibold italic">No payments found</td>
                     </tr>
                   ) : (
                     payments.map((pay) => {
                       const linkedInv = pay.invoice_id ? invoices.find(i => i.id === pay.invoice_id) : null;
+                      const isNegative = pay.amount < 0;
                       return (
-                        <tr key={pay.id} className="border-b border-[#2b313a] hover:bg-[#1d222a] transition-colors">
-                          <td className="py-4 text-sm font-semibold text-gray-400">
+                        <tr key={pay.id} className="hover:bg-[#1d222a]/50 transition-colors">
+                          <td className="py-4 text-xs font-semibold text-gray-500">
                             {new Date(pay.paid_at).toLocaleDateString()}
                           </td>
                           <td className="py-4">
@@ -296,8 +297,11 @@ export const CustomerDetailPage: React.FC = () => {
                               {linkedInv ? linkedInv.invoice_no : 'General'}
                             </span>
                           </td>
-                          <td className="py-4 text-sm font-bold text-green-400 text-right">
-                            + Rs. {(pay.amount || 0).toLocaleString()}
+                          <td className={cn(
+                            "py-4 text-sm font-mono font-bold text-right",
+                            isNegative ? "text-red-400" : "text-green-400"
+                          )}>
+                            {isNegative ? '-' : '+'} Rs. {Math.abs(pay.amount || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -373,14 +377,14 @@ export const CustomerDetailPage: React.FC = () => {
                 <button 
                   disabled={paymentLoading}
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="w-full py-4 rounded-2xl border border-[#2b313a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all disabled:opacity-50"
+                  className="w-full py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all disabled:opacity-50"
                 >
                   CANCEL
                 </button>
                 <button 
                   disabled={paymentLoading || !paymentAmount}
                   onClick={handleRecordPayment}
-                  className="w-full h-[52px] bg-primary text-white rounded-2xl font-bold text-sm hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden border border-primary/20"
+                  className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
                 >
                   <AnimatePresence mode="wait">
                     {paymentLoading ? (
@@ -402,7 +406,3 @@ export const CustomerDetailPage: React.FC = () => {
     </div>
   );
 };
-
-
-
-

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { getProducts } from '../services/productService';
 import { getCustomers } from '../services/customerService';
+import { getRolePin } from '../utils/permissions';
 import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
 import { checkout } from '../services/posService';
 import type { Product, Customer } from '../types';
@@ -31,18 +32,19 @@ export interface CartItem {
   product: Product;
   quantityCartons: number;
   quantityPieces: number;
+  batchId?: string;
 }
 
-type PayMethod = 'cash' | 'creditCard' | 'ewallet';
+type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
 
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
-  'bg-[#e6d3f0]',
+  'bg-[#e2e8f0]',
   'bg-[#d4e8f8]',
-  'bg-[#d9dcf6]',
-  'bg-[#f2c8de]',
-  'bg-[#ece7ec]',
-  'bg-[#f0d0db]',
+  'bg-[#cbd5e1]',
+  'bg-[#f1f5f9]',
+  'bg-[#f8fafc]',
+  'bg-[#e5e7eb]',
   'bg-[#cbe8df]',
 ];
 
@@ -70,7 +72,35 @@ export const POSPage: React.FC = () => {
   const [isOrderTypeModalOpen, setIsOrderTypeModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  // Discount & approval
+  const [discountAmt, setDiscountAmt] = useState(0);
+  const [discountApproved, setDiscountApproved] = useState(false);
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [approvalPin, setApprovalPin] = useState('');
+  const [approvalError, setApprovalError] = useState('');
+
+  const [availableBatches, setAvailableBatches] = useState<Record<string, any[]>>({});
+
+  useEffect(() => {
+    const cartProductIds = [...new Set(cart.map(i => i.product.id))];
+    if (cartProductIds.length === 0) {
+      setAvailableBatches({});
+      return;
+    }
+    
+    import('../services/inventoryService').then(({ getBatchesForProducts }) => {
+      getBatchesForProducts(cartProductIds).then(batches => {
+        const batchMap: Record<string, any[]> = {};
+        for (const b of batches) {
+          if (!batchMap[b.product_id]) batchMap[b.product_id] = [];
+          batchMap[b.product_id].push(b);
+        }
+        setAvailableBatches(batchMap);
+      });
+    });
+  }, [cart.length]);
 
   useEffect(() => {
     let active = true;
@@ -156,10 +186,17 @@ export const POSPage: React.FC = () => {
   }, [products]);
 
   const categoryProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase();
     return products.filter((p) => {
-      return selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+      const categoryMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
+      const searchMatch = !q || 
+        (p.name?.toLowerCase().includes(q)) || 
+        (p.item_code?.toLowerCase().includes(q)) || 
+        (p.model?.toLowerCase().includes(q)) ||
+        (p.sku?.toLowerCase().includes(q));
+      return categoryMatch && searchMatch;
     });
-  }, [selectedCategory, products]);
+  }, [selectedCategory, searchQuery, products]);
 
   const getCartPiecesForProduct = (productId: string): number => {
     return cart
@@ -242,26 +279,62 @@ export const POSPage: React.FC = () => {
   };
 
   const subtotal = cart.reduce((acc, item) => {
-    const pricePerPiece = isWholesale ? item.product.wholesale_price : item.product.retail_price;
-    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     return acc + pricePerPiece * totalPieces;
   }, 0);
 
   const estimatedCostFloor = cart.reduce((acc, item) => {
-    const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     const avgCost = avgCostByProduct[item.product.id] ?? 0;
     return acc + avgCost * totalPieces;
   }, 0);
 
-  const discount = subtotal > 50 ? 5.5 : 0;
+  const mspFloor = cart.reduce((acc, item) => {
+    const ppc = item.product.pieces_per_carton || 1;
+    const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
+    const msp = item.product.msp ?? 0;
+    return acc + msp * totalPieces;
+  }, 0);
+
+  const discount = discountApproved ? discountAmt : 0;
   const total = subtotal - discount;
-  const isBelowCost = subtotal - discount < estimatedCostFloor;
-  const canProcessTransaction = cart.length > 0 && !!selectedCustomerId && !isProcessing;
+  const isBelowCost = total < estimatedCostFloor;
+  const isBelowMSP = mspFloor > 0 && total < mspFloor;
+  const needsApproval = discountAmt > 0 && !discountApproved;
+  const canProcessTransaction =
+    cart.length > 0
+    && !!selectedCustomerId
+    && btnPhase === 'idle'
+    && !isBelowCost
+    && !isBelowMSP
+    && !needsApproval;
+
+  function handleDiscountChange(val: string) {
+    const num = parseFloat(val) || 0;
+    setDiscountAmt(num);
+    setDiscountApproved(false);
+  }
+
+  function handleApproveDiscount() {
+    const adminPin = getRolePin('admin');
+    if (approvalPin === adminPin) {
+      setDiscountApproved(true);
+      setApprovalModalOpen(false);
+      setApprovalPin('');
+      setApprovalError('');
+    } else {
+      setApprovalError('Incorrect admin PIN');
+      setApprovalPin('');
+    }
+  }
 
   const processTransaction = async () => {
     if (!canProcessTransaction) return;
 
-    setIsProcessing(true);
+    setBtnPhase('loading');
 
     try {
       await checkout(
@@ -271,31 +344,36 @@ export const POSPage: React.FC = () => {
         subtotal,
         discount,
         total,
-        paymentMethod === 'cash' ? 'cash' : 'bank_transfer'
+        paymentMethod === 'credit'
+          ? 'credit'
+          : paymentMethod === 'cash'
+            ? 'cash'
+            : 'bank_transfer'
       );
 
       if (isInventoryEnforced) {
         setStockPiecesByProduct((prev) => {
           const next = { ...prev };
-
           for (const item of cart) {
             const pieces = item.quantityCartons * (item.product.pieces_per_carton || 1) + item.quantityPieces;
-            const current = next[item.product.id] ?? 0;
-            next[item.product.id] = Math.max(0, current - pieces);
+            next[item.product.id] = Math.max(0, (next[item.product.id] ?? 0) - pieces);
           }
-
           return next;
         });
       }
 
       setValidationMessage(null);
-      setIsSuccessModalOpen(true);
+      setBtnPhase('done');
+      setTimeout(() => {
+        setCart([]);
+        setSelectedCustomerId('');
+        setBtnPhase('idle');
+      }, 1600);
     } catch (error) {
       console.error('Transaction Failed:', error);
       const message = error instanceof Error ? error.message : 'Transaction failed. See console for details.';
       setValidationMessage(message);
-    } finally {
-      setIsProcessing(false);
+      setBtnPhase('idle');
     }
   };
 
@@ -375,7 +453,7 @@ export const POSPage: React.FC = () => {
           <AnimatePresence mode="wait">
             <motion.div 
               key={selectedCategory}
-              className="pos-product-grid"
+              className="pos-product-grid mt-3"
               initial="hidden"
               animate="show"
               exit="exit"
@@ -400,7 +478,8 @@ export const POSPage: React.FC = () => {
                 const exceedsStock = isInventoryEnforced && selectedPieces > remainingPieces;
                 const hasAmount = qtyCartons > 0 || qtyPieces > 0;
                 
-                const isSearchMatch = searchQuery === '' || product.name.toLowerCase().includes(searchQuery.toLowerCase());
+                // Search match is now handled in categoryProducts useMemo
+                const isSearchMatch = true;
 
                 return (
                   <motion.article 
@@ -464,7 +543,7 @@ export const POSPage: React.FC = () => {
         <aside className="pos-bill">
           <div className="pos-bill-head">
             <div>
-              <h2>Table 5</h2>
+              <h2>POS System</h2>
               <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Walk-in'}</p>
             </div>
             {cart.length > 0 && (
@@ -491,8 +570,9 @@ export const POSPage: React.FC = () => {
             {cart.length === 0 && <p className="pos-cart-empty">No items yet</p>}
             <AnimatePresence>
               {cart.map((item, index) => {
-                const pricePerPiece = isWholesale ? item.product.wholesale_price : item.product.retail_price;
-                const totalPieces = item.quantityCartons * item.product.pieces_per_carton + item.quantityPieces;
+                const ppc = item.product.pieces_per_carton || 1;
+                const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
+                const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
 
                 return (
                   <motion.div 
@@ -516,9 +596,27 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
-                        <p>
+                        <p className="text-[10px] text-gray-500">
                           {item.quantityCartons} CTN x {item.quantityPieces} PCS
                         </p>
+                        <div className="mt-1">
+                          <select
+                            value={item.batchId || ''}
+                            onChange={(e) => {
+                              const newCart = [...cart];
+                              newCart[index].batchId = e.target.value || undefined;
+                              setCart(newCart);
+                            }}
+                            className="bg-[#1d222a] border border-[#2b313a] text-[9px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
+                          >
+                            <option value="">FIFO (Oldest First)</option>
+                            {(availableBatches[item.product.id] || []).map(b => (
+                              <option key={b.id} value={b.id}>
+                                Batch: {b.shipments?.reference || 'Direct'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                       <strong>LKR {(pricePerPiece * totalPieces).toFixed(2)}</strong>
                     </div>
@@ -533,9 +631,43 @@ export const POSPage: React.FC = () => {
               <span>Subtotal</span>
               <strong>LKR <AnimatedNumber value={subtotal} /></strong>
             </div>
-            <div>
+            <div style={{ alignItems: 'center' }}>
               <span>Discount</span>
-              <strong>- LKR <AnimatedNumber value={discount} /></strong>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={discountAmt || ''}
+                  onChange={e => handleDiscountChange(e.target.value)}
+                  placeholder="0.00"
+                  style={{
+                    width: 80, background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 8, padding: '3px 8px',
+                    color: '#f1f5f9', fontSize: 12, fontFamily: 'monospace',
+                    outline: 'none',
+                  }}
+                />
+                {discountAmt > 0 && !discountApproved && (
+                  <button
+                    type="button"
+                    onClick={() => { setApprovalModalOpen(true); setApprovalError(''); setApprovalPin(''); }}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                      borderRadius: 6, cursor: 'pointer',
+                      background: 'rgba(251,191,36,0.15)',
+                      border: '1px solid rgba(251,191,36,0.3)',
+                      color: '#fbbf24',
+                    }}
+                  >
+                    Approve
+                  </button>
+                )}
+                {discountApproved && discountAmt > 0 && (
+                  <span style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>✓ Approved</span>
+                )}
+              </div>
             </div>
             <div className="total">
               <span>Total</span>
@@ -543,7 +675,89 @@ export const POSPage: React.FC = () => {
             </div>
           </div>
 
-          {isBelowCost && (
+          {/* Discount approval modal */}
+          {approvalModalOpen && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 200,
+              background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{
+                background: '#171c23', border: '1px solid #2b313a',
+                borderRadius: 20, padding: 28, width: 320,
+                display: 'flex', flexDirection: 'column', gap: 16,
+              }}>
+                <div>
+                  <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Admin Approval Required</p>
+                  <p style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
+                    Discount of LKR {discountAmt.toFixed(2)} requires admin authorisation.
+                  </p>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>
+                    Admin PIN
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={approvalPin}
+                    onChange={e => { setApprovalPin(e.target.value); setApprovalError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleApproveDiscount()}
+                    placeholder="••••"
+                    autoFocus
+                    style={{
+                      width: '100%', background: '#1d222a',
+                      border: approvalError ? '1px solid #ef4444' : '1px solid #2b313a',
+                      borderRadius: 12, padding: '10px 14px',
+                      color: '#f1f5f9', fontSize: 18, letterSpacing: '0.3em',
+                      outline: 'none', textAlign: 'center',
+                    }}
+                  />
+                  {approvalError && (
+                    <p style={{ color: '#f87171', fontSize: 11, marginTop: 6, textAlign: 'center' }}>{approvalError}</p>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => { setApprovalModalOpen(false); setApprovalPin(''); setApprovalError(''); }}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 12,
+                      background: '#1d222a', border: '1px solid #2b313a',
+                      color: '#9ca3af', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApproveDiscount}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: 12,
+                      background: '#7c3aed', border: 'none',
+                      color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {needsApproval && (
+            <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+              Discount requires admin approval before checkout
+            </div>
+          )}
+
+          {isBelowMSP && (
+            <div className="pos-warning" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}>
+              ❌ Below MSP — minimum total: LKR {mspFloor.toFixed(2)}
+            </div>
+          )}
+
+          {!isBelowMSP && isBelowCost && (
             <div className="pos-warning">Below cost floor: LKR {estimatedCostFloor.toFixed(2)}</div>
           )}
 
@@ -570,25 +784,78 @@ export const POSPage: React.FC = () => {
               <QrCode size={16} />
               E-wallet
             </button>
+            <button type="button" className={cn(paymentMethod === 'credit' && 'active')} onClick={() => setPaymentMethod('credit')}>
+              <CreditCard size={16} />
+              Credit
+            </button>
           </div>
 
-          <button type="button" className="pos-submit" onClick={processTransaction} disabled={!canProcessTransaction}>
-            {isProcessing ? (
-              <span className="pos-processing-state">
-                <LoaderCircle size={16} className="animate-spin" />
-                Processing
-              </span>
-            ) : (
-              'Place Order'
-            )}
+          <button
+            type="button"
+            className="pos-submit relative overflow-hidden"
+            onClick={processTransaction}
+            disabled={!canProcessTransaction}
+            style={{
+              background: btnPhase === 'done' ? '#16a34a' : undefined,
+              transition: 'background 0.3s ease',
+            }}
+          >
+            {/* invisible spacer — keeps the button's natural height */}
+            <span className="invisible select-none" aria-hidden>Place Order</span>
+            <AnimatePresence mode="wait">
+              {btnPhase === 'idle' && (
+                <motion.span
+                  key="label"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  Place Order
+                </motion.span>
+              )}
+              {btnPhase === 'loading' && (
+                <motion.span
+                  key="loading"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 flex items-center justify-center gap-2"
+                >
+                  <LoaderCircle size={16} className="animate-spin" />
+                  Processing
+                </motion.span>
+              )}
+              {btnPhase === 'done' && (
+                <motion.span
+                  key="done"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  className="absolute inset-0 flex items-center justify-center"
+                >
+                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                    <polyline
+                      points="3,11 8.5,16.5 19,5"
+                      stroke="white"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="30"
+                      strokeDashoffset="30"
+                      style={{ animation: 'pos-check-draw 0.35s cubic-bezier(0.4,0,0.2,1) 0.05s forwards' }}
+                    />
+                  </svg>
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
-
-          {isProcessing && (
-            <div className="pos-processing-overlay">
-              <div className="pos-processing-bar" />
-              <p>Syncing order and updating stock...</p>
-            </div>
-          )}
+          <style>{`
+            @keyframes pos-check-draw { to { stroke-dashoffset: 0; } }
+          `}</style>
         </aside>
 
       <Modal isOpen={isOrderTypeModalOpen} onClose={() => setIsOrderTypeModalOpen(false)} title="Order Type">
@@ -603,7 +870,9 @@ export const POSPage: React.FC = () => {
               }}
               className={cn(
                 'py-4 rounded-xl border text-sm font-semibold transition-colors',
-                selectedOrderType === type ? 'bg-violet-100 border-violet-300 text-violet-700' : 'bg-white border-slate-200'
+                selectedOrderType === type
+                  ? 'bg-[#f8fafc] border-[#f8fafc] text-black'
+                  : 'bg-[#1d222a] border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33]'
               )}
             >
               {type}
@@ -614,12 +883,12 @@ export const POSPage: React.FC = () => {
 
       <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Success">
         <div className="text-center py-6 space-y-4">
-          <h3 className="text-2xl font-bold text-slate-900">Payment Completed</h3>
-          <p className="text-sm text-slate-500">Total received: LKR {total.toFixed(2)}</p>
+          <h3 className="text-2xl font-bold text-white">Payment Completed</h3>
+          <p className="text-sm text-gray-400">Total received: LKR {total.toFixed(2)}</p>
           <button
             type="button"
             onClick={resetAfterSuccess}
-            className="w-full py-3 rounded-xl bg-slate-900 text-white font-semibold"
+            className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
           >
             Back to POS
           </button>

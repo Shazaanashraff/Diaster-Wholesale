@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Phone, CreditCard, Mail, MapPin, User, Hash, AlertCircle, Trash2, AlertTriangle, Loader2, Search, Filter } from 'lucide-react';
+import { UserPlus, Phone, CreditCard, Mail, MapPin, User, Hash, AlertCircle, Trash2, Loader2, Search, Filter, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
-import { getCustomers, createCustomer, deleteCustomer } from '../services/customerService';
+import { archiveCustomer, getCustomers, createCustomer } from '../services/customerService';
 import type { Customer } from '../types';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedNumber } from '../components/AnimatedNumber';
@@ -13,8 +14,8 @@ export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -27,6 +28,27 @@ export const CustomersPage: React.FC = () => {
   });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'wholesale' | 'retail'>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'balance' | 'credit'>('name');
+
+  const visibleCustomers = customers
+    .filter(c => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q);
+      const matchesType = filterType === 'all' || c.type === filterType;
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'balance') return (b.outstanding_balance || 0) - (a.outstanding_balance || 0);
+      if (sortBy === 'credit') return (b.credit_limit || 0) - (a.credit_limit || 0);
+      return a.name.localeCompare(b.name);
+    });
+
+  const hasActiveFilters = filterType !== 'all' || sortBy !== 'name' || searchQuery !== '';
+  const clearFilters = () => { setFilterType('all'); setSortBy('name'); setSearchQuery(''); };
 
   const loadCustomers = async () => {
     try {
@@ -69,15 +91,15 @@ export const CustomersPage: React.FC = () => {
   };
 
   const handleDeleteCustomer = async () => {
-    if (!customerToDelete) return;
+    if (!deleteTarget) return;
     try {
       setFormLoading(true);
-      await deleteCustomer(customerToDelete.id);
-      setIsDeleteModalOpen(false);
-      setCustomerToDelete(null);
+      setDeleteError(null);
+      await archiveCustomer(deleteTarget.id);
+      setDeleteTarget(null);
       await loadCustomers();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to delete customer');
+      setDeleteError(err.message || 'Failed to archive customer');
     } finally {
       setFormLoading(false);
     }
@@ -89,17 +111,28 @@ export const CustomersPage: React.FC = () => {
         <div className="pos-main-head w-full max-w-7xl mx-auto px-3">
           <label className="pos-search">
             <Search size={18} />
-            <input 
-              type="text" 
-              placeholder="Search customers..." 
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </label>
           <div className="pos-mode-toggle">
-            <button className="active flex items-center gap-2">
-              <Filter size={14} /> Filter
+            <button
+              onClick={() => setFilterOpen(p => !p)}
+              className={cn('flex items-center gap-2', (filterOpen || hasActiveFilters) && 'active')}
+            >
+              <Filter size={14} />
+              Filter
+              {hasActiveFilters && (
+                <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] font-black flex items-center justify-center">
+                  {[filterType !== 'all', sortBy !== 'name', searchQuery !== ''].filter(Boolean).length}
+                </span>
+              )}
             </button>
             <div className="w-[1px] h-4 bg-[#2b313a] mx-1"></div>
-            <button 
+            <button
               onClick={() => setIsAddModalOpen(true)}
               className="flex items-center gap-2 text-primary ml-2 hover:opacity-80 transition-opacity whitespace-nowrap"
             >
@@ -109,6 +142,80 @@ export const CustomersPage: React.FC = () => {
           </div>
         </div>
 
+        {/* ── Filter Panel ── */}
+        {filterOpen && (
+          <div className="mx-3 mb-3 rounded-2xl border border-[#2b313a] bg-[#13181f] overflow-hidden" style={{ animation: 'posFadeIn 180ms ease' }}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2b313a]">
+              <div className="flex items-center gap-4">
+                {/* Type filter */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Type</span>
+                  <div className="flex gap-1">
+                    {(['all', 'wholesale', 'retail'] as const).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setFilterType(t)}
+                        className={cn(
+                          'px-3 py-1 rounded-lg text-[11px] font-bold transition-all',
+                          filterType === t
+                            ? 'bg-[#f8fafc] text-[#111315]'
+                            : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                        )}
+                      >
+                        {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="w-px h-5 bg-[#2b313a]" />
+
+                {/* Sort */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sort</span>
+                  <div className="flex gap-1">
+                    {([
+                      { key: 'name',    label: 'Name' },
+                      { key: 'balance', label: 'Balance' },
+                      { key: 'credit',  label: 'Credit' },
+                    ] as const).map(s => (
+                      <button
+                        key={s.key}
+                        onClick={() => setSortBy(s.key)}
+                        className={cn(
+                          'px-3 py-1 rounded-lg text-[11px] font-bold transition-all',
+                          sortBy === s.key
+                            ? 'bg-[#f8fafc] text-[#111315]'
+                            : 'bg-[#1d222a] text-gray-400 hover:text-white border border-[#2b313a]'
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-bold text-gray-500">
+                  {visibleCustomers.length} of {customers.length}
+                </span>
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-900/20 text-red-400 text-[11px] font-bold hover:bg-red-900/30 transition-all border border-red-900/30"
+                  >
+                    <X size={11} /> Clear
+                  </button>
+                )}
+                <button onClick={() => setFilterOpen(false)} className="text-gray-600 hover:text-gray-300 transition-colors">
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="px-3 overflow-y-auto pb-8 custom-scrollbar">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full mt-2 max-w-7xl mx-auto">
             {loading ? (
@@ -117,7 +224,7 @@ export const CustomersPage: React.FC = () => {
               ))
             ) : (
               <AnimatePresence>
-              {customers.map((customer) => (
+              {visibleCustomers.map((customer) => (
                 <motion.div 
                   layout
                   initial={{ opacity: 0, y: 10 }}
@@ -144,8 +251,8 @@ export const CustomersPage: React.FC = () => {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          setCustomerToDelete(customer);
-                          setIsDeleteModalOpen(true);
+                          setDeleteTarget(customer);
+                          setDeleteError(null);
                         }}
                         className="p-1.5 rounded-lg bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-500/20 border border-[#2b313a] transition-all duration-300"
                       >
@@ -302,14 +409,14 @@ export const CustomersPage: React.FC = () => {
             <button 
               disabled={formLoading}
               onClick={() => setIsAddModalOpen(false)}
-              className="w-full py-4 rounded-2xl border-2 border-border/50 text-sm font-bold text-gray-400 hover:text-dark hover:border-dark/20 transition-all disabled:opacity-50"
+              className="w-full py-4 rounded-2xl border border-[#2b313a] bg-[#1d222a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all disabled:opacity-50"
             >
               CANCEL
             </button>
             <button 
               disabled={formLoading}
               onClick={handleRegister}
-              className="w-full h-[56px] bg-primary text-white rounded-2xl font-bold text-sm shadow-xl shadow-violet-100/10 hover:bg-violet-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+              className="w-full h-[56px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
             >
               <AnimatePresence mode="wait">
                 {formLoading ? (
@@ -327,51 +434,18 @@ export const CustomersPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* DELETE CONFIRMATION MODAL */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="Delete Customer"
-      >
-        <div className="space-y-6">
-          <div className="p-6 bg-red-50 rounded-[2rem] flex flex-col items-center text-center">
-            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-red-500 mb-4 shadow-sm border border-red-100">
-              <AlertTriangle size={32} />
-            </div>
-            <h4 className="text-xl font-bold text-dark mb-2">Are you sure?</h4>
-            <p className="text-sm text-gray-500 font-semibold leading-relaxed">
-              You are about to delete <span className="text-red-500 font-bold">{customerToDelete?.name}</span>. 
-              This action will permanently remove the customer and all associated ledger history. This cannot be undone.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="py-4 rounded-2xl border-2 border-border/50 text-sm font-bold text-gray-400 hover:text-dark hover:border-dark/20 transition-all"
-            >
-              CANCEL
-            </button>
-            <button
-              onClick={handleDeleteCustomer}
-              disabled={formLoading}
-              className="w-full h-[56px] bg-red-500 text-white rounded-2xl font-bold text-sm shadow-xl shadow-red-100/10 hover:bg-red-600 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
-            >
-              <AnimatePresence mode="wait">
-                {formLoading ? (
-                  <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
-                    <Loader2 size={20} className="animate-spin" />
-                  </motion.div>
-                ) : (
-                  <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
-                    YES, DELETE
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* ARCHIVE CONFIRMATION MODAL */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
+        onConfirm={handleDeleteCustomer}
+        title="Archive Customer"
+        message={`Are you sure you want to archive "${deleteTarget?.name}"? They will no longer appear in POS or active lists, but their history will be preserved.`}
+        confirmText="Archive Customer"
+        variant="warning"
+        isLoading={formLoading}
+        error={deleteError}
+      />
     </div>
   );
 };

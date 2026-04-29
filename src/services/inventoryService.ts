@@ -44,6 +44,29 @@ export async function insertStockAdjustment(
 }
 
 /**
+ * Fetch movement rates (units sold in last 30 days) keyed by product_id.
+ */
+export async function getMovementRates(): Promise<Record<string, { units30d: number; perDay: number }>> {
+  const { data, error } = await supabase
+    .from('product_movement_30d')
+    .select('product_id, units_sold_30d, units_per_day');
+
+  if (error) {
+    console.warn('getMovementRates:', error.message);
+    return {};
+  }
+
+  const result: Record<string, { units30d: number; perDay: number }> = {};
+  for (const row of data ?? []) {
+    result[row.product_id] = {
+      units30d: Number(row.units_sold_30d),
+      perDay: Number(row.units_per_day),
+    };
+  }
+  return result;
+}
+
+/**
  * Fetch weighted average cost per piece for a product list.
  * This is used by POS to prevent discounting below cost.
  */
@@ -96,4 +119,21 @@ export async function getAverageCostPerPiece(
   }
 
   return averages;
+}
+
+/**
+ * Fetch all available stock batches for a list of products.
+ * Ordered by received_at (FIFO).
+ */
+export async function getBatchesForProducts(productIds: string[]): Promise<any[]> {
+  if (productIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('stock_batches')
+    .select('*, shipments(reference)')
+    .in('product_id', productIds)
+    .gt('cartons', 0)
+    .order('received_at', { ascending: true });
+  
+  if (error) throw new Error(error.message);
+  return data;
 }

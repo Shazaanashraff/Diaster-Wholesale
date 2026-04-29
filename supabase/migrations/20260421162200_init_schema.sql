@@ -31,7 +31,10 @@ CREATE TABLE IF NOT EXISTS customers (
   phone         TEXT NOT NULL DEFAULT '',
   email         TEXT NOT NULL DEFAULT '',
   address       TEXT NOT NULL DEFAULT '',
-  credit_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  type          TEXT NOT NULL DEFAULT 'retail' CHECK (type IN ('wholesale', 'retail')),
+  credit_limit  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  outstanding_balance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  credit_balance NUMERIC(12,2) NOT NULL DEFAULT 0, -- legacy compatibility
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
