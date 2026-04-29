@@ -7,14 +7,24 @@ import { ExportBar } from './shared/ExportBar';
 import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
+interface CashFlowTransaction {
+  amount: number;
+  created_at: string;
+  type: 'IN' | 'OUT';
+  label: string;
+  method?: string;
+}
+
 export const CashFlowReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>({ cashIn: 0, cashOut: 0, transactions: [] });
+  const [data, setData] = useState<{
+    cashIn: number;
+    cashOut: number;
+    transactions: CashFlowTransaction[];
+  }>({ cashIn: 0, cashOut: 0, transactions: [] });
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       
       const [payments, expenses] = await Promise.all([
@@ -22,8 +32,8 @@ export const CashFlowReport: React.FC = () => {
         supabase.from('expenses').select('amount, created_at').gte('created_at', from || '').lte('created_at', to || '')
       ]);
 
-      const inData = (payments.data || []).map(p => ({ ...p, type: 'IN', label: 'Sales Receipt' }));
-      const outData = (expenses.data || []).map(e => ({ ...e, type: 'OUT', label: 'Expense' }));
+      const inData: CashFlowTransaction[] = (payments.data || []).map(p => ({ ...p, type: 'IN', label: 'Sales Receipt' } as CashFlowTransaction));
+      const outData: CashFlowTransaction[] = (expenses.data || []).map(e => ({ ...e, type: 'OUT', label: 'Expense' } as CashFlowTransaction));
 
       const all = [...inData, ...outData].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
@@ -31,13 +41,12 @@ export const CashFlowReport: React.FC = () => {
       const cashOut = outData.reduce((sum, e) => sum + Number(e.amount), 0);
 
       setData({ cashIn, cashOut, transactions: all });
-      setLoading(false);
     }
     load();
   }, [period]);
 
   const headers = ['Date', 'Type', 'Description', 'Amount'];
-  const rows = data.transactions.map((r: any) => [
+  const rows = data.transactions.map((r) => [
     fmtDate(r.created_at), r.type, r.label, fmtCurrency(r.amount)
   ]);
 
@@ -57,7 +66,7 @@ export const CashFlowReport: React.FC = () => {
         <ReportKPICard label="Net Flow" value={data.cashIn - data.cashOut} prefix="LKR " icon={Wallet} color="bg-blue-600" />
       </div>
 
-      <ReportTable
+      <ReportTable<CashFlowTransaction>
         columns={[
           { header: 'Date', accessor: (r) => fmtDate(r.created_at) },
           { header: 'Type', accessor: (r) => (

@@ -6,15 +6,12 @@ import { AlertTriangle } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const LowStockReport: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const res = await getLowStockReport(10); // Default threshold 10
       setData(res);
-      setLoading(false);
     }
     load();
   }, []);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
-import { ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown, ClipboardList, Receipt, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown, ClipboardList, Receipt } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
 import { getCustomerById, getCustomerLedger, recordPayment } from '../services/customerService';

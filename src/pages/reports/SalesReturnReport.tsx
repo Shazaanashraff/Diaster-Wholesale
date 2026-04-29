@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { cn } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
@@ -10,12 +9,10 @@ import { ReportKPICard } from './shared/ReportKPICard';
 
 export const SalesReturnReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       
       let query = supabase
@@ -28,7 +25,6 @@ export const SalesReturnReport: React.FC = () => {
 
       const { data: res } = await query;
       setData(res || []);
-      setLoading(false);
     }
     load();
   }, [period]);

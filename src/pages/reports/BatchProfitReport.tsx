@@ -7,12 +7,10 @@ import { Ship } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const BatchProfitReport: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       
       // Get shipments joined with batches and invoice items
       const { data: shipments } = await supabase
@@ -58,7 +56,6 @@ export const BatchProfitReport: React.FC = () => {
       });
 
       setData(result.sort((a, b) => new Date(b.arrived_at).getTime() - new Date(a.arrived_at).getTime()));
-      setLoading(false);
     }
     load();
   }, []);

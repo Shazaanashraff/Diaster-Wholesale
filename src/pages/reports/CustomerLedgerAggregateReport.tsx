@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCustomers } from '../../services/customerService';
 import type { Customer } from '../../types';
-import { Loader2, Users, ArrowUpRight, ArrowDownRight, Search } from 'lucide-react';
+import { Loader2, ArrowUpRight, ArrowDownRight, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export const CustomerLedgerAggregateReport: React.FC = () => {

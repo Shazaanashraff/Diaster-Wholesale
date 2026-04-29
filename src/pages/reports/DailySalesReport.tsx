@@ -8,24 +8,32 @@ import { ExportBar } from './shared/ExportBar';
 import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
+interface DailySalesTransaction {
+  created_at: string;
+  invoice_no: string;
+  payment_status: string;
+  total: number;
+}
+
 export const DailySalesReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('today');
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>({ totalSales: 0, transactions: 0, data: [] });
+  const [data, setData] = useState<{
+    totalSales: number;
+    transactions: number;
+    data: DailySalesTransaction[];
+  }>({ totalSales: 0, transactions: 0, data: [] });
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       const res = await getDailySalesReport(from || undefined, to || undefined);
-      setData(res);
-      setLoading(false);
+      setData(res as any);
     }
     load();
   }, [period]);
 
   const headers = ['Date', 'Invoice No', 'Status', 'Total'];
-  const rows = (data.data || []).map((r: any) => [
+  const rows = (data.data || []).map((r) => [
     fmtDate(r.created_at), r.invoice_no, r.payment_status, fmtCurrency(r.total)
   ]);
 
@@ -44,7 +52,7 @@ export const DailySalesReport: React.FC = () => {
         <ReportKPICard label="Transactions" value={data.transactions} icon={ShoppingBag} color="bg-blue-600" />
       </div>
 
-      <ReportTable
+      <ReportTable<DailySalesTransaction>
         columns={[
           { header: 'Date', accessor: (r) => fmtDate(r.created_at) },
           { header: 'Invoice', accessor: 'invoice_no' },

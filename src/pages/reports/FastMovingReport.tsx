@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getProducts } from '../../services/productService';
 import { getMovementRates } from '../../services/inventoryService';
-import type { Product } from '../../types';
-import { Loader2, TrendingUp, ArrowUpRight } from 'lucide-react';
-import { cn } from '../../lib/utils';
+import { Loader2, TrendingUp } from 'lucide-react';
 
 export const FastMovingReport: React.FC = () => {
   const [data, setData] = useState<any[]>([]);

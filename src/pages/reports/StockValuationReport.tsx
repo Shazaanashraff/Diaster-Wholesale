@@ -7,12 +7,10 @@ import { BarChart3 } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const StockValuationReport: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       
       const { data: stocks } = await supabase.from('product_stock').select('*');
       const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
@@ -34,7 +32,6 @@ export const StockValuationReport: React.FC = () => {
       }).filter(r => r.available > 0);
 
       setData(result.sort((a, b) => b.valuation - a.valuation));
-      setLoading(false);
     }
     load();
   }, []);

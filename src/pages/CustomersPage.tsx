@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Phone, CreditCard, Mail, MapPin, User, Hash, AlertCircle, Trash2, AlertTriangle, Loader2, Search, Filter, X } from 'lucide-react';
+import { UserPlus, Phone, CreditCard, Mail, MapPin, User, Hash, AlertCircle, Trash2, Loader2, Search, Filter, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
 import { archiveCustomer, getCustomers, createCustomer } from '../services/customerService';

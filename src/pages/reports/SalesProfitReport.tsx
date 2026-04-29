@@ -7,16 +7,13 @@ import { ExportBar } from './shared/ExportBar';
 
 export const SalesProfitReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       const res = await getSalesProfitReport(from || undefined, to || undefined);
       setData(res);
-      setLoading(false);
     }
     load();
   }, [period]);

@@ -53,17 +53,6 @@ export interface ProfitExpensePoint {
 // ============================================================
 // Helper: Fetch Expenses (Shared)
 // ============================================================
-let _expensesReq: Promise<{ amount: number; created_at: string }[]> | null = null;
-const fetchExpenses = (): Promise<{ amount: number; created_at: string }[]> => {
-  if (!_expensesReq) {
-    const req = Promise.resolve(supabase.from('expenses').select('amount, created_at'))
-      .then(({ data }) => (data as { amount: number; created_at: string }[] | null) ?? [])
-      .catch((): { amount: number; created_at: string }[] => []);
-    _expensesReq = req;
-    req.finally(() => { _expensesReq = null; });
-  }
-  return _expensesReq!;
-};
 
 // ============================================================
 // Phase 1: Service Layer Extensions
@@ -73,7 +62,7 @@ const fetchExpenses = (): Promise<{ amount: number; created_at: string }[]> => {
 export const getProfitAndLoss = async (from?: string, to?: string) => {
   let invQuery = supabase.from('invoices').select('total, subtotal, discount, payment_status, created_at');
   let expQuery = supabase.from('expenses').select('amount, created_at');
-  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton), invoice_id, created_at');
+  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton), product_id, invoice_id, created_at');
   let batchQuery = supabase.from('stock_batches').select('product_id, cost_per_piece');
 
   if (from) {

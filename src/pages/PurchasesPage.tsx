@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, X, Loader2, AlertCircle, CheckCircle2,
-  Truck, Package, ChevronRight, Trash2, RefreshCw,
+  Package, ChevronRight, Trash2, RefreshCw,
 } from 'lucide-react';
 import { getPurchases, createPurchase, deletePurchase } from '../services/purchaseService';
 import { getSuppliers } from '../services/supplierService';

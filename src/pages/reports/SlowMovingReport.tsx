@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getProducts } from '../../services/productService';
 import { getMovementRates, getInventory } from '../../services/inventoryService';
 import { computeStock } from '../../utils/stockUtils';
-import type { Product } from '../../types';
 import { Loader2, AlertCircle, ShoppingBag } from 'lucide-react';
-import { cn } from '../../lib/utils';
 
 export const SlowMovingReport: React.FC = () => {
   const [data, setData] = useState<any[]>([]);

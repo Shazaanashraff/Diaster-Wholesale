@@ -204,7 +204,6 @@ export const PurchaseDetailPage: React.FC = () => {
   const statusCfg = STATUS_CONFIG[purchase.status];
   const StatusIcon = statusCfg.icon;
   const supplier = (purchase.suppliers as any);
-  const isLocked = purchase.status === 'closed';
 
   // Step indicator
   const STEPS = ['draft', 'confirmed', 'in_transit', 'received', 'closed'];

@@ -1,20 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  type Role, ROLE_LABELS, ROLE_DESCRIPTIONS, getRolePin,
-  ROLE_PIN_KEYS, DEFAULT_PINS,
+  type Role, ROLE_LABELS, getRolePin,
 } from '../utils/permissions';
 
 const MAX_ATTEMPTS = 3;
 const PIN_LENGTH = 4;
-
-const ROLES: Role[] = ['admin', 'accountant', 'officer', 'pos_operator'];
-
-const ROLE_ICONS: Record<Role, string> = {
-  admin:        '👑',
-  accountant:   '📊',
-  officer:      '📦',
-  pos_operator: '🖥️',
-};
 
 interface PinAuthPageProps {
   onSuccess: () => void;

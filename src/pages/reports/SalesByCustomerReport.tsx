@@ -9,12 +9,10 @@ import { ReportKPICard } from './shared/ReportKPICard';
 
 export const SalesByCustomerReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       
       let query = supabase
@@ -44,7 +42,6 @@ export const SalesByCustomerReport: React.FC = () => {
       });
 
       setData(Object.values(map).sort((a, b) => b.revenue - a.revenue));
-      setLoading(false);
     }
     load();
   }, [period]);

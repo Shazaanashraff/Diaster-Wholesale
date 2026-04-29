@@ -9,12 +9,10 @@ import { ReportKPICard } from './shared/ReportKPICard';
 
 export const InventoryAdjustmentReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period);
       
       let query = supabase
@@ -27,7 +25,6 @@ export const InventoryAdjustmentReport: React.FC = () => {
 
       const { data: res } = await query;
       setData(res || []);
-      setLoading(false);
     }
     load();
   }, [period]);

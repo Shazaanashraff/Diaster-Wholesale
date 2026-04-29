@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, PieChart, Activity } from 'lucide-react';
+import { DollarSign, TrendingUp, PieChart, Activity } from 'lucide-react';
 import { getProfitAndLoss } from '../../services/reportService';
 import { type ReportPeriod, getReportDateRange, fmtCurrency } from '../../utils/reportUtils';
 import { ReportKPICard } from './shared/ReportKPICard';

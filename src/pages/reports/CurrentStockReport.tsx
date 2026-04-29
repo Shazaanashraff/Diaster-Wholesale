@@ -6,15 +6,12 @@ import { Package, Activity } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const CurrentStockReport: React.FC = () => {
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const res = await getCurrentStockReport();
       setData(res);
-      setLoading(false);
     }
     load();
   }, []);

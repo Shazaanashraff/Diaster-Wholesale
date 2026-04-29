@@ -5,6 +5,7 @@ export interface SupplierWithBalance extends Supplier {
   total_purchased: number;
   total_paid: number;
   outstanding: number;
+  advance_balance: number;
 }
 
 export async function getSuppliers(): Promise<SupplierWithBalance[]> {
@@ -24,12 +25,17 @@ export async function getSuppliers(): Promise<SupplierWithBalance[]> {
     paid[p.supplier_id] = (paid[p.supplier_id] ?? 0) + Number(p.amount);
   }
 
-  return (suppliers ?? []).map((s) => ({
-    ...(s as Supplier),
-    total_purchased: purchased[s.id] ?? 0,
-    total_paid: paid[s.id] ?? 0,
-    outstanding: (purchased[s.id] ?? 0) - (paid[s.id] ?? 0),
-  }));
+  return (suppliers ?? []).map((s) => {
+    const tp = purchased[s.id] ?? 0;
+    const tpaid = paid[s.id] ?? 0;
+    return {
+      ...(s as Supplier),
+      total_purchased: tp,
+      total_paid: tpaid,
+      outstanding: Math.max(0, tp - tpaid),
+      advance_balance: Math.max(0, tpaid - tp),
+    };
+  });
 }
 
 export async function getSupplierById(id: string): Promise<Supplier> {
