@@ -115,7 +115,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {/* METRIC TILES */}
-        <div className="pos-tile-grid pb-2" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+        <div className="pos-tile-grid pb-2 !grid-cols-1 sm:!grid-cols-2 lg:!grid-cols-3 xl:!grid-cols-5" style={{ gridTemplateColumns: 'none' }}>
           {([
             { label: 'Revenue',          value: metrics?.revenue ?? 0,       icon: DollarSign,    color: 'bg-[#d4e8f8]', currency: true,  decimals: 2, to: '/reports' },
             { label: 'Expenses',         value: metrics?.expenses ?? 0,      icon: Receipt,       color: 'bg-[#fde8c8]', currency: true,  decimals: 2, to: '/reports' },

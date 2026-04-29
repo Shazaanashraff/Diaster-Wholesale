@@ -94,7 +94,7 @@ export const CustomerDetailPage: React.FC = () => {
     return (
       <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
         <TopBar />
-        <div className="p-10 pos-page-body w-full">
+        <div className="p-4 md:p-10 pos-page-body w-full">
           <div className="flex items-center gap-4 mb-8">
             <div className="w-12 h-12 rounded-full skeleton"></div>
             <div className="w-48 h-10 rounded-xl skeleton"></div>
@@ -129,7 +129,7 @@ export const CustomerDetailPage: React.FC = () => {
     <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
       <TopBar />
       
-      <div className="p-10 pos-page-body w-full">
+      <div className="p-4 md:p-10 pos-page-body w-full">
         {/* Header Section */}
         <div className="pos-page-header flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4" style={{ animation: 'posFadeIn 380ms ease both' }}>
           <div className="flex items-center gap-4">
@@ -141,7 +141,7 @@ export const CustomerDetailPage: React.FC = () => {
             </button>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-white tracking-tight">{customer.name}</h1>
+                <h1 className="text-xl md:text-3xl font-bold text-white tracking-tight">{customer.name}</h1>
                 <span className={cn(
                   "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border border-transparent",
                   customer.type === 'wholesale' ? "bg-purple-900/30 text-purple-400 border-purple-900/50" : "bg-indigo-900/30 text-indigo-400 border-indigo-900/50"
@@ -154,7 +154,7 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
           <button 
             onClick={openPaymentModal}
-            className="flex items-center gap-3 px-8 py-4 bg-primary text-black rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
+            className="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-primary text-black rounded-2xl md:rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
           >
             <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
           </button>

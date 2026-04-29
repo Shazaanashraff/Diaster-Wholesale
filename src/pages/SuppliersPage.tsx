@@ -352,7 +352,7 @@ export const SuppliersPage: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm" onClick={() => setDrawerSupplier(null)} />
           <div
-            className="fixed right-0 top-0 h-full z-[110] w-[520px] bg-[#111315] border-l border-[#2b313a] flex flex-col shadow-2xl"
+            className="fixed right-0 top-0 h-full z-[110] w-full max-w-[520px] bg-[#111315] border-l border-[#2b313a] flex flex-col shadow-2xl"
             style={{ animation: 'posFadeIn 180ms ease' }}
           >
             <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
