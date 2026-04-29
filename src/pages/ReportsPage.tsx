@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  BarChart3,
   TrendingUp,
-  TrendingDown,
   DollarSign,
   ShoppingBag,
   Users,
@@ -37,11 +35,6 @@ const revenueData = [
   { name: 'Jun', value: 780 },
   { name: 'Jul', value: 690 },
   { name: 'Aug', value: 920 },
-];
-
-const gaugeData = [
-  { name: 'Completed', value: 92.46, color: '#f8fafc' },
-  { name: 'Remaining', value: 7.54, color: '#1d222a' },
 ];
 
 const tileConfig = [

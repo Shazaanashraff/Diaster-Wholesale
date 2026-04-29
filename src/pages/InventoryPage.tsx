@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { TopBar } from '../components/TopBar';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, SlidersHorizontal, Check, ArrowRight } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
