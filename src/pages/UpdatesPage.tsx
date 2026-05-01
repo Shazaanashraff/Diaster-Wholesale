@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { TopBar } from '../components/TopBar';
 import {
   RefreshCw, AlertCircle, CheckCircle, Download, Package,
@@ -6,16 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { version as currentVersion } from '../../package.json';
-
-const isElectron = () =>
-  !!(window as any).desktop?.updater || /Electron/.test(navigator.userAgent);
-
-const callUpdater = (method: 'checkNow' | 'installNow') => {
-  const updater = (window as any).desktop?.updater;
-  if (!updater) return;
-  if (method === 'checkNow') updater.checkNow();
-  else updater.installNow();
-};
+import { useUpdater } from '../hooks/useUpdater';
 
 type ChangelogEntry = {
   version: string;
@@ -84,59 +75,21 @@ const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
-type UpdaterStatus =
-  | 'checking'
-  | 'update-available'
-  | 'update-not-available'
-  | 'download-progress'
-  | 'update-downloaded'
-  | 'error'
-  | 'idle';
-
-interface UpdaterPayload {
-  status: UpdaterStatus;
-  version?: string;
-  percent?: number;
-  message?: string;
-}
-
 export const UpdatesPage: React.FC = () => {
-  const [status, setStatus] = useState<UpdaterStatus>('idle');
-  const [percent, setPercent] = useState(0);
-  const [newVersion, setNewVersion] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
-  const [desktop, setDesktop] = useState(false);
+  const {
+    status,
+    percent,
+    version: newVersion,
+    message: error,
+    lastCheckedAt,
+    isDesktop,
+    installNow,
+    checkNow,
+  } = useUpdater();
 
-  useEffect(() => { setDesktop(isElectron()); }, []);
-
-  useEffect(() => {
-    const updater = (window as any).desktop?.updater;
-    if (!updater) return;
-
-    const cleanup = updater.onStatus((payload: UpdaterPayload) => {
-      setStatus(payload.status);
-      if (payload.status === 'download-progress' && payload.percent !== undefined)
-        setPercent(payload.percent);
-      if (payload.status === 'update-available')
-        setNewVersion(payload.version || '');
-      if (payload.status === 'update-downloaded')
-        setPercent(100);
-      if (payload.status === 'error')
-        setError(payload.message || 'An unknown error occurred.');
-      if (payload.status === 'update-not-available' || payload.status === 'error')
-        setLastChecked(new Date());
-    });
-
-    return cleanup;
-  }, []);
-
-  const handleRestart = () => callUpdater('installNow');
-  const handleCheckUpdates = () => {
-    setStatus('checking');
-    setError(null);
-    callUpdater('checkNow');
-  };
+  const lastChecked = lastCheckedAt ? new Date(lastCheckedAt) : null;
+  const handleRestart = () => installNow();
+  const handleCheckUpdates = () => checkNow();
 
   const statusConfig = {
     checking: {
@@ -174,6 +127,12 @@ export const UpdatesPage: React.FC = () => {
       label: 'Update check failed',
       sub: error,
       accent: 'border-red-500/20',
+    },
+    skipped: {
+      icon: <AlertCircle size={15} className="text-amber-400" />,
+      label: 'Updater is unavailable',
+      sub: error,
+      accent: 'border-amber-500/20',
     },
     idle: null,
   } as const;
@@ -226,11 +185,12 @@ export const UpdatesPage: React.FC = () => {
                 </div>
               </div>
 
-              {desktop ? (
+              {isDesktop ? (
                 <button
                   onClick={handleCheckUpdates}
                   disabled={status === 'checking' || status === 'download-progress'}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
                 >
                   <RefreshCw size={14} className={status === 'checking' ? 'animate-spin' : ''} />
                   {status === 'checking' ? 'Checking…' : 'Check for Updates'}
@@ -275,12 +235,13 @@ export const UpdatesPage: React.FC = () => {
                   {status === 'update-downloaded' && (
                     <button
                       onClick={handleRestart}
-                      className="px-4 py-2 bg-white text-black rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0"
+                      className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0"
+                      style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
                     >
                       Restart & Install
                     </button>
                   )}
-                  {(status === 'update-not-available' || status === 'error') && (
+                  {(status === 'update-not-available' || status === 'error' || status === 'skipped') && (
                     <button
                       onClick={handleCheckUpdates}
                       className="px-3 py-1.5 bg-[#252a30] border border-[#2b313a] text-gray-400 rounded-lg text-xs font-bold flex-shrink-0"

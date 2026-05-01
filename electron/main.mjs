@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
@@ -161,22 +161,8 @@ function configureAutoUpdater() {
     });
   });
 
-  autoUpdater.on('update-downloaded', async (info) => {
+  autoUpdater.on('update-downloaded', (info) => {
     sendUpdaterStatus('update-downloaded', { version: info.version });
-
-    const result = await dialog.showMessageBox(mainWindow ?? undefined, {
-      type: 'info',
-      title: 'Update ready',
-      message: 'A new version has been downloaded.',
-      detail: 'Restart the app now to finish installing the update.',
-      buttons: ['Restart now', 'Later'],
-      defaultId: 0,
-      cancelId: 1,
-    });
-
-    if (result.response === 0) {
-      setImmediate(() => autoUpdater.quitAndInstall());
-    }
   });
 
   autoUpdater.on('error', (error) => {

@@ -1,99 +1,86 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, CheckCircle, ChevronRight, Download } from 'lucide-react';
+import { RefreshCw, CheckCircle, Download } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-
-type UpdaterStatus =
-  | 'checking'
-  | 'update-available'
-  | 'update-not-available'
-  | 'download-progress'
-  | 'update-downloaded'
-  | 'error'
-  | 'idle';
-
-interface UpdaterPayload {
-  status: UpdaterStatus;
-  version?: string;
-  percent?: number;
-  message?: string;
-}
+import { useUpdater } from '../hooks/useUpdater';
 
 export const UpdateBanner: React.FC = () => {
-  const [status, setStatus] = useState<UpdaterStatus>('idle');
-  const [percent, setPercent] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
+  const { status, percent, version, message, isDesktop, installNow } = useUpdater();
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    // @ts-ignore
-    if (!window.desktop?.updater) return;
-
-    // @ts-ignore
-    const cleanup = window.desktop.updater.onStatus((payload: UpdaterPayload) => {
-      setStatus(payload.status);
-      if (payload.status === 'download-progress' && payload.percent !== undefined) {
-        setPercent(payload.percent);
-      }
-      if (
-        payload.status === 'update-available' ||
-        payload.status === 'update-downloaded' ||
-        payload.status === 'download-progress'
-      ) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
-      }
-    });
-
-    return cleanup;
-  }, []);
-
-  if (location.pathname === '/updates' || !isVisible) return null;
-
   const isDownloaded = status === 'update-downloaded';
   const isDownloading = status === 'download-progress';
+  const isChecking = status === 'checking';
+  const isVisible =
+    isChecking || status === 'update-available' || isDownloading || isDownloaded || status === 'error';
 
-  const bg = isDownloaded ? 'bg-amber-600 hover:bg-amber-700 border-amber-500' : 'bg-violet-600 hover:bg-violet-700 border-violet-500';
+  if (!isDesktop || location.pathname !== '/' || !isVisible) return null;
+
+  const title = isDownloaded
+    ? `Update ready${version ? ` — v${version}` : ''}`
+    : isDownloading
+      ? `Downloading update${version ? ` v${version}` : ''} — ${Math.round(percent)}%`
+      : isChecking
+        ? 'Checking for updates...'
+        : status === 'error'
+          ? 'Update check failed'
+          : `New update available${version ? ` — v${version}` : ''}`;
+
+  const subtitle = status === 'error'
+    ? (message ?? 'Please try again from the Updates page.')
+    : isDownloaded
+      ? 'Restart now to install.'
+      : 'Open Updates for details.';
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 20, opacity: 1 }}
-        exit={{ y: -100, opacity: 0 }}
-        className={`fixed top-4 right-4 z-50 shadow-lg cursor-pointer max-w-xs w-72 rounded-xl overflow-hidden border text-white transition-colors ${bg}`}
-        onClick={() => navigate('/updates')}
+        initial={{ y: -10, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: -10, opacity: 0 }}
+        className="mx-5 mt-4 rounded-xl border border-[#2b313a] bg-[#171c23] text-white shadow-sm"
       >
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="bg-white/20 p-1.5 rounded-lg flex-shrink-0">
+            <div className="bg-[#1d222a] border border-[#2b313a] p-1.5 rounded-lg flex-shrink-0">
               {isDownloaded ? (
-                <CheckCircle size={18} />
+                <CheckCircle size={17} className="text-emerald-400" />
               ) : isDownloading ? (
-                <Download size={18} />
+                <Download size={17} className="text-blue-400" />
               ) : (
-                <RefreshCw size={18} className="animate-spin" />
+                <RefreshCw size={17} className={`text-gray-300 ${isChecking ? 'animate-spin' : ''}`} />
               )}
             </div>
             <div className="flex flex-col min-w-0">
-              <p className="text-sm font-bold leading-tight">
-                {isDownloaded
-                  ? 'Update ready to install'
-                  : isDownloading
-                  ? `Downloading… ${Math.round(percent)}%`
-                  : 'New update available'}
-              </p>
-              <p className="text-xs opacity-75 mt-0.5">Click to view details</p>
+              <p className="text-sm font-bold text-white leading-tight truncate">{title}</p>
+              <p className="text-xs text-gray-400 mt-0.5 truncate">{subtitle}</p>
             </div>
           </div>
-          <ChevronRight size={16} className="opacity-60 flex-shrink-0" />
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isDownloaded && (
+              <button
+                type="button"
+                onClick={installNow}
+                className="px-3 py-1.5 bg-[#f8fafc] text-[#111315] rounded-lg text-xs font-bold border border-[#f8fafc]"
+              >
+                Restart now
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => navigate('/updates')}
+              className="px-3 py-1.5 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-lg text-xs font-semibold"
+            >
+              Open Updates
+            </button>
+          </div>
         </div>
-        {isDownloading && (
-          <div className="h-1 bg-white/20">
+        {(isDownloading || isDownloaded) && (
+          <div className="h-1 bg-[#222831]">
             <motion.div
-              className="h-full bg-white/60"
+              className="h-full bg-white"
               initial={{ width: 0 }}
               animate={{ width: `${percent}%` }}
             />
