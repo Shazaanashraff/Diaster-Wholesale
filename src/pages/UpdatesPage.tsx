@@ -153,6 +153,52 @@ export const UpdatesPage: React.FC = () => {
           </p>
         </div>
 
+        {status !== 'idle' && activeStatus && (
+          <div
+            className={`mb-5 rounded-xl border ${activeStatus.accent} bg-[#171c23] px-4 py-3`}
+            style={{ animation: 'posFadeIn 360ms ease both' }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="mt-0.5 flex-shrink-0">{activeStatus.icon}</div>
+                <div className="min-w-0">
+                  <p className="text-sm text-white font-bold">{activeStatus.label}</p>
+                  {activeStatus.sub && <p className="text-xs text-gray-300 mt-0.5">{activeStatus.sub}</p>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {status === 'update-downloaded' && (
+                  <button
+                    onClick={handleRestart}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold"
+                    style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
+                  >
+                    Restart now
+                  </button>
+                )}
+                {(status === 'update-not-available' || status === 'error' || status === 'skipped') && (
+                  <button
+                    onClick={handleCheckUpdates}
+                    className="px-3 py-1.5 bg-[#252a30] border border-[#2b313a] text-gray-300 rounded-lg text-xs font-semibold"
+                  >
+                    {status === 'error' ? 'Try again' : 'Check again'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {(status === 'download-progress' || status === 'update-downloaded') && (
+              <div className="mt-3 w-full h-1.5 bg-[#252a30] rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-white"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percent}%` }}
+                  transition={{ ease: 'easeOut', duration: 0.3 }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Version card */}
         <div
           className="bg-[#171c23] rounded-[2.5rem] border border-[#2b313a] overflow-hidden mb-5 shadow-sm"
@@ -227,7 +273,7 @@ export const UpdatesPage: React.FC = () => {
                     <div className="min-w-0">
                       <p className="text-sm text-white font-bold">{activeStatus.label}</p>
                       {activeStatus.sub && (
-                        <p className="text-xs text-gray-500 mt-0.5">{activeStatus.sub}</p>
+                        <p className="text-xs text-gray-300 mt-0.5">{activeStatus.sub}</p>
                       )}
                     </div>
                   </div>

@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUpdater } from '../hooks/useUpdater';
 
 export const UpdateBanner: React.FC = () => {
-  const { status, percent, version, message, isDesktop, installNow } = useUpdater();
+  const { status, percent, version, message, isDesktop, installNow, checkNow } = useUpdater();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,10 +28,14 @@ export const UpdateBanner: React.FC = () => {
           : `New update available${version ? ` — v${version}` : ''}`;
 
   const subtitle = status === 'error'
-    ? (message ?? 'Please try again from the Updates page.')
+    ? (message ?? 'Please try again.')
     : isDownloaded
-      ? 'Restart now to install.'
-      : 'Open Updates for details.';
+      ? 'Download completed. Restart to install.'
+      : isDownloading
+        ? `${Math.round(percent)}% downloaded`
+        : isChecking
+          ? 'Contacting release feed...'
+          : 'Download is running in the background.';
 
   return (
     <AnimatePresence>
@@ -40,6 +44,7 @@ export const UpdateBanner: React.FC = () => {
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: -10, opacity: 0 }}
         className="mx-5 mt-4 rounded-xl border border-[#2b313a] bg-[#171c23] text-white shadow-sm"
+        aria-live="polite"
       >
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -53,12 +58,21 @@ export const UpdateBanner: React.FC = () => {
               )}
             </div>
             <div className="flex flex-col min-w-0">
-              <p className="text-sm font-bold text-white leading-tight truncate">{title}</p>
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{subtitle}</p>
+              <p className="text-sm font-bold text-white leading-tight">{title}</p>
+              <p className="text-xs text-gray-300 mt-0.5">{subtitle}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {status === 'error' && (
+              <button
+                type="button"
+                onClick={checkNow}
+                className="px-3 py-1.5 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-lg text-xs font-semibold"
+              >
+                Retry
+              </button>
+            )}
             {isDownloaded && (
               <button
                 type="button"
