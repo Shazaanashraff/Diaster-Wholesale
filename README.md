@@ -83,6 +83,16 @@ For private release feeds, provide a token via environment variable at runtime (
 DIASTER_UPDATER_TOKEN=your_token_here
 ```
 
+If `DIASTER_UPDATER_TOKEN` is missing for a private repo, updater checks will fail with GitHub `releases.atom` 404.
+
+Supported runtime token env vars: `DIASTER_UPDATER_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`.
+
+If your release feed is public, set:
+
+```bash
+DIASTER_UPDATER_ALLOW_PUBLIC=true
+```
+
 Before using updates in production:
 
 1. Publish each new version as a GitHub Release with assets (`latest.yml`, setup `.exe`, `.blockmap`).
