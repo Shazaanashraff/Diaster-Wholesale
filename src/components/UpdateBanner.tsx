@@ -75,15 +75,6 @@ export const UpdateBanner: React.FC = () => {
                 Retry
               </button>
             )}
-            {restartReady && (
-              <button
-                type="button"
-                onClick={installNow}
-                className="px-3 py-1.5 bg-[#f8fafc] text-[#111315] rounded-lg text-xs font-bold border border-[#f8fafc]"
-              >
-                Restart now
-              </button>
-            )}
             <button
               type="button"
               onClick={() => navigate('/updates')}

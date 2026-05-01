@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
@@ -163,6 +163,24 @@ function configureAutoUpdater() {
 
   autoUpdater.on('update-downloaded', (info) => {
     sendUpdaterStatus('update-downloaded', { version: info.version });
+
+    const dialogOpts = {
+      type: 'info',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'App Update Ready',
+      message: `A new version (v${info.version}) of Diaster Wholesale is ready to install.`,
+      detail: 'The application will restart to complete the installation.',
+    };
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
+        if (returnValue.response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
+    }
   });
 
   autoUpdater.on('error', (error) => {

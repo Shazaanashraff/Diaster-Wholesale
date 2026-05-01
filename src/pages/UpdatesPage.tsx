@@ -169,15 +169,6 @@ export const UpdatesPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {restartReady && (
-                  <button
-                    onClick={handleRestart}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold"
-                    style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
-                  >
-                    Restart now
-                  </button>
-                )}
                 {(status === 'update-not-available' || status === 'error' || status === 'skipped') && (
                   <button
                     onClick={handleCheckUpdates}
@@ -280,15 +271,6 @@ export const UpdatesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {restartReady && (
-                    <button
-                      onClick={handleRestart}
-                      className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0"
-                      style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
-                    >
-                      Restart & Install
-                    </button>
-                  )}
                   {(status === 'update-not-available' || status === 'error' || status === 'skipped') && (
                     <button
                       onClick={handleCheckUpdates}
