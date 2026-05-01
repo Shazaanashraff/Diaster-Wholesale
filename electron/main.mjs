@@ -177,7 +177,8 @@ function configureAutoUpdater() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
         if (returnValue.response === 0) {
-          autoUpdater.quitAndInstall();
+          log.info('User confirmed update restart. Calling quitAndInstall(false, true)...');
+          autoUpdater.quitAndInstall(false, true);
         }
       });
     }
@@ -212,7 +213,8 @@ ipcMain.handle('updater:check-now', async () => {
 
 ipcMain.on('updater:install-now', () => {
   if (!isDev) {
-    autoUpdater.quitAndInstall();
+    log.info('Manual install requested via IPC. Calling quitAndInstall(false, true)...');
+    autoUpdater.quitAndInstall(false, true);
   }
 });
 
