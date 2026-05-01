@@ -49,8 +49,16 @@ const getUpdater = (): UpdaterApi | null => {
   return ((window as any).desktop?.updater as UpdaterApi | undefined) ?? null;
 };
 
-const isElectronRuntime = () =>
-  typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent);
+const isElectronRuntime = () => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return (
+    /Electron/i.test(ua) || 
+    !!(window as any).desktop || 
+    !!(window as any).chrome?.webview || // Fallback for some wrappers
+    !!(window as any).webkit?.messageHandlers // Fallback for some wrappers
+  );
+};
 
 const emitStoreUpdate = () => {
   for (const callback of subscribers) {
@@ -109,33 +117,66 @@ const applyPayload = (payload: UpdaterPayload) => {
 };
 
 const ensureGlobalSubscription = () => {
-  if (isSubscribed) return;
+  if (isSubscribed) return false;
   const updater = getUpdater();
-  if (!updater) return;
+  if (!updater) return false;
 
   isSubscribed = true;
   updater.onStatus((payload) => {
     applyPayload(payload);
   });
+  return true;
 };
 
 export const useUpdater = () => {
   const [state, setState] = useState<UpdaterState>(storeState);
   const [isDesktop, setIsDesktop] = useState<boolean>(() => isElectronRuntime() || !!getUpdater());
+  const [hasBridge, setHasBridge] = useState<boolean>(() => !!getUpdater());
 
   useEffect(() => {
-    ensureGlobalSubscription();
+    const syncBridgeState = () => {
+      const updater = getUpdater();
+      const bridgeExists = !!updater;
+      
+      if (bridgeExists) {
+        setHasBridge(true);
+        setIsDesktop(true);
+        const newlySubscribed = ensureGlobalSubscription();
+        
+        if (newlySubscribed && storeState.status === 'idle') {
+          updater.checkNow();
+        }
+      } else {
+        const currentlyElectron = isElectronRuntime();
+        setIsDesktop(currentlyElectron);
+        if (!currentlyElectron) {
+           setHasBridge(false);
+        }
+      }
+    };
+
+    syncBridgeState();
     subscribers.add(setState);
     setState(storeState);
-    setIsDesktop(isElectronRuntime() || !!getUpdater());
 
-    const refreshTimer = setTimeout(() => {
-      setIsDesktop(isElectronRuntime() || !!getUpdater());
-    }, 400);
+    // Polling for bridge
+    const pollIntervals = [100, 300, 800, 2000, 5000];
+    const timers = pollIntervals.map((ms, idx) => setTimeout(() => {
+      syncBridgeState();
+      
+      // If we are definitely in Electron but bridge is still missing after 5 seconds
+      if (idx === pollIntervals.length - 1 && isElectronRuntime() && !getUpdater()) {
+        updateStore({
+          status: 'error',
+          message: 'Updater bridge initialization failed. Please restart the application.',
+          lastCheckedAt: Date.now(),
+        });
+      }
+    }, ms));
 
     return () => {
       subscribers.delete(setState);
-      clearTimeout(refreshTimer);
+      timers.forEach(clearTimeout);
     };
   }, []);
 
@@ -144,7 +185,7 @@ export const useUpdater = () => {
     if (!updater) {
       updateStore({
         status: 'error',
-        message: 'Updater bridge unavailable in this session.',
+        message: 'Updater bridge unavailable. Please restart the app.',
         lastCheckedAt: Date.now(),
       });
       return;
@@ -162,7 +203,7 @@ export const useUpdater = () => {
     if (!updater) {
       updateStore({
         status: 'error',
-        message: 'Updater bridge unavailable in this session.',
+        message: 'Updater bridge unavailable.',
         lastCheckedAt: Date.now(),
       });
       return;
@@ -173,7 +214,7 @@ export const useUpdater = () => {
   return {
     ...state,
     isDesktop,
-    hasUpdaterBridge: !!getUpdater(),
+    hasUpdaterBridge: hasBridge,
     checkNow,
     installNow,
   };
