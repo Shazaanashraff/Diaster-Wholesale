@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUpdater } from '../hooks/useUpdater';
 
 export const UpdateBanner: React.FC = () => {
-  const { status, percent, version, message, isDesktop, installNow, checkNow } = useUpdater();
+  const { status, percent, version, message, isDesktop, checkNow } = useUpdater();
   const navigate = useNavigate();
   const location = useLocation();
 

@@ -84,13 +84,10 @@ export const UpdatesPage: React.FC = () => {
     lastCheckedAt,
     isDesktop,
     hasUpdaterBridge,
-    installNow,
     checkNow,
   } = useUpdater();
 
   const lastChecked = lastCheckedAt ? new Date(lastCheckedAt) : null;
-  const restartReady = status === 'update-downloaded' || (status === 'download-progress' && Math.round(percent) >= 100);
-  const handleRestart = () => installNow();
   const handleCheckUpdates = () => checkNow();
 
   const statusConfig = {
