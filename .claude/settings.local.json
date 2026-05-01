@@ -7,7 +7,9 @@
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/components/**)",
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/pages/**)",
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/services/**)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git tag *)"
     ]
   }
 }

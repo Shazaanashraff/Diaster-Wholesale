@@ -12,12 +12,14 @@ export const UpdateBanner: React.FC = () => {
   const isDownloaded = status === 'update-downloaded';
   const isDownloading = status === 'download-progress';
   const isChecking = status === 'checking';
+  const restartReady = isDownloaded || (isDownloading && Math.round(percent) >= 100);
+  const isDashboardRoute = location.pathname === '/' || location.pathname === '/dashboard';
   const isVisible =
     isChecking || status === 'update-available' || isDownloading || isDownloaded || status === 'error';
 
-  if (!isDesktop || location.pathname !== '/' || !isVisible) return null;
+  if (!isDesktop || !isDashboardRoute || !isVisible) return null;
 
-  const title = isDownloaded
+  const title = restartReady
     ? `Update ready${version ? ` — v${version}` : ''}`
     : isDownloading
       ? `Downloading update${version ? ` v${version}` : ''} — ${Math.round(percent)}%`
@@ -29,7 +31,7 @@ export const UpdateBanner: React.FC = () => {
 
   const subtitle = status === 'error'
     ? (message ?? 'Please try again.')
-    : isDownloaded
+    : restartReady
       ? 'Download completed. Restart to install.'
       : isDownloading
         ? `${Math.round(percent)}% downloaded`
@@ -73,7 +75,7 @@ export const UpdateBanner: React.FC = () => {
                 Retry
               </button>
             )}
-            {isDownloaded && (
+            {restartReady && (
               <button
                 type="button"
                 onClick={installNow}

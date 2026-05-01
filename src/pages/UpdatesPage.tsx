@@ -17,13 +17,13 @@ type ChangelogEntry = {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '0.1.5',
+    version: currentVersion,
     date: 'May 2026',
     tag: 'latest',
     highlights: [
-      { icon: Star,       text: 'Redesigned Updates page with improved status indicators and version timeline' },
-      { icon: Shield,     text: 'Embedded updater token for seamless private-release auto-update' },
-      { icon: Zap,        text: 'Performance and UI polish across multiple pages' },
+      { icon: Star,       text: 'Dashboard update strip now shows live download progress and restart action' },
+      { icon: Download,   text: 'Updates page now shows a top status strip with download percentage and restart button' },
+      { icon: Zap,        text: 'Improved updater status text visibility and retry behavior' },
     ],
   },
   {
@@ -83,11 +83,13 @@ export const UpdatesPage: React.FC = () => {
     message: error,
     lastCheckedAt,
     isDesktop,
+    hasUpdaterBridge,
     installNow,
     checkNow,
   } = useUpdater();
 
   const lastChecked = lastCheckedAt ? new Date(lastCheckedAt) : null;
+  const restartReady = status === 'update-downloaded' || (status === 'download-progress' && Math.round(percent) >= 100);
   const handleRestart = () => installNow();
   const handleCheckUpdates = () => checkNow();
 
@@ -167,7 +169,7 @@ export const UpdatesPage: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {status === 'update-downloaded' && (
+                {restartReady && (
                   <button
                     onClick={handleRestart}
                     className="px-3 py-1.5 rounded-lg text-xs font-bold"
@@ -234,12 +236,12 @@ export const UpdatesPage: React.FC = () => {
               {isDesktop ? (
                 <button
                   onClick={handleCheckUpdates}
-                  disabled={status === 'checking' || status === 'download-progress'}
+                  disabled={!hasUpdaterBridge || status === 'checking' || status === 'download-progress'}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                   style={{ backgroundColor: '#f8fafc', color: '#111315', borderColor: '#f8fafc' }}
                 >
                   <RefreshCw size={14} className={status === 'checking' ? 'animate-spin' : ''} />
-                  {status === 'checking' ? 'Checking…' : 'Check for Updates'}
+                  {!hasUpdaterBridge ? 'Updater unavailable' : status === 'checking' ? 'Checking…' : 'Check for Updates'}
                 </button>
               ) : (
                 <div className="flex items-center gap-2 px-3 py-2 bg-[#1d222a] border border-[#2b313a] text-gray-500 rounded-xl text-xs font-semibold">
@@ -278,7 +280,7 @@ export const UpdatesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {status === 'update-downloaded' && (
+                  {restartReady && (
                     <button
                       onClick={handleRestart}
                       className="px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex-shrink-0"

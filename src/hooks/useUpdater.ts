@@ -49,6 +49,9 @@ const getUpdater = (): UpdaterApi | null => {
   return ((window as any).desktop?.updater as UpdaterApi | undefined) ?? null;
 };
 
+const isElectronRuntime = () =>
+  typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent);
+
 const emitStoreUpdate = () => {
   for (const callback of subscribers) {
     callback(storeState);
@@ -118,19 +121,34 @@ const ensureGlobalSubscription = () => {
 
 export const useUpdater = () => {
   const [state, setState] = useState<UpdaterState>(storeState);
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => isElectronRuntime() || !!getUpdater());
 
   useEffect(() => {
     ensureGlobalSubscription();
     subscribers.add(setState);
     setState(storeState);
+    setIsDesktop(isElectronRuntime() || !!getUpdater());
+
+    const refreshTimer = setTimeout(() => {
+      setIsDesktop(isElectronRuntime() || !!getUpdater());
+    }, 400);
+
     return () => {
       subscribers.delete(setState);
+      clearTimeout(refreshTimer);
     };
   }, []);
 
   const checkNow = useCallback(() => {
     const updater = getUpdater();
-    if (!updater) return;
+    if (!updater) {
+      updateStore({
+        status: 'error',
+        message: 'Updater bridge unavailable in this session.',
+        lastCheckedAt: Date.now(),
+      });
+      return;
+    }
     updateStore({
       status: 'checking',
       percent: 0,
@@ -141,13 +159,21 @@ export const useUpdater = () => {
 
   const installNow = useCallback(() => {
     const updater = getUpdater();
-    if (!updater) return;
+    if (!updater) {
+      updateStore({
+        status: 'error',
+        message: 'Updater bridge unavailable in this session.',
+        lastCheckedAt: Date.now(),
+      });
+      return;
+    }
     updater.installNow();
   }, []);
 
   return {
     ...state,
-    isDesktop: !!getUpdater(),
+    isDesktop,
+    hasUpdaterBridge: !!getUpdater(),
     checkNow,
     installNow,
   };
