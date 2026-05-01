@@ -15,6 +15,7 @@ import {
   LogOut,
   Building2,
   ShoppingCart,
+  Download,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCurrentRole, can, type Permission } from '../utils/permissions';
@@ -43,6 +44,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: ShoppingCart,      label: 'Procurement', path: '/purchases', requires: 'manage_procurement', section: 'Procurement' },
   { icon: Building2,         label: 'Suppliers',   path: '/suppliers', requires: ['manage_suppliers', 'manage_payments'],   section: 'Procurement' },
   { icon: Upload,            label: 'Bulk Import', path: '/import',    requires: 'bulk_import',        section: 'Admin' },
+  { icon: Download,          label: 'Updates',     path: '/updates',                                   section: 'Admin' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {

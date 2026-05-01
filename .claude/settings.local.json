@@ -6,7 +6,8 @@
       "Read(//c/c/Users/Dell/Desktop/Diaster Wholesale/**)",
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/components/**)",
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/pages/**)",
-      "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/services/**)"
+      "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/services/**)",
+      "Bash(npm run *)"
     ]
   }
 }
