@@ -21,9 +21,9 @@ const CHANGELOG: ChangelogEntry[] = [
     date: 'May 2026',
     tag: 'latest',
     highlights: [
+      { icon: Shield,     text: 'Resolved updater bridge race condition for reliable startup' },
       { icon: Star,       text: 'Dashboard update strip now shows live download progress and restart action' },
-      { icon: Download,   text: 'Updates page now shows a top status strip with download percentage and restart button' },
-      { icon: Zap,        text: 'Improved updater status text visibility and retry behavior' },
+      { icon: Download,   text: 'Updates page now shows top status strip with download percentage' },
     ],
   },
   {
