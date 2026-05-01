@@ -88,3 +88,7 @@ Before using updates in production:
 1. Publish each new version as a GitHub Release with assets (`latest.yml`, setup `.exe`, `.blockmap`).
 2. Bump app version in `package.json` for each release.
 3. Keep secrets in CI/environment variables only (`GH_TOKEN`/`DIASTER_UPDATER_TOKEN`).
+
+Windows setup artifact name is fixed to:
+
+`Diaster.Wholesale-Setup-<version>.exe`

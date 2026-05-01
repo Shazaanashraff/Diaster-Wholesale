@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-const updaterAccessToken = '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';
+const updaterAccessToken = process.env.DIASTER_UPDATER_TOKEN;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -92,15 +92,13 @@ function configureAutoUpdater() {
       token: updaterAccessToken,
       vPrefixedTagName: true,
     });
-    
-    autoUpdater.requestHeaders = {
-      Authorization: `token ${updaterAccessToken}`,
-    };
   }
 
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.disableWebInstaller = true;
+  autoUpdater.disableDifferentialDownload = true;
 
   autoUpdater.on('checking-for-update', () => {
     sendUpdaterStatus('checking');
