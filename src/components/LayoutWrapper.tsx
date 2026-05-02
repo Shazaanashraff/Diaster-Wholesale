@@ -41,8 +41,9 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
             "pos-content custom-scrollbar relative flex flex-col p-0",
             isPosRoute ? "pos-content-pos" : "pos-content-standard"
           )}
-        >
-          <UpdateBanner />
+          >
+            <UpdateBanner />
+
           {isPosRoute ? (
             children
           ) : (

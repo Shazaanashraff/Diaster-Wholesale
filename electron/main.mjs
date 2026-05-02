@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
@@ -13,11 +13,17 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-const updaterAccessToken = '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';
+const updaterAccessToken =
+  process.env.DIASTER_UPDATER_TOKEN ??
+  process.env.GH_TOKEN ??
+  process.env.GITHUB_TOKEN ??
+  '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';
+const updaterAllowPublicFeed = process.env.DIASTER_UPDATER_ALLOW_PUBLIC === 'true';
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 let updateCheckTimer = null;
+let updaterDisabledReason = null;
 
 function sendUpdaterStatus(status, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -44,7 +50,7 @@ function createMainWindow() {
     autoHideMenuBar: true,
     icon: resolveIcon(),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -68,11 +74,34 @@ async function checkForUpdates(reason = 'manual') {
     return { ok: false, reason: 'development-mode' };
   }
 
+  if (updaterDisabledReason) {
+    return { ok: false, reason: updaterDisabledReason };
+  }
+
   try {
     await autoUpdater.checkForUpdates();
     return { ok: true };
   } catch (error) {
-    const message = error?.message ?? String(error);
+    const rawMessage = error?.message ?? String(error);
+    const isGitHubFeedAuthError =
+      rawMessage.includes('/releases.atom') && rawMessage.includes('404');
+
+    if (isGitHubFeedAuthError) {
+      updaterDisabledReason =
+        'github-feed-auth-missing: set DIASTER_UPDATER_TOKEN for private GitHub releases';
+      if (updateCheckTimer) {
+        clearInterval(updateCheckTimer);
+        updateCheckTimer = null;
+      }
+      sendUpdaterStatus('error', {
+        message:
+          'Auto-update feed is not accessible. For private GitHub releases, set DIASTER_UPDATER_TOKEN in the app runtime environment.',
+        reason,
+      });
+      return { ok: false, reason: updaterDisabledReason };
+    }
+
+    const message = rawMessage;
     sendUpdaterStatus('error', { message, reason });
     return { ok: false, reason: message };
   }
@@ -84,6 +113,13 @@ function configureAutoUpdater() {
     return;
   }
 
+  if (!updaterAccessToken && !updaterAllowPublicFeed) {
+    updaterDisabledReason =
+      'missing-updater-token: set DIASTER_UPDATER_TOKEN (or GH_TOKEN/GITHUB_TOKEN) for private GitHub releases';
+    sendUpdaterStatus('skipped', { reason: updaterDisabledReason });
+    return;
+  }
+
   if (updaterAccessToken) {
     autoUpdater.setFeedURL({
       provider: 'github',
@@ -92,15 +128,20 @@ function configureAutoUpdater() {
       token: updaterAccessToken,
       vPrefixedTagName: true,
     });
-    
-    autoUpdater.requestHeaders = {
-      Authorization: `token ${updaterAccessToken}`,
-    };
+  } else {
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'Hesara2003',
+      repo: 'Diaster-Wholesale',
+      vPrefixedTagName: true,
+    });
   }
 
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.disableWebInstaller = true;
+  autoUpdater.disableDifferentialDownload = true;
 
   autoUpdater.on('checking-for-update', () => {
     sendUpdaterStatus('checking');
@@ -120,21 +161,26 @@ function configureAutoUpdater() {
     });
   });
 
-  autoUpdater.on('update-downloaded', async (info) => {
+  autoUpdater.on('update-downloaded', (info) => {
     sendUpdaterStatus('update-downloaded', { version: info.version });
 
-    const result = await dialog.showMessageBox(mainWindow ?? undefined, {
+    const dialogOpts = {
       type: 'info',
-      title: 'Update ready',
-      message: 'A new version has been downloaded.',
-      detail: 'Restart the app now to finish installing the update.',
-      buttons: ['Restart now', 'Later'],
+      buttons: ['Restart Now', 'Later'],
       defaultId: 0,
       cancelId: 1,
-    });
+      title: 'App Update Ready',
+      message: `A new version (v${info.version}) of Diaster Wholesale is ready to install.`,
+      detail: 'The application will restart to complete the installation.',
+    };
 
-    if (result.response === 0) {
-      setImmediate(() => autoUpdater.quitAndInstall());
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
+        if (returnValue.response === 0) {
+          log.info('User confirmed update restart. Calling quitAndInstall(false, true)...');
+          autoUpdater.quitAndInstall(false, true);
+        }
+      });
     }
   });
 
@@ -167,7 +213,8 @@ ipcMain.handle('updater:check-now', async () => {
 
 ipcMain.on('updater:install-now', () => {
   if (!isDev) {
-    autoUpdater.quitAndInstall();
+    log.info('Manual install requested via IPC. Calling quitAndInstall(false, true)...');
+    autoUpdater.quitAndInstall(false, true);
   }
 });
 
