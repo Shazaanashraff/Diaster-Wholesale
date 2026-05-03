@@ -9,11 +9,12 @@ export interface Product {
   sku?: string;
   name: string;
   model: string;
-  description: string;
+  description?: string;
   category: string;
   wholesale_price: number;
   retail_price: number;
   pieces_per_carton: number;
+  reorder_level?: number;
   margin_pct?: number;
   cost_price?: number;
   msp?: number;
@@ -110,6 +111,7 @@ export interface ProductStock {
   wholesale_price: number;
   retail_price: number;
   pieces_per_carton: number;
+  reorder_level?: number;
   cartons_in: number;
   pieces_in: number;
   cartons_sold: number;

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getProducts } from '../services/productService';
 import { getCustomers } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
@@ -12,13 +13,12 @@ import {
   Minus,
   Plus,
   Search,
-  Coffee,
-  Soup,
-  Wine,
-  CupSoda,
-  UtensilsCrossed,
-  CakeSlice,
-  Fish,
+  Code2,
+  MonitorCheck,
+  Gamepad2,
+  Gift,
+  Server,
+  Globe,
   Wallet,
   CreditCard,
   QrCode,
@@ -33,6 +33,7 @@ export interface CartItem {
   quantityCartons: number;
   quantityPieces: number;
   batchId?: string;
+  unitPrice?: number;
 }
 
 type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
@@ -48,9 +49,10 @@ const TILE_COLORS = [
   'bg-[#cbe8df]',
 ];
 
-const TILE_ICONS = [Coffee, Soup, Fish, UtensilsCrossed, CakeSlice, CupSoda, Wine, Coffee];
+const TILE_ICONS = [Code2, MonitorCheck, Gamepad2, Gift, Server, Globe, Code2, MonitorCheck];
 
 export const POSPage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,21 +64,18 @@ export const POSPage: React.FC = () => {
   const [isInventoryEnforced, setIsInventoryEnforced] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartonQuantities, setCartonQuantities] = useState<Record<string, number>>({});
   const [pieceQuantities, setPieceQuantities] = useState<Record<string, number>>({});
 
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PayMethod>('cash');
-  const [selectedOrderType, setSelectedOrderType] = useState<string>('Dine-in');
-  const [isOrderTypeModalOpen, setIsOrderTypeModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
   const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
 
   // Discount & approval
   const [discountAmt, setDiscountAmt] = useState(0);
-  const [discountApproved, setDiscountApproved] = useState(false);
+  const [pricingApproved, setPricingApproved] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [approvalPin, setApprovalPin] = useState('');
   const [approvalError, setApprovalError] = useState('');
@@ -162,6 +161,16 @@ export const POSPage: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    setCart((prev) =>
+      prev.map((item) => ({
+        ...item,
+        unitPrice: isWholesale ? item.product.wholesale_price : item.product.retail_price,
+      }))
+    );
+    setPricingApproved(false);
+  }, [isWholesale]);
+
   const categoryTiles = useMemo(() => {
     const byCategory = new Map<string, { count: number; products: Product[] }>();
 
@@ -192,7 +201,6 @@ export const POSPage: React.FC = () => {
       const searchMatch = !q || 
         (p.name?.toLowerCase().includes(q)) || 
         (p.item_code?.toLowerCase().includes(q)) || 
-        (p.model?.toLowerCase().includes(q)) ||
         (p.sku?.toLowerCase().includes(q));
       return categoryMatch && searchMatch;
     });
@@ -218,33 +226,26 @@ export const POSPage: React.FC = () => {
     return inCartPieces + pendingTotalPieces > availablePieces;
   };
 
-  const updateQuantity = (productId: string, type: 'cartons' | 'pieces', delta: number) => {
-    if (type === 'cartons') {
-      setCartonQuantities((prev) => ({
-        ...prev,
-        [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
-      }));
-    } else {
-      setPieceQuantities((prev) => ({
-        ...prev,
-        [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
-      }));
-    }
+  const updateQuantity = (productId: string, delta: number) => {
+    setPieceQuantities((prev) => ({
+      ...prev,
+      [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
+    }));
+    setPricingApproved(false);
   };
 
   const addToCart = (product: Product) => {
-    const qtyCartons = cartonQuantities[product.id] || 0;
-    const qtyPieces = pieceQuantities[product.id] || 0;
+    const qtyUnits = pieceQuantities[product.id] || 0;
 
-    if (qtyCartons === 0 && qtyPieces === 0) return;
+    if (qtyUnits === 0) return;
 
-    if (exceedsAvailableStock(product, qtyCartons, qtyPieces)) {
+    if (exceedsAvailableStock(product, 0, qtyUnits)) {
       const piecesPerCarton = product.pieces_per_carton || 1;
       const availablePieces = stockPiecesByProduct[product.id] ?? 0;
       const availCartons = Math.floor(availablePieces / piecesPerCarton);
       const availLoose = availablePieces % piecesPerCarton;
 
-      setValidationMessage(`Cannot add ${product.name}. Available: ${availCartons} CTN, ${availLoose} PCS.`);
+      setValidationMessage(`Cannot add ${product.name}. Available: ${availCartons} packs, ${availLoose} units.`);
       return;
     }
 
@@ -255,31 +256,41 @@ export const POSPage: React.FC = () => {
           item.product.id === product.id
             ? {
                 ...item,
-                quantityCartons: item.quantityCartons + qtyCartons,
-                quantityPieces: item.quantityPieces + qtyPieces,
+                quantityCartons: 0,
+                quantityPieces: item.quantityPieces + qtyUnits,
               }
             : item
         );
       }
-      return [...prev, { product, quantityCartons: qtyCartons, quantityPieces: qtyPieces }];
+      return [
+        ...prev,
+        {
+          product,
+          quantityCartons: 0,
+          quantityPieces: qtyUnits,
+          unitPrice: isWholesale ? product.wholesale_price : product.retail_price,
+        },
+      ];
     });
 
-    setCartonQuantities((prev) => ({ ...prev, [product.id]: 0 }));
     setPieceQuantities((prev) => ({ ...prev, [product.id]: 0 }));
+    setPricingApproved(false);
     setValidationMessage(null);
   };
 
   const removeFromCart = (index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
+    setPricingApproved(false);
   };
 
   const clearCart = () => {
     setCart([]);
     setValidationMessage(null);
+    setPricingApproved(false);
   };
 
   const subtotal = cart.reduce((acc, item) => {
-    const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+    const pricePerPiece = Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price));
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     return acc + pricePerPiece * totalPieces;
@@ -288,40 +299,41 @@ export const POSPage: React.FC = () => {
   const estimatedCostFloor = cart.reduce((acc, item) => {
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-    const avgCost = avgCostByProduct[item.product.id] ?? 0;
-    return acc + avgCost * totalPieces;
+    const floorCost = Math.max(avgCostByProduct[item.product.id] ?? 0, item.product.cost_price ?? 0);
+    return acc + floorCost * totalPieces;
   }, 0);
 
-  const mspFloor = cart.reduce((acc, item) => {
+  const wholesaleFloor = cart.reduce((acc, item) => {
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-    const msp = item.product.msp ?? 0;
-    return acc + msp * totalPieces;
+    return acc + Number(item.product.wholesale_price ?? 0) * totalPieces;
   }, 0);
 
-  const discount = discountApproved ? discountAmt : 0;
+  const discount = pricingApproved ? discountAmt : 0;
   const total = subtotal - discount;
   const isBelowCost = total < estimatedCostFloor;
-  const isBelowMSP = mspFloor > 0 && total < mspFloor;
-  const needsApproval = discountAmt > 0 && !discountApproved;
+  const hasBelowWholesaleItemPrice = cart.some(
+    (item) => Number(item.unitPrice ?? item.product.wholesale_price) < Number(item.product.wholesale_price)
+  );
+  const isBelowWholesale = total < wholesaleFloor || hasBelowWholesaleItemPrice;
+  const needsApproval = (discountAmt > 0 || isBelowWholesale) && !pricingApproved;
   const canProcessTransaction =
     cart.length > 0
     && !!selectedCustomerId
     && btnPhase === 'idle'
     && !isBelowCost
-    && !isBelowMSP
     && !needsApproval;
 
   function handleDiscountChange(val: string) {
     const num = parseFloat(val) || 0;
     setDiscountAmt(num);
-    setDiscountApproved(false);
+    setPricingApproved(false);
   }
 
   function handleApproveDiscount() {
     const adminPin = getRolePin('admin');
     if (approvalPin === adminPin) {
-      setDiscountApproved(true);
+      setPricingApproved(true);
       setApprovalModalOpen(false);
       setApprovalPin('');
       setApprovalError('');
@@ -329,6 +341,14 @@ export const POSPage: React.FC = () => {
       setApprovalError('Incorrect admin PIN');
       setApprovalPin('');
     }
+  }
+
+  function updateCartUnitPrice(index: number, value: string) {
+    const parsed = Math.max(0, parseFloat(value) || 0);
+    setCart((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, unitPrice: parsed } : item))
+    );
+    setPricingApproved(false);
   }
 
   const processTransaction = async () => {
@@ -367,6 +387,8 @@ export const POSPage: React.FC = () => {
       setTimeout(() => {
         setCart([]);
         setSelectedCustomerId('');
+        setDiscountAmt(0);
+        setPricingApproved(false);
         setBtnPhase('idle');
       }, 1600);
     } catch (error) {
@@ -381,6 +403,8 @@ export const POSPage: React.FC = () => {
     setIsSuccessModalOpen(false);
     setCart([]);
     setSelectedCustomerId('');
+    setDiscountAmt(0);
+    setPricingApproved(false);
     setValidationMessage(null);
   };
 
@@ -411,18 +435,18 @@ export const POSPage: React.FC = () => {
           <div className="pos-main-head">
             <label className="pos-search">
               <Search size={18} />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search"
-              />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products or item codes..."
+                />
             </label>
             <div className="pos-mode-toggle">
               <button type="button" className={cn(isWholesale && 'active')} onClick={() => setIsWholesale(true)}>
-                Wholesale
+                Dealer
               </button>
               <button type="button" className={cn(!isWholesale && 'active')} onClick={() => setIsWholesale(false)}>
-                Retail
+                Public
               </button>
             </div>
           </div>
@@ -464,19 +488,18 @@ export const POSPage: React.FC = () => {
               }}
             >
               {categoryProducts.slice(0, 12).map((product) => {
-                const qtyCartons = cartonQuantities[product.id] || 0;
-                const qtyPieces = pieceQuantities[product.id] || 0;
+                const qtyUnits = pieceQuantities[product.id] || 0;
                 const piecesPerCarton = product.pieces_per_carton || 1;
 
-                const selectedPieces = qtyCartons * piecesPerCarton + qtyPieces;
+                const selectedPieces = qtyUnits;
                 const inCartPieces = getCartPiecesForProduct(product.id);
                 const availablePieces = isInventoryEnforced ? (stockPiecesByProduct[product.id] ?? 0) : Number.MAX_SAFE_INTEGER;
                 const remainingPieces = isInventoryEnforced ? Math.max(0, availablePieces - inCartPieces) : Number.MAX_SAFE_INTEGER;
+                const availableCartons = isInventoryEnforced ? Math.floor(remainingPieces / piecesPerCarton) : 0;
 
-                const canIncreaseCartons = !isInventoryEnforced || (selectedPieces + piecesPerCarton) <= remainingPieces;
                 const canIncreasePieces = !isInventoryEnforced || (selectedPieces + 1) <= remainingPieces;
                 const exceedsStock = isInventoryEnforced && selectedPieces > remainingPieces;
-                const hasAmount = qtyCartons > 0 || qtyPieces > 0;
+                const hasAmount = qtyUnits > 0;
                 
                 // Search match is now handled in categoryProducts useMemo
                 const isSearchMatch = true;
@@ -495,30 +518,24 @@ export const POSPage: React.FC = () => {
                     )}
                   >
                   <div className="pos-product-top">
-                    <p>Orders to Kitchen</p>
+                    <p>
+                      {isInventoryEnforced
+                        ? `Available ${remainingPieces} units • ${availableCartons} cartons`
+                        : 'Inventory not enforced'}
+                    </p>
                     <h4>{product.name}</h4>
                     <strong>LKR {(isWholesale ? product.wholesale_price : product.retail_price).toFixed(2)}</strong>
+                    <p className="text-[10px] text-gray-500">Qty per carton: {piecesPerCarton}</p>
                   </div>
 
                   <div className="pos-qty-group">
                     <div className="pos-qty-row">
-                      <span>CTN {qtyCartons}</span>
+                      <span>QTY {qtyUnits}</span>
                       <div>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'cartons', -1)} disabled={qtyCartons === 0}>
+                        <button type="button" onClick={() => updateQuantity(product.id, -1)} disabled={qtyUnits === 0}>
                           <Minus size={14} />
                         </button>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'cartons', 1)} disabled={!canIncreaseCartons}>
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="pos-qty-row">
-                      <span>PCS {qtyPieces}</span>
-                      <div>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'pieces', -1)} disabled={qtyPieces === 0}>
-                          <Minus size={14} />
-                        </button>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'pieces', 1)} disabled={!canIncreasePieces}>
+                        <button type="button" onClick={() => updateQuantity(product.id, 1)} disabled={!canIncreasePieces}>
                           <Plus size={14} />
                         </button>
                       </div>
@@ -543,8 +560,15 @@ export const POSPage: React.FC = () => {
         <aside className="pos-bill">
           <div className="pos-bill-head">
             <div>
-              <h2>POS System</h2>
-              <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Walk-in'}</p>
+              <h2>Digital Goods POS</h2>
+              <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Direct Customer'}</p>
+              <button
+                type="button"
+                onClick={() => navigate('/returns')}
+                className="mt-2 text-[10px] font-bold uppercase tracking-wider text-primary hover:text-white transition-colors"
+              >
+                Open Returns
+              </button>
             </div>
             {cart.length > 0 && (
               <button type="button" onClick={clearCart} className="pos-clear-btn">
@@ -572,7 +596,9 @@ export const POSPage: React.FC = () => {
               {cart.map((item, index) => {
                 const ppc = item.product.pieces_per_carton || 1;
                 const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-                const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+                const pricePerPiece = Number(
+                  item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)
+                );
 
                 return (
                   <motion.div 
@@ -597,8 +623,19 @@ export const POSPage: React.FC = () => {
                       <div>
                         <h4>{item.product.name}</h4>
                         <p className="text-[10px] text-gray-500">
-                          {item.quantityCartons} CTN x {item.quantityPieces} PCS
+                          {item.quantityPieces} units
                         </p>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[9px] text-gray-500 uppercase">Sale price</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={pricePerPiece}
+                            onChange={(e) => updateCartUnitPrice(index, e.target.value)}
+                            className="w-20 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          />
+                        </div>
                         <div className="mt-1">
                           <select
                             value={item.batchId || ''}
@@ -609,10 +646,10 @@ export const POSPage: React.FC = () => {
                             }}
                             className="bg-[#1d222a] border border-[#2b313a] text-[9px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
                           >
-                            <option value="">FIFO (Oldest First)</option>
+                            <option value="">Auto Allocate (Oldest Lot First)</option>
                             {(availableBatches[item.product.id] || []).map(b => (
                               <option key={b.id} value={b.id}>
-                                Batch: {b.shipments?.reference || 'Direct'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
+                                Lot: {b.shipments?.reference || 'Direct Entry'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
                               </option>
                             ))}
                           </select>
@@ -649,7 +686,7 @@ export const POSPage: React.FC = () => {
                     outline: 'none',
                   }}
                 />
-                {discountAmt > 0 && !discountApproved && (
+                {(discountAmt > 0 || isBelowWholesale) && !pricingApproved && (
                   <button
                     type="button"
                     onClick={() => { setApprovalModalOpen(true); setApprovalError(''); setApprovalPin(''); }}
@@ -660,11 +697,11 @@ export const POSPage: React.FC = () => {
                       border: '1px solid rgba(251,191,36,0.3)',
                       color: '#fbbf24',
                     }}
-                  >
-                    Approve
+                    >
+                    Authorize
                   </button>
                 )}
-                {discountApproved && discountAmt > 0 && (
+                {pricingApproved && (discountAmt > 0 || isBelowWholesale) && (
                   <span style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>✓ Approved</span>
                 )}
               </div>
@@ -690,7 +727,9 @@ export const POSPage: React.FC = () => {
                 <div>
                   <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Admin Approval Required</p>
                   <p style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
-                    Discount of LKR {discountAmt.toFixed(2)} requires admin authorisation.
+                    {isBelowWholesale
+                      ? `Total is below wholesale floor (LKR ${wholesaleFloor.toFixed(2)}). Admin authorisation required.`
+                      : `Discount of LKR ${discountAmt.toFixed(2)} requires admin authorisation.`}
                   </p>
                 </div>
                 <div>
@@ -747,25 +786,21 @@ export const POSPage: React.FC = () => {
 
           {needsApproval && (
             <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
-              Discount requires admin approval before checkout
+              Discount or below-wholesale pricing requires admin approval before checkout
             </div>
           )}
 
-          {isBelowMSP && (
+          {isBelowWholesale && (
             <div className="pos-warning" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}>
-              ❌ Below MSP — minimum total: LKR {mspFloor.toFixed(2)}
+              ⚠ Below wholesale floor: LKR {wholesaleFloor.toFixed(2)}
             </div>
           )}
 
-          {!isBelowMSP && isBelowCost && (
+          {isBelowCost && (
             <div className="pos-warning">Below cost floor: LKR {estimatedCostFloor.toFixed(2)}</div>
           )}
 
           {validationMessage && <div className="pos-error">{validationMessage}</div>}
-
-          <button className="pos-order-type" type="button" onClick={() => setIsOrderTypeModalOpen(true)}>
-            {selectedOrderType}
-          </button>
 
           <div className="pos-pay-grid">
             <button type="button" className={cn(paymentMethod === 'cash' && 'active')} onClick={() => setPaymentMethod('cash')}>
@@ -801,7 +836,7 @@ export const POSPage: React.FC = () => {
             }}
           >
             {/* invisible spacer — keeps the button's natural height */}
-            <span className="invisible select-none" aria-hidden>Place Order</span>
+            <span className="invisible select-none" aria-hidden>Complete Sale</span>
             <AnimatePresence mode="wait">
               {btnPhase === 'idle' && (
                 <motion.span
@@ -812,7 +847,7 @@ export const POSPage: React.FC = () => {
                   transition={{ duration: 0.15 }}
                   className="absolute inset-0 flex items-center justify-center"
                 >
-                  Place Order
+                  Complete Sale
                 </motion.span>
               )}
               {btnPhase === 'loading' && (
@@ -857,29 +892,6 @@ export const POSPage: React.FC = () => {
             @keyframes pos-check-draw { to { stroke-dashoffset: 0; } }
           `}</style>
         </aside>
-
-      <Modal isOpen={isOrderTypeModalOpen} onClose={() => setIsOrderTypeModalOpen(false)} title="Order Type">
-        <div className="grid grid-cols-2 gap-3">
-          {['Dine-in', 'Pickup', 'Delivery', 'Courier'].map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => {
-                setSelectedOrderType(type);
-                setIsOrderTypeModalOpen(false);
-              }}
-              className={cn(
-                'py-4 rounded-xl border text-sm font-semibold transition-colors',
-                selectedOrderType === type
-                  ? 'bg-[#f8fafc] border-[#f8fafc] text-black'
-                  : 'bg-[#1d222a] border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33]'
-              )}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </Modal>
 
       <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Success">
         <div className="text-center py-6 space-y-4">

@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS products (
   wholesale_price NUMERIC(12,2) NOT NULL DEFAULT 0,
   retail_price    NUMERIC(12,2) NOT NULL DEFAULT 0,
   pieces_per_carton INT NOT NULL DEFAULT 1,
+  reorder_level  INT NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -155,6 +156,7 @@ SELECT
   p.wholesale_price,
   p.retail_price,
   p.pieces_per_carton,
+  p.reorder_level,
   COALESCE(batch_totals.cartons_in, 0)     AS cartons_in,
   COALESCE(batch_totals.pieces_in, 0)      AS pieces_in,
   COALESCE(sold_totals.cartons_sold, 0)    AS cartons_sold,

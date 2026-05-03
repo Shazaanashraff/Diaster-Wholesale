@@ -109,7 +109,6 @@ export async function searchReturnableInvoices(searchTerm: string): Promise<Retu
         products(name, item_code, pieces_per_carton)
       )
     `)
-    .in('payment_status', ['partial', 'paid'])
     .order('created_at', { ascending: false })
     .limit(60);
 
@@ -167,10 +166,6 @@ export async function processInvoiceReturn(
     throw new Error('This invoice has already been returned.');
   }
 
-  if (invoice.payment_status !== 'paid' && invoice.payment_status !== 'partial') {
-    throw new Error('Only paid or partially paid invoices can be returned.');
-  }
-
   if (invoice.items.length === 0) {
     throw new Error('Invoice has no items to return.');
   }
@@ -199,20 +194,22 @@ export async function processInvoiceReturn(
     throw new Error(adjustError.message);
   }
 
-  const { error: paymentError } = await supabase
-    .from('payments')
-    .insert({
-      invoice_id: invoice.id,
-      customer_id: invoice.customer_id,
-      amount: -Math.abs(invoice.total),
-      method: 'credit',
-      reference: `RETURN-${invoice.invoice_no}`,
-      paid_at: now,
-    });
+  if (invoice.payment_status === 'paid' || invoice.payment_status === 'partial') {
+    const { error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        invoice_id: invoice.id,
+        customer_id: invoice.customer_id,
+        amount: -Math.abs(invoice.total),
+        method: 'credit',
+        reference: `RETURN-${invoice.invoice_no}`,
+        paid_at: now,
+      });
 
-  if (paymentError) {
-    console.error('processInvoiceReturn payment error:', paymentError.message);
-    throw new Error(paymentError.message);
+    if (paymentError) {
+      console.error('processInvoiceReturn payment error:', paymentError.message);
+      throw new Error(paymentError.message);
+    }
   }
 
   const updatedNotes = [

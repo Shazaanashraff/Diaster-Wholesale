@@ -93,7 +93,7 @@ export const ReturnsPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">Sales Returns</h1>
             <p className="text-sm font-semibold text-gray-500 mt-1">
-              Reverse a paid invoice, restore stock, and adjust ledger entries.
+              Reverse an invoice, restore stock, and adjust ledger entries.
             </p>
           </div>
           <button
@@ -140,7 +140,7 @@ export const ReturnsPage: React.FC = () => {
               ) : invoices.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-500" style={{ animation: 'posFadeIn 380ms ease' }}>
                   <ReceiptText size={36} strokeWidth={1.75} />
-                  <p className="text-xs font-bold">No matching paid invoices</p>
+                  <p className="text-xs font-bold">No matching invoices</p>
                 </div>
               ) : (
                 invoices.map((invoice, idx) => (

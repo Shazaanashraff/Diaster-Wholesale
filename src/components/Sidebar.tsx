@@ -35,7 +35,7 @@ interface SidebarProps {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard,   label: 'Dashboard',   path: '/' },
-  { icon: MonitorSmartphone, label: 'POS System',  path: '/pos',       requires: 'pos' },
+  { icon: MonitorSmartphone, label: 'Digital POS', path: '/pos',       requires: 'pos' },
   { icon: Boxes,             label: 'Inventory',   path: '/inventory', requires: 'view_inventory' },
   { icon: Package2,          label: 'Products',    path: '/products',  requires: 'manage_products' },
   { icon: Users,             label: 'Customers',   path: '/customers', requires: 'view_customers' },

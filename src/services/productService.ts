@@ -5,6 +5,26 @@ import type { Product } from '../types';
 // Product Service — CRUD operations against Supabase
 // ============================================================
 
+async function loadExistingItemCodes(): Promise<Set<string>> {
+  const { data, error } = await supabase.from('products').select('item_code');
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).map((row) => String(row.item_code).trim().toUpperCase()));
+}
+
+export async function generateItemCode(prefetchedCodes?: string[]): Promise<string> {
+  const existing =
+    prefetchedCodes && prefetchedCodes.length > 0
+      ? new Set(prefetchedCodes.map((code) => code.trim().toUpperCase()))
+      : await loadExistingItemCodes();
+
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    if (!existing.has(code)) return code;
+  }
+
+  throw new Error('Unable to generate a unique item code. Please try again.');
+}
+
 /**
  * Fetch all products ordered by name (A-Z).
  */
@@ -45,11 +65,25 @@ export async function getProductById(id: string): Promise<Product> {
  * Insert a new product and return the created record.
  */
 export async function createProduct(
-  product: Omit<Product, 'id' | 'created_at' | 'updated_at'>
+  product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'item_code' | 'model' | 'description'> & {
+    item_code?: string;
+    model?: string;
+    description?: string;
+  }
 ): Promise<Product> {
+  const payload = {
+    ...product,
+    item_code:
+      product.item_code && product.item_code.trim().length > 0
+        ? product.item_code.trim()
+        : await generateItemCode(),
+    model: product.model ?? '',
+    description: product.description ?? '',
+  };
+
   const { data, error } = await supabase
     .from('products')
-    .insert(product)
+    .insert(payload)
     .select()
     .single();
 
@@ -84,18 +118,14 @@ export async function updateProduct(
 }
 
 /**
- * Check for duplicate product by model + name (case-insensitive).
+ * Check for duplicate product by name (case-insensitive).
  * Returns matching products (empty array = no duplicates).
  */
-export async function checkDuplicate(
-  model: string,
-  name: string
-): Promise<Product[]> {
+export async function checkDuplicate(name: string): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
     .select('*')
-    .ilike('model', model)
-    .ilike('name', name);
+    .ilike('name', name.trim());
 
   if (error) {
     console.error('checkDuplicate error:', error.message);

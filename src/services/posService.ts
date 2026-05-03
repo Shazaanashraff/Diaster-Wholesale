@@ -6,6 +6,7 @@ export interface CartItem {
   quantityCartons: number;
   quantityPieces: number;
   batchId?: string;
+  unitPrice?: number;
 }
 
 export const checkout = async (
@@ -89,7 +90,9 @@ export const checkout = async (
 
     // 3. Insert Invoice Items
     const invoiceItems = cart.map((item) => {
-      const piecePrice = isWholesale ? item.product.wholesale_price : item.product.retail_price;
+      const piecePrice = Number(
+        item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)
+      );
       const piecesPerCarton = item.product.pieces_per_carton || 1;
       const totalPieces = item.quantityCartons * piecesPerCarton + item.quantityPieces;
       const itemTotal = piecePrice * totalPieces;

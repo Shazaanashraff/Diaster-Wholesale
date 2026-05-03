@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../components/Modal';
 import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
-import { usePermissions } from '../utils/permissions';
+import { getCurrentRole, usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment, getMovementRates } from '../services/inventoryService';
+import { getInventory, insertStockAdjustment, getMovementRates, getStockLedger, transferStoreToShop, type StockLedgerEntry } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -24,6 +24,9 @@ export const InventoryPage: React.FC = () => {
   const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<StockLedgerEntry[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
 
   // ── Low-stock threshold ──
   const [threshold, setThreshold] = useState<number>(readThreshold);
@@ -36,6 +39,13 @@ export const InventoryPage: React.FC = () => {
   const [adjReason, setAdjReason] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
   const [adjError, setAdjError] = useState<string | null>(null);
+
+  // ── Store -> Shop transfer ──
+  const [transferProductId, setTransferProductId] = useState('');
+  const [transferUnits, setTransferUnits] = useState('');
+  const [transferNote, setTransferNote] = useState('');
+  const [transferSaving, setTransferSaving] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,14 +79,19 @@ export const InventoryPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [data, rates] = await Promise.all([getInventory(), getMovementRates()]);
+      setLedgerLoading(true);
+      setLedgerError(null);
+      const [data, rates, ledgerRows] = await Promise.all([getInventory(), getMovementRates(), getStockLedger(undefined, 250)]);
       setInventory(data);
       setMovementRates(rates);
+      setLedger(ledgerRows);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
+      setLedgerError(message);
     } finally {
       setLoading(false);
+      setLedgerLoading(false);
     }
   }
 
@@ -140,11 +155,56 @@ export const InventoryPage: React.FC = () => {
     }
   }
 
+  function getEffectiveReorderLevel(row: ProductStock): number {
+    const perProduct = Math.max(0, Number(row.reorder_level ?? 0));
+    return perProduct > 0 ? perProduct : threshold;
+  }
+
+  async function handleTransferSubmit() {
+    if (!transferProductId) {
+      setTransferError('Select a product to transfer.');
+      return;
+    }
+
+    const units = Math.max(0, parseInt(transferUnits, 10) || 0);
+    if (units <= 0) {
+      setTransferError('Enter a valid transfer quantity.');
+      return;
+    }
+
+    try {
+      setTransferSaving(true);
+      setTransferError(null);
+      await transferStoreToShop({
+        product_id: transferProductId,
+        units,
+        note: transferNote,
+        transferred_by: getCurrentRole(),
+      });
+      setTransferUnits('');
+      setTransferNote('');
+      const [inventoryRows, movementRows, ledgerRows] = await Promise.all([
+        getInventory(),
+        getMovementRates(),
+        getStockLedger(undefined, 250),
+      ]);
+      setInventory(inventoryRows);
+      setMovementRates(movementRows);
+      setLedger(ledgerRows);
+      setToast('Store to shop transfer logged');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to transfer stock';
+      setTransferError(message);
+    } finally {
+      setTransferSaving(false);
+    }
+  }
+
   const visibleInventory = inventory
     .filter(row => {
       const q = searchQuery.toLowerCase();
-      const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q) || (row.model || '').toLowerCase().includes(q);
-      const matchesFilter = !filterLowStock || computeStock(row).totalPieces < threshold;
+      const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q);
+      const matchesFilter = !filterLowStock || computeStock(row).totalPieces < getEffectiveReorderLevel(row);
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
@@ -165,7 +225,7 @@ export const InventoryPage: React.FC = () => {
             <Search size={18} />
             <input
               type="text"
-              placeholder="Search stock..."
+              placeholder="Search products and stock..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -225,8 +285,8 @@ export const InventoryPage: React.FC = () => {
                   <div className="flex gap-1">
                     {([
                       { key: 'name',    label: 'Name' },
-                      { key: 'cartons', label: 'Cartons' },
-                      { key: 'pieces',  label: 'Pieces' },
+                      { key: 'cartons', label: 'Packs' },
+                      { key: 'pieces',  label: 'Units' },
                       { key: 'margin',  label: 'Margin' },
                     ] as const).map(s => (
                       <button
@@ -300,7 +360,7 @@ export const InventoryPage: React.FC = () => {
               <div className="w-16 h-16 rounded-full bg-[#1d222a] flex items-center justify-center border border-[#2b313a]">
                 <Package size={28} className="text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No inventory data yet. Add products and stock batches first.</p>
+              <p className="text-sm font-semibold text-gray-500">No inventory data yet. Add products and opening stock first.</p>
             </div>
           </div>
         )}
@@ -319,11 +379,11 @@ export const InventoryPage: React.FC = () => {
                         Product Name <ArrowUpDown size={14} />
                       </div>
                     </th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">Model</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Pieces</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Retail</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">Reorder</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Packs</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Units</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Dealer</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Margin</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">30d Sales</th>
                     <th className="px-8 py-6"></th>
@@ -333,7 +393,8 @@ export const InventoryPage: React.FC = () => {
                   <AnimatePresence>
                     {visibleInventory.map((row) => {
                       const stock = computeStock(row);
-                      const isLowStock = stock.totalPieces < threshold;
+                      const reorderLevel = getEffectiveReorderLevel(row);
+                      const isLowStock = stock.totalPieces < reorderLevel;
 
                       return (
                         <motion.tr 
@@ -360,7 +421,7 @@ export const InventoryPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-8 py-6 text-left">
-                          <span className="text-xs font-bold text-gray-400">{row.model}</span>
+                          <span className="text-xs font-bold text-gray-400">{reorderLevel} units</span>
                         </td>
                         <td className="px-8 py-6 text-right">
                           <span className={cn(
@@ -427,6 +488,60 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="px-3 pb-8">
+          <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
+            <div className="px-6 py-4 border-b border-[#2b313a]">
+              <h3 className="text-sm font-bold text-white">Stock Ledger</h3>
+              <p className="text-[11px] text-gray-500 mt-1">Track stock in/out events with actor and location.</p>
+            </div>
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full min-w-[900px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#1d222a] border-b border-[#2b313a]">
+                    {['Date', 'Item', 'Action', 'Location', 'Qty', 'Who', 'Reference'].map((h) => (
+                      <th key={h} className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2b313a]">
+                  {ledgerLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">Loading ledger…</td>
+                    </tr>
+                  ) : ledgerError ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-red-400 text-center">{ledgerError}</td>
+                    </tr>
+                  ) : ledger.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">No ledger activity yet.</td>
+                    </tr>
+                  ) : (
+                    ledger.map((row) => (
+                      <tr key={row.id} className="hover:bg-[#1d222a] transition-colors">
+                        <td className="px-6 py-3 text-[11px] text-gray-400">{new Date(row.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-3">
+                          <p className="text-xs font-bold text-white">{row.product_name}</p>
+                          <p className="text-[10px] font-mono text-gray-500">{row.item_code}</p>
+                        </td>
+                        <td className="px-6 py-3 text-xs font-semibold text-gray-300">{row.action}</td>
+                        <td className="px-6 py-3 text-xs font-semibold uppercase text-gray-400">{row.location}</td>
+                        <td className={cn('px-6 py-3 text-xs font-mono font-bold', row.quantity >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                          {row.quantity >= 0 ? '+' : ''}{row.quantity}
+                        </td>
+                        <td className="px-6 py-3 text-xs text-gray-400">{row.actor}</td>
+                        <td className="px-6 py-3 text-xs text-gray-500">{row.reference || '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </section>
 
       <aside className="pos-bill">
@@ -442,12 +557,12 @@ export const InventoryPage: React.FC = () => {
 
         <div className="pos-bill-inner">
         <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
-          <h2 className="text-xl font-bold tracking-tight">Stock Control</h2>
+          <h2 className="text-xl font-bold tracking-tight">Inventory Control</h2>
           <p className="text-xs font-semibold text-gray-500">Configure global rules</p>
         </div>
 
         <div className="mt-6">
-          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-3">Global Low Stock Threshold</label>
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-3">Global Low-Stock Alert (Units)</label>
           <div className="flex items-center gap-3">
             <input
               type="number"
@@ -473,13 +588,55 @@ export const InventoryPage: React.FC = () => {
           <div className="bg-indigo-900/10 border border-indigo-900/30 rounded-xl p-4">
             <h4 className="text-sm font-bold text-white mb-1"><AlertTriangle size={14} className="inline text-indigo-400 mr-2 -translate-y-0.5" />Action Required</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              You have {inventory.filter(i => computeStock(i).totalPieces < threshold).length} items currently sitting below your safe threshold of {threshold}.
+              You have {inventory.filter(i => computeStock(i).totalPieces < getEffectiveReorderLevel(i)).length} items currently below reorder threshold.
             </p>
             <button
               onClick={() => { setFilterLowStock(true); document.getElementById('inventory-table')?.scrollIntoView({ behavior: 'smooth' }); }}
               className="mt-3 text-[11px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors"
             >
-              Review flagged stock <ArrowRight size={14} className="inline ml-1" />
+              Review flagged products <ArrowRight size={14} className="inline ml-1" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-8 border-t border-[#1f242c] pt-6">
+          <h4 className="text-sm font-bold text-white mb-3">Store → Shop Transfer</h4>
+          <div className="space-y-3">
+            <select
+              value={transferProductId}
+              onChange={(e) => setTransferProductId(e.target.value)}
+              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
+            >
+              <option value="">Select product</option>
+              {inventory.map((row) => (
+                <option key={row.product_id} value={row.product_id}>
+                  {row.item_code} — {row.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min="1"
+              value={transferUnits}
+              onChange={(e) => setTransferUnits(e.target.value)}
+              placeholder="Transfer units"
+              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 placeholder:text-gray-500 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40 font-mono"
+            />
+            <input
+              value={transferNote}
+              onChange={(e) => setTransferNote(e.target.value)}
+              placeholder="Optional note"
+              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 placeholder:text-gray-500 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
+            />
+            {transferError && <p className="text-[10px] font-semibold text-red-400">{transferError}</p>}
+            <button
+              type="button"
+              onClick={handleTransferSubmit}
+              disabled={transferSaving}
+              className="w-full px-4 py-2.5 rounded-xl bg-primary text-gray-900 text-[11px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {transferSaving && <Loader2 size={14} className="animate-spin" />}
+              Transfer to Shop
             </button>
           </div>
         </div>
@@ -496,24 +653,24 @@ export const InventoryPage: React.FC = () => {
       <Modal
         isOpen={adjustRow !== null}
         onClose={closeAdjustModal}
-        title={adjustRow ? `Adjust Stock — ${adjustRow.name}` : 'Adjust Stock'}
+        title={adjustRow ? `Adjust Inventory — ${adjustRow.name}` : 'Adjust Inventory'}
       >
         {adjustRow && (
           <div className="flex flex-col gap-6">
             {/* Current stock summary */}
             <div className="flex items-center gap-4 p-4 bg-accent rounded-2xl border border-border/50">
               <div className="flex-1 text-center">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Current Cartons</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Current Packs</p>
                 <p className="text-lg font-bold text-dark mt-1">{computeStock(adjustRow).availCartons}</p>
               </div>
               <div className="w-px h-10 bg-border/50" />
               <div className="flex-1 text-center">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Loose Pieces</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Loose Units</p>
                 <p className="text-lg font-bold text-dark mt-1">{computeStock(adjustRow).availLoose}</p>
               </div>
               <div className="w-px h-10 bg-border/50" />
               <div className="flex-1 text-center">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Pieces</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Units</p>
                 <p className="text-lg font-bold text-primary mt-1">{computeStock(adjustRow).totalPieces}</p>
               </div>
             </div>
@@ -555,7 +712,7 @@ export const InventoryPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                  Carton Delta
+                  Pack Delta
                 </label>
                 <input
                   type="number"
@@ -568,7 +725,7 @@ export const InventoryPage: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                  Piece Delta
+                  Unit Delta
                 </label>
                 <input
                   type="number"
@@ -589,7 +746,7 @@ export const InventoryPage: React.FC = () => {
               <textarea
                 value={adjReason}
                 onChange={(e) => setAdjReason(e.target.value)}
-                placeholder="e.g. Damaged goods, stock recount, returned items..."
+                placeholder="e.g. Key import correction, activation reversal, manual recount..."
                 rows={3}
                 className="w-full px-4 py-3 bg-accent border border-border/50 rounded-2xl text-sm font-medium text-dark outline-none focus:border-primary/30 transition-all resize-none"
               />

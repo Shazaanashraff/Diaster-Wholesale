@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { getPurchases, createPurchase, deletePurchase } from '../services/purchaseService';
 import { getSuppliers } from '../services/supplierService';
-import { getProducts } from '../services/productService';
+import { getProducts, createProduct } from '../services/productService';
 import { getInventory, getMovementRates } from '../services/inventoryService';
 import type { Purchase, Product, ProductStock } from '../types';
 import type { SupplierWithBalance } from '../services/supplierService';
@@ -38,6 +38,26 @@ interface NewItemRow {
 
 const EMPTY_ITEM: NewItemRow = { product_id: '', quantity_units: 0, quantity_cartons: 0, unit_price_rmb: 0 };
 
+interface QuickProductForm {
+  name: string;
+  wholesale_price: string;
+  retail_price: string;
+  cost_price: string;
+  pieces_per_carton: string;
+  reorder_level: string;
+  description: string;
+}
+
+const EMPTY_QUICK_PRODUCT: QuickProductForm = {
+  name: '',
+  wholesale_price: '',
+  retail_price: '',
+  cost_price: '',
+  pieces_per_carton: '1',
+  reorder_level: '0',
+  description: '',
+};
+
 export const PurchasesPage: React.FC = () => {
   const navigate = useNavigate();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -53,12 +73,17 @@ export const PurchasesPage: React.FC = () => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [form, setForm] = useState({
     supplier_id: '',
-    exchange_rate: '365',
+    exchange_rate: '48',
     notes: '',
   });
   const [items, setItems] = useState<NewItemRow[]>([{ ...EMPTY_ITEM }]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [quickProductOpen, setQuickProductOpen] = useState(false);
+  const [quickProductTargetRow, setQuickProductTargetRow] = useState<number | null>(null);
+  const [quickProductForm, setQuickProductForm] = useState<QuickProductForm>({ ...EMPTY_QUICK_PRODUCT });
+  const [quickProductSaving, setQuickProductSaving] = useState(false);
+  const [quickProductError, setQuickProductError] = useState('');
 
   // Confirm delete
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
@@ -116,9 +141,12 @@ export const PurchasesPage: React.FC = () => {
 
   // ── New purchase form ────────────────────────────────────────────
   function openPanel() {
-    setForm({ supplier_id: '', exchange_rate: '365', notes: '' });
+    setForm({ supplier_id: '', exchange_rate: '48', notes: '' });
     setItems([{ ...EMPTY_ITEM }]);
     setFormError('');
+    setQuickProductOpen(false);
+    setQuickProductError('');
+    setQuickProductForm({ ...EMPTY_QUICK_PRODUCT });
     setPanelOpen(true);
   }
 
@@ -132,6 +160,58 @@ export const PurchasesPage: React.FC = () => {
 
   function removeItemRow(idx: number) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function openQuickProductForRow(idx: number) {
+    setQuickProductTargetRow(idx);
+    setQuickProductOpen(true);
+    setQuickProductError('');
+    setQuickProductForm({ ...EMPTY_QUICK_PRODUCT });
+  }
+
+  async function handleQuickCreateProduct() {
+    const name = quickProductForm.name.trim();
+    const wholesale_price = parseFloat(quickProductForm.wholesale_price) || 0;
+    const retail_price = parseFloat(quickProductForm.retail_price) || 0;
+    const cost_price = parseFloat(quickProductForm.cost_price) || 0;
+    const pieces_per_carton = Math.max(1, parseInt(quickProductForm.pieces_per_carton, 10) || 1);
+    const reorder_level = Math.max(0, parseInt(quickProductForm.reorder_level, 10) || 0);
+    const description = quickProductForm.description.trim();
+
+    if (!name) {
+      setQuickProductError('Item name is required');
+      return;
+    }
+
+    setQuickProductSaving(true);
+    setQuickProductError('');
+    try {
+      const created = await createProduct({
+        name,
+        model: '',
+        category: 'general',
+        wholesale_price,
+        retail_price,
+        cost_price,
+        pieces_per_carton,
+        reorder_level,
+        description,
+        margin_pct: 20,
+      });
+
+      setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      if (quickProductTargetRow !== null) {
+        setItem(quickProductTargetRow, { product_id: created.id });
+      }
+      setQuickProductOpen(false);
+      setQuickProductTargetRow(null);
+      setQuickProductForm({ ...EMPTY_QUICK_PRODUCT });
+      showToast(`${created.name} added`);
+    } catch (e: any) {
+      setQuickProductError(e.message ?? 'Failed to create product');
+    } finally {
+      setQuickProductSaving(false);
+    }
   }
 
   const exchRate = parseFloat(form.exchange_rate) || 0;
@@ -427,6 +507,94 @@ export const PurchasesPage: React.FC = () => {
                   </button>
                 </div>
 
+                {quickProductOpen && (
+                  <div className="mb-3 rounded-xl border border-[#2b313a] bg-[#171c23] p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Quick New Product</p>
+                      <button
+                        type="button"
+                        onClick={() => setQuickProductOpen(false)}
+                        className="text-gray-500 hover:text-white transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+
+                    {quickProductError && (
+                      <div className="text-[10px] font-semibold text-red-400">{quickProductError}</div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={quickProductForm.name}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="Item name"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        value={quickProductForm.pieces_per_carton}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, pieces_per_carton: e.target.value }))}
+                        placeholder="Qty per carton"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickProductForm.cost_price}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, cost_price: e.target.value }))}
+                        placeholder="Cost price"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickProductForm.wholesale_price}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, wholesale_price: e.target.value }))}
+                        placeholder="Wholesale price"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={quickProductForm.retail_price}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, retail_price: e.target.value }))}
+                        placeholder="Selling price"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        value={quickProductForm.reorder_level}
+                        onChange={(e) => setQuickProductForm((p) => ({ ...p, reorder_level: e.target.value }))}
+                        placeholder="Reorder level"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                      />
+                    </div>
+
+                    <input
+                      value={quickProductForm.description}
+                      onChange={(e) => setQuickProductForm((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="Optional description"
+                      className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={handleQuickCreateProduct}
+                      disabled={quickProductSaving}
+                      className="px-3 py-2 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center gap-1"
+                    >
+                      {quickProductSaving && <Loader2 size={10} className="animate-spin" />}
+                      Create Item
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   {/* Column headers */}
                   <div className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 px-1">
@@ -449,19 +617,18 @@ export const PurchasesPage: React.FC = () => {
                               <option value="">Select product…</option>
                               {products.map((p) => (
                                 <option key={p.id} value={p.id}>
-                                  {p.model} — {p.name}
+                                  {p.item_code} — {p.name}
                                 </option>
                               ))}
                             </select>
-                            <a
-                              href="#/products"
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openQuickProductForRow(idx)}
                               className="text-gray-500 hover:text-primary transition-colors p-1"
-                              title="Create new product (opens in new tab)"
+                              title="Quick create product"
                             >
                               <Plus size={14} />
-                            </a>
+                            </button>
                             <button
                               onClick={(e) => { e.preventDefault(); getProducts().then(setProducts); }}
                               className="text-gray-500 hover:text-primary transition-colors p-1"

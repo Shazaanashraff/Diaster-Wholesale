@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
 import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct } from '../services/productService';
+import { insertStockAdjustment } from '../services/inventoryService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -25,24 +26,14 @@ export const ProductsPage: React.FC = () => {
 
   // ── Form refs ──
   const nameRef = useRef<HTMLInputElement>(null);
-  const itemCodeRef = useRef<HTMLInputElement>(null);
-  const modelRef = useRef<HTMLInputElement>(null);
   const wholesaleRef = useRef<HTMLInputElement>(null);
   const retailRef = useRef<HTMLInputElement>(null);
+  const costPriceRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const piecesPerCartonRef = useRef<HTMLInputElement>(null);
+  const reorderLevelRef = useRef<HTMLInputElement>(null);
   const marginPctRef = useRef<HTMLInputElement>(null);
-
-  // Auto-generate a unique 6-digit SKU
-  async function generateSKU(): Promise<string> {
-    const existing = new Set(products.map((p) => p.item_code));
-    let sku = '';
-    for (let attempts = 0; attempts < 20; attempts++) {
-      sku = String(Math.floor(100000 + Math.random() * 900000));
-      if (!existing.has(sku)) break;
-    }
-    return sku;
-  }
+  const openingQuantityRef = useRef<HTMLInputElement>(null);
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,7 +46,7 @@ export const ProductsPage: React.FC = () => {
   const visibleProducts = products
     .filter(p => {
       const q = searchQuery.toLowerCase();
-      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q) || (p.model || '').toLowerCase().includes(q);
+      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q);
       const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
       return matchesSearch && matchesCategory;
     })
@@ -101,14 +92,18 @@ export const ProductsPage: React.FC = () => {
 
   const handleSubmit = async () => {
     const name = nameRef.current?.value.trim() || '';
-    const model = modelRef.current?.value.trim() || '';
     const wholesale_price = parseFloat(wholesaleRef.current?.value || '0');
     const retail_price = parseFloat(retailRef.current?.value || '0');
+    const cost_price = parseFloat(costPriceRef.current?.value || '0') || 0;
     const description = descriptionRef.current?.value.trim() || '';
     const pieces_per_carton = parseInt(piecesPerCartonRef.current?.value || '1') || 1;
+    const reorder_level = Math.max(0, parseInt(reorderLevelRef.current?.value || '0', 10) || 0);
     const margin_pct = parseFloat(marginPctRef.current?.value || '20') || 20;
+    const openingQuantity = Math.max(0, parseInt(openingQuantityRef.current?.value || '0', 10) || 0);
 
     if (!name) return;
+
+    let createdProduct: Product | null = null;
 
     try {
       setSaving(true);
@@ -116,33 +111,65 @@ export const ProductsPage: React.FC = () => {
       if (editingProduct) {
         // ── UPDATE ──
         const updated = await updateProduct(editingProduct.id, {
-          name, model, wholesale_price, retail_price,
-          description, pieces_per_carton, margin_pct,
+          name,
+          model: '',
+          wholesale_price,
+          retail_price,
+          cost_price,
+          description,
+          pieces_per_carton,
+          reorder_level,
+          margin_pct,
         });
         setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
         // ── Duplicate check ──
-        const duplicates = await checkDuplicate(model, name);
+        const duplicates = await checkDuplicate(name);
         if (duplicates.length > 0) {
           setDuplicateWarning(
-            `"${name}" (${model}) already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
+            `"${name}" already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
           );
           if (!duplicateWarning) { setSaving(false); return; }
         }
 
-        // ── Auto-generate 6-digit SKU ──
-        const item_code = itemCodeRef.current?.value.trim() || (await generateSKU());
-
-        const created = await createProduct({
-          name, item_code, model, wholesale_price, retail_price,
-          description, category: 'general', pieces_per_carton, margin_pct,
+        createdProduct = await createProduct({
+          name,
+          model: '',
+          wholesale_price,
+          retail_price,
+          cost_price,
+          description,
+          category: 'general',
+          pieces_per_carton,
+          reorder_level,
+          margin_pct,
         });
-        setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+
+        if (openingQuantity > 0) {
+          await insertStockAdjustment({
+            product_id: createdProduct.id,
+            adjustment_pieces: openingQuantity,
+            reason: '[OPENING] Initial quantity at product creation',
+            adjusted_by: 'admin',
+          });
+        }
+
+        setProducts((prev) => [...prev, createdProduct].sort((a, b) => a.name.localeCompare(b.name)));
       }
 
       closeModal();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Operation failed';
+      if (createdProduct) {
+        setProducts((prev) =>
+          prev.some((p) => p.id === createdProduct.id)
+            ? prev
+            : [...prev, createdProduct].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        closeModal();
+        setError(`Product saved, but opening quantity was not saved: ${message}`);
+        return;
+      }
       setError(message);
     } finally {
       setSaving(false);
@@ -359,11 +386,13 @@ export const ProductsPage: React.FC = () => {
                           </div>
                           <div className="w-px h-6 bg-[#2b313a]"></div>
                           <div className="flex flex-col">
-                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Model</span>
-                            <p className="text-xs font-bold text-gray-300">{product.model}</p>
+                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Qty / Carton</span>
+                            <p className="text-xs font-bold text-gray-300">{product.pieces_per_carton || 1}</p>
                           </div>
                           <div className="w-px h-6 bg-[#2b313a]"></div>
-                          <p className="text-xs font-semibold text-gray-500 max-w-sm line-clamp-1 italic">{product.description}</p>
+                          <p className="text-xs font-semibold text-gray-500 max-w-sm line-clamp-1 italic">
+                            {product.description || 'No description'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -373,7 +402,7 @@ export const ProductsPage: React.FC = () => {
                         <div className="text-right">
                           <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost / MSP</p>
                           <p className="text-sm font-bold text-amber-400 font-mono">LKR {product.cost_price!.toFixed(2)}</p>
-                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {product.msp!.toFixed(2)}</p>
+                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {Number(product.msp ?? 0).toFixed(2)}</p>
                         </div>
                       )}
                       <div className="text-right">
@@ -443,36 +472,18 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Hash size={12} className="text-primary" /> SKU / Item Code
+                <Hash size={12} className="text-primary" /> Item Code
               </label>
-              <input
-                ref={itemCodeRef}
-                type="text"
-                defaultValue={editingProduct?.item_code || ''}
-                placeholder={editingProduct ? editingProduct.item_code : 'Auto-generated'}
-                disabled={!!editingProduct}
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+              <div className="w-full bg-accent border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-semibold font-mono text-gray-500">
+                {editingProduct?.item_code || 'Auto-generated on save'}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-              <Package size={12} className="text-primary" /> Model / Version
-            </label>
-            <input
-              ref={modelRef}
-              type="text"
-              defaultValue={editingProduct?.model || ''}
-              placeholder="e.g. A616"
-              className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Wholesale Price (LKR)
+                <Tag size={12} className="text-primary" /> Dealer Price (LKR)
               </label>
               <input
                 ref={wholesaleRef}
@@ -484,7 +495,7 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Retail Price (LKR)
+                <Tag size={12} className="text-primary" /> Selling Price (LKR)
               </label>
               <input
                 ref={retailRef}
@@ -494,12 +505,24 @@ export const ProductsPage: React.FC = () => {
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Package size={12} className="text-primary" /> Units per Carton
+                <Tag size={12} className="text-primary" /> Cost Price (LKR)
+              </label>
+              <input
+                ref={costPriceRef}
+                type="number"
+                defaultValue={editingProduct?.cost_price || ''}
+                placeholder="0.00"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Package size={12} className="text-primary" /> Qty per Carton
               </label>
               <input
                 ref={piecesPerCartonRef}
@@ -507,6 +530,19 @@ export const ProductsPage: React.FC = () => {
                 min="1"
                 defaultValue={editingProduct?.pieces_per_carton || 1}
                 placeholder="1"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Package size={12} className="text-primary" /> Reorder Level (Units)
+              </label>
+              <input
+                ref={reorderLevelRef}
+                type="number"
+                min="0"
+                defaultValue={editingProduct?.reorder_level ?? 0}
+                placeholder="0"
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
               />
             </div>
@@ -526,6 +562,25 @@ export const ProductsPage: React.FC = () => {
             </div>
           </div>
 
+          {!editingProduct && (
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Hash size={12} className="text-primary" /> Opening Stock (Units)
+              </label>
+              <input
+                ref={openingQuantityRef}
+                type="number"
+                min="0"
+                defaultValue={0}
+                placeholder="0"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+              />
+              <p className="text-[10px] text-gray-500 font-medium pl-1">
+                Adds opening stock immediately when this product is created.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
               <AlignLeft size={12} className="text-primary" /> Description
@@ -533,7 +588,7 @@ export const ProductsPage: React.FC = () => {
             <textarea 
               ref={descriptionRef}
               defaultValue={editingProduct?.description || ''}
-              placeholder="Brief overview of the digital product..." 
+              placeholder="Optional notes..." 
               rows={3}
               className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all resize-none"
             />
