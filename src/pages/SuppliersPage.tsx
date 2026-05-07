@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Plus, Search, X, Building2, Phone, Mail, Globe, Wallet,
-  ChevronRight, Loader2, CreditCard, Banknote, CheckCircle2, AlertCircle,
+  Plus, Search, X, Building2, Phone, Mail, Globe,
+  ChevronRight, Loader2, CheckCircle2, AlertCircle,
   Trash2, Edit2,
 } from 'lucide-react';
 import {
   getSuppliers, createSupplier, updateSupplier, archiveSupplier,
-  getSupplierLedger, recordSupplierPayment,
+  getSupplierLedger, recordSupplierPaymentFull,
+  updateSupplierPaymentNotes, deleteSupplierPayment,
   type SupplierWithBalance, type SupplierLedger,
 } from '../services/supplierService';
-import type { Supplier } from '../types';
+import type { Supplier, SupplierPayment } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { PaymentMethodSelector, type PaymentLineData } from '../components/PaymentMethodSelector';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -48,20 +50,26 @@ export const SuppliersPage: React.FC = () => {
 
   // Payment modal
   const [payModalOpen, setPayModalOpen] = useState(false);
-  const [payForm, setPayForm] = useState({ 
-    amount: '', 
-    method: 'cash' as 'cash' | 'bank_transfer' | 'credit', 
+  const [payForm, setPayForm] = useState({
+    amount: '',
     notes: '',
-    allocations: {} as Record<string, string> // purchase_id -> amount
+    allocations: {} as Record<string, string>,
   });
+  const [payLines, setPayLines] = useState<PaymentLineData[]>([{ method: 'cash', amount: 0 }]);
   const [paying, setPaying] = useState(false);
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
-  // Confirm delete
+  // Confirm delete supplier
   const [deleteTarget, setDeleteTarget] = useState<SupplierWithBalance | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Payment edit / delete
+  const [editPayment, setEditPayment] = useState<SupplierPayment | null>(null);
+  const [editPaymentNotes, setEditPaymentNotes] = useState('');
+  const [deletePaymentTarget, setDeletePaymentTarget] = useState<SupplierPayment | null>(null);
+  const [paymentActionLoading, setPaymentActionLoading] = useState(false);
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 2800);
@@ -162,12 +170,8 @@ export const SuppliersPage: React.FC = () => {
   // ── Payment ──────────────────────────────────────────────────────
   function openPayment(s: SupplierWithBalance) {
     setDrawerSupplier(s);
-    setPayForm({ 
-      amount: '', 
-      method: 'cash', 
-      notes: '',
-      allocations: {}
-    });
+    setPayForm({ amount: '', notes: '', allocations: {} });
+    setPayLines([{ method: 'cash', amount: 0 }]);
     setPayModalOpen(true);
   }
 
@@ -175,29 +179,61 @@ export const SuppliersPage: React.FC = () => {
     if (!drawerSupplier) return;
     const amount = parseFloat(payForm.amount);
     if (!amount || amount <= 0) { showToast('Enter a valid amount', false); return; }
-    
+    const linesSum = payLines.reduce((s, l) => s + l.amount, 0);
+    if (Math.abs(linesSum - amount) > 0.01) { showToast('Payment lines must sum to total amount', false); return; }
+
     const allocations = Object.entries(payForm.allocations)
       .filter(([_, amt]) => parseFloat(amt) > 0)
       .map(([id, amt]) => ({ purchase_id: id, amount: parseFloat(amt) }));
 
     setPaying(true);
     try {
-      await recordSupplierPayment({
-        supplier_id: drawerSupplier.id,
-        amount,
-        method: payForm.method,
-        notes: payForm.notes,
-        allocations: allocations.length > 0 ? allocations : undefined,
-      });
+      if (allocations.length > 0) {
+        for (const alloc of allocations) {
+          await recordSupplierPaymentFull({
+            supplier_id: drawerSupplier.id, purchase_id: alloc.purchase_id,
+            total_amount: alloc.amount,
+            payment_lines: [{ ...payLines[0], amount: alloc.amount }],
+            notes: payForm.notes,
+          });
+        }
+      } else {
+        await recordSupplierPaymentFull({
+          supplier_id: drawerSupplier.id, purchase_id: null,
+          total_amount: amount, payment_lines: payLines, notes: payForm.notes,
+        });
+      }
       setPayModalOpen(false);
       showToast('Payment recorded');
       load();
       if (drawerSupplier) openLedger(drawerSupplier);
-    } catch (e: any) {
-      showToast(e.message, false);
-    } finally {
-      setPaying(false);
-    }
+    } catch (e: any) { showToast(e.message, false); }
+    finally { setPaying(false); }
+  }
+
+  async function handleSavePaymentNotes() {
+    if (!editPayment) return;
+    setPaymentActionLoading(true);
+    try {
+      await updateSupplierPaymentNotes(editPayment.id, editPaymentNotes);
+      showToast('Payment notes updated');
+      setEditPayment(null);
+      if (drawerSupplier) openLedger(drawerSupplier);
+    } catch (e: any) { showToast(e.message, false); }
+    finally { setPaymentActionLoading(false); }
+  }
+
+  async function handleDeletePayment() {
+    if (!deletePaymentTarget) return;
+    setPaymentActionLoading(true);
+    try {
+      await deleteSupplierPayment(deletePaymentTarget.id);
+      showToast('Payment deleted');
+      setDeletePaymentTarget(null);
+      load();
+      if (drawerSupplier) openLedger(drawerSupplier);
+    } catch (e: any) { showToast(e.message, false); }
+    finally { setPaymentActionLoading(false); }
   }
 
   // ── Render ───────────────────────────────────────────────────────
@@ -439,20 +475,29 @@ export const SuppliersPage: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-[#1d222a]">
-                      {['Date', 'Amount', 'Method', 'Notes'].map((h) => (
-                        <th key={h} className="px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
+                      {['Date', 'Amount', 'Method', 'Notes', ''].map((h) => (
+                        <th key={h} className="px-4 py-2.5 text-[9px] font-bold uppercase tracking-widest text-gray-600 last:text-right">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2b313a]">
                     {ledger.payments.length === 0 ? (
-                      <tr><td colSpan={4} className="px-4 py-8 text-center text-xs text-gray-600">No payments yet.</td></tr>
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-xs text-gray-600">No payments yet.</td></tr>
                     ) : ledger.payments.map((p) => (
                       <tr key={p.id} className="hover:bg-[#1d222a] transition-colors">
                         <td className="px-4 py-3 text-xs text-gray-400">{new Date(p.paid_at).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-xs font-mono font-bold text-green-400">{fmt(p.amount)}</td>
-                        <td className="px-4 py-3 text-xs text-gray-400 capitalize">{p.method.replace('_', ' ')}</td>
+                        <td className="px-4 py-3 text-xs text-gray-400 capitalize">
+                          {p.method.replace('_', ' ')}
+                          {p.method === 'cheque' && p.cheque_number && <span className="text-gray-600 ml-1">#{p.cheque_number}</span>}
+                        </td>
                         <td className="px-4 py-3 text-xs text-gray-500">{p.notes || '—'}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => { setEditPayment(p as any); setEditPaymentNotes(p.notes || ''); }} className="p-1 rounded text-gray-600 hover:text-white hover:bg-[#2b313a] transition-colors" title="Edit notes"><Edit2 size={11} /></button>
+                            <button onClick={() => setDeletePaymentTarget(p as any)} className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Delete payment"><Trash2 size={11} /></button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -551,9 +596,7 @@ export const SuppliersPage: React.FC = () => {
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Amount (LKR)</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="number" min="0" step="0.01"
                     value={payForm.amount}
                     onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))}
                     placeholder="0.00"
@@ -563,29 +606,10 @@ export const SuppliersPage: React.FC = () => {
                     <p className="text-[10px] text-gray-600 mt-1">Outstanding: {fmt(drawerSupplier.outstanding)}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Method</label>
-                  <div className="flex gap-2">
-                    {[
-                      { val: 'cash', icon: Banknote, label: 'Cash' },
-                      { val: 'bank_transfer', icon: CreditCard, label: 'Bank' },
-                      { val: 'credit', icon: Wallet, label: 'Credit' },
-                    ].map((m) => (
-                      <button
-                        key={m.val}
-                        onClick={() => setPayForm((p) => ({ ...p, method: m.val as any }))}
-                        className={cn(
-                          'flex-1 flex flex-col items-center gap-1 py-2 rounded-xl border text-[10px] font-bold transition-all',
-                          payForm.method === m.val
-                            ? 'bg-primary/15 border-primary/40 text-primary'
-                            : 'bg-[#1d222a] border-[#2b313a] text-gray-500 hover:border-[#3d4652]'
-                        )}
-                      >
-                        <m.icon size={14} />{m.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <PaymentMethodSelector
+                  total={parseFloat(payForm.amount) || 0}
+                  onChange={setPayLines}
+                />
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Allocate to Purchases (Optional)</label>
                   <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
@@ -597,32 +621,21 @@ export const SuppliersPage: React.FC = () => {
                             <p className="text-[10px] font-mono font-bold text-white truncate">{p.reference}</p>
                             <p className="text-[9px] text-gray-500">Total: {fmt(p.total_lkr)}</p>
                           </div>
-                          <input
-                            type="number"
-                            placeholder="0.00"
-                            value={allocated}
-                            onChange={(e) => setPayForm(prev => ({
-                              ...prev,
-                              allocations: { ...prev.allocations, [p.id]: e.target.value }
-                            }))}
+                          <input type="number" placeholder="0.00" value={allocated}
+                            onChange={(e) => setPayForm(prev => ({ ...prev, allocations: { ...prev.allocations, [p.id]: e.target.value } }))}
                             className="w-24 bg-[#171c23] border border-[#2b313a] text-xs text-primary font-mono rounded-lg px-2 py-1 outline-none focus:border-primary/40"
                           />
                         </div>
                       );
                     })}
                     {ledger?.purchases.filter(p => p.status !== 'draft').length === 0 && (
-                      <p className="text-[10px] text-gray-600 italic">No confirmed/received purchases to allocate.</p>
+                      <p className="text-[10px] text-gray-600 italic">No confirmed purchases to allocate.</p>
                     )}
                   </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Notes</label>
-                  <input
-                    value={payForm.notes}
-                    onChange={(e) => setPayForm((p) => ({ ...p, notes: e.target.value }))}
-                    placeholder="Optional reference…"
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40"
-                  />
+                  <input value={payForm.notes} onChange={(e) => setPayForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional reference…" className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40" />
                 </div>
               </div>
               <div className="flex gap-3 p-5 border-t border-[#2b313a]">
@@ -643,7 +656,7 @@ export const SuppliersPage: React.FC = () => {
         </>
       )}
 
-      {/* ── Confirm Delete ────────────────────────────────────────── */}
+      {/* ── Confirm Delete Supplier ───────────────────────────────── */}
       <ConfirmModal
         isOpen={!!deleteTarget}
         onClose={() => { setDeleteTarget(null); setDeleteError(null); }}
@@ -654,6 +667,60 @@ export const SuppliersPage: React.FC = () => {
         variant="warning"
         isLoading={saving}
         error={deleteError}
+      />
+
+      {/* ── Edit Payment Notes Modal ──────────────────────────────── */}
+      {editPayment && (
+        <>
+          <div className="fixed inset-0 z-[160] bg-black/60 backdrop-blur-sm" onClick={() => setEditPayment(null)} />
+          <div className="fixed inset-0 z-[170] flex items-center justify-center p-4">
+            <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-sm shadow-2xl" style={{ animation: 'posFadeIn 180ms ease' }}>
+              <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
+                <h3 className="font-bold text-white">Edit Payment Notes</h3>
+                <button onClick={() => setEditPayment(null)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors"><X size={14} /></button>
+              </div>
+              <div className="p-5 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-[#1d222a] rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-1">Amount</p>
+                    <p className="font-mono font-bold text-green-400">{fmt(editPayment.amount)}</p>
+                  </div>
+                  <div className="bg-[#1d222a] rounded-xl p-3">
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold mb-1">Method</p>
+                    <p className="capitalize text-white">{editPayment.method.replace('_', ' ')}</p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Notes</label>
+                  <input
+                    value={editPaymentNotes}
+                    onChange={e => setEditPaymentNotes(e.target.value)}
+                    placeholder="Payment reference or notes…"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 p-5 border-t border-[#2b313a]">
+                <button onClick={() => setEditPayment(null)} className="flex-1 py-2.5 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl text-xs font-bold hover:text-white transition-colors">Cancel</button>
+                <button onClick={handleSavePaymentNotes} disabled={paymentActionLoading} className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+                  {paymentActionLoading && <Loader2 size={12} className="animate-spin" />} Save Notes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Confirm Delete Payment ─────────────────────────────────── */}
+      <ConfirmModal
+        isOpen={!!deletePaymentTarget}
+        onClose={() => setDeletePaymentTarget(null)}
+        onConfirm={handleDeletePayment}
+        title="Delete Payment"
+        message={`Delete payment of ${deletePaymentTarget ? fmt(deletePaymentTarget.amount) : ''} (${deletePaymentTarget?.method})? ${deletePaymentTarget?.method === 'credit' ? 'The credit payable balance will be adjusted automatically.' : 'This action cannot be undone.'}`}
+        confirmText="Delete Payment"
+        variant="danger"
+        isLoading={paymentActionLoading}
       />
     </div>
   );

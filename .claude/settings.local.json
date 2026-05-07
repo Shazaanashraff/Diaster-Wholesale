@@ -9,7 +9,14 @@
       "Read(//c/Users/Dell/Desktop/Diaster/ Wholesale/src/services/**)",
       "Bash(npm run *)",
       "Bash(git commit -m ' *)",
-      "Bash(git tag *)"
+      "Bash(git tag *)",
+      "Bash(Select-String -Pattern '\"version\"')",
+      "PowerShell(git -C \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Diaster Wholesale\" diff --stat HEAD)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Diaster Wholesale\" status --short)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Diaster Wholesale\" add package.json src/components/Sidebar.tsx src/pages/InventoryPage.tsx src/pages/POSPage.tsx src/pages/ProductsPage.tsx src/pages/PurchasesPage.tsx src/pages/ReturnsPage.tsx src/services/inventoryService.ts src/services/posService.ts src/services/productService.ts src/services/returnsService.ts src/types/index.ts supabase/schema.sql supabase_migration.sql \"supabase/migrations/20260503103000_product_reorder_and_item_code.sql\")",
+      "PowerShell(git -C \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Diaster Wholesale\" tag v0.1.17)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Dell\\\\Desktop\\\\Diaster Wholesale\" push origin main --tags)",
+      "Bash(node -p \"require\\('./package.json'\\).version\")"
     ]
   }
 }

@@ -36,8 +36,6 @@ export interface CartItem {
   unitPrice?: number;
 }
 
-type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
-
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
   'bg-[#e2e8f0]',
@@ -67,11 +65,14 @@ export const POSPage: React.FC = () => {
   const [pieceQuantities, setPieceQuantities] = useState<Record<string, number>>({});
 
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  // Transaction state
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'cheque' | 'credit' | 'online'>('cash');
+  const [chequeDetails, setChequeDetails] = useState({ cheque_number: '', bank_name: '', due_date: '' });
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PayMethod>('cash');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
-  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
 
   // Discount & approval
   const [discountAmt, setDiscountAmt] = useState(0);
@@ -322,7 +323,8 @@ export const POSPage: React.FC = () => {
     && !!selectedCustomerId
     && btnPhase === 'idle'
     && !isBelowCost
-    && !needsApproval;
+    && !needsApproval
+    && (paymentMethod !== 'cheque' || (!!chequeDetails.cheque_number && !!chequeDetails.bank_name && !!chequeDetails.due_date));
 
   function handleDiscountChange(val: string) {
     const num = parseFloat(val) || 0;
@@ -364,11 +366,12 @@ export const POSPage: React.FC = () => {
         subtotal,
         discount,
         total,
-        paymentMethod === 'credit'
-          ? 'credit'
-          : paymentMethod === 'cash'
-            ? 'cash'
-            : 'bank_transfer'
+        {
+          method: paymentMethod,
+          cheque_number: paymentMethod === 'cheque' ? chequeDetails.cheque_number : undefined,
+          bank_name: paymentMethod === 'cheque' ? chequeDetails.bank_name : undefined,
+          due_date: paymentMethod === 'cheque' ? chequeDetails.due_date : undefined,
+        }
       );
 
       if (isInventoryEnforced) {
@@ -406,6 +409,7 @@ export const POSPage: React.FC = () => {
     setDiscountAmt(0);
     setPricingApproved(false);
     setValidationMessage(null);
+    setChequeDetails({ cheque_number: '', bank_name: '', due_date: '' });
   };
 
   if (loading) {
@@ -802,28 +806,31 @@ export const POSPage: React.FC = () => {
 
           {validationMessage && <div className="pos-error">{validationMessage}</div>}
 
-          <div className="pos-pay-grid">
+          <div className="pos-pay-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
             <button type="button" className={cn(paymentMethod === 'cash' && 'active')} onClick={() => setPaymentMethod('cash')}>
-              <Wallet size={16} />
-              Cash
+              <Wallet size={16} /> Cash
             </button>
-            <button
-              type="button"
-              className={cn(paymentMethod === 'creditCard' && 'active')}
-              onClick={() => setPaymentMethod('creditCard')}
-            >
-              <CreditCard size={16} />
-              Card
+            <button type="button" className={cn(paymentMethod === 'card' && 'active')} onClick={() => setPaymentMethod('card')}>
+              <CreditCard size={16} /> Card
             </button>
-            <button type="button" className={cn(paymentMethod === 'ewallet' && 'active')} onClick={() => setPaymentMethod('ewallet')}>
-              <QrCode size={16} />
-              E-wallet
+            <button type="button" className={cn(paymentMethod === 'cheque' && 'active')} onClick={() => setPaymentMethod('cheque')}>
+              <CreditCard size={16} /> Cheque
+            </button>
+            <button type="button" className={cn(paymentMethod === 'online' && 'active')} onClick={() => setPaymentMethod('online')}>
+              <QrCode size={16} /> Online
             </button>
             <button type="button" className={cn(paymentMethod === 'credit' && 'active')} onClick={() => setPaymentMethod('credit')}>
-              <CreditCard size={16} />
-              Credit
+              <CreditCard size={16} /> Credit
             </button>
           </div>
+
+          {paymentMethod === 'cheque' && (
+            <div className="flex flex-col gap-2 mb-4">
+              <input type="text" placeholder="Cheque Number" value={chequeDetails.cheque_number} onChange={e => setChequeDetails(p => ({...p, cheque_number: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40" />
+              <input type="text" placeholder="Bank Name" value={chequeDetails.bank_name} onChange={e => setChequeDetails(p => ({...p, bank_name: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40" />
+              <input type="date" value={chequeDetails.due_date} onChange={e => setChequeDetails(p => ({...p, due_date: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40 text-gray-400" />
+            </div>
+          )}
 
           <button
             type="button"

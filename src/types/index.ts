@@ -139,24 +139,39 @@ export interface Supplier {
   email: string;
   country: string;
   notes: string;
+  credit_limit?: number;
+  credit_days?: number;
+  current_payable?: number;
   created_at: string;
 }
 
-export type PurchaseStatus = 'draft' | 'confirmed' | 'in_transit' | 'received' | 'closed';
+export type PurchaseStatus = 'draft' | 'ordered' | 'received' | 'completed' | 'cancelled';
+
+export interface Location {
+  id: string;
+  name: string;
+  type: 'warehouse' | 'shop';
+  is_active: boolean;
+  created_at: string;
+}
 
 export interface Purchase {
   id: string;
   reference: string;
   supplier_id: string;
+  location_id?: string;
+  rep_name?: string;
   status: PurchaseStatus;
   exchange_rate: number;
   total_rmb: number;
+  discount_amount?: number;
   total_lkr: number;
   cost_finalized: boolean;
   notes: string;
   created_at: string;
   updated_at: string;
   suppliers?: Supplier;
+  locations?: Location;
 }
 
 export interface PurchaseItem {
@@ -166,6 +181,7 @@ export interface PurchaseItem {
   quantity_units: number;
   quantity_cartons: number;
   unit_price_rmb: number;
+  discount_percent?: number;
   created_at: string;
   products?: Product;
 }
@@ -198,11 +214,102 @@ export interface SupplierPayment {
   supplier_id: string;
   purchase_id: string | null;
   amount: number;
-  method: 'cash' | 'bank_transfer' | 'credit';
+  method: 'cash' | 'card' | 'cheque' | 'credit' | 'online' | 'bank_transfer' | 'mixed';
+  cheque_number?: string;
+  bank_name?: string;
+  due_date?: string;
   notes: string;
   paid_at: string;
   created_at: string;
   purchases?: Pick<Purchase, 'reference'>;
+}
+
+export interface SupplierPaymentLine {
+  id: string;
+  payment_id: string;
+  amount: number;
+  method: 'cash' | 'card' | 'cheque' | 'credit' | 'online' | 'bank_transfer';
+  cheque_number?: string;
+  bank_name?: string;
+  due_date?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export type SupplierReturnStatus = 'pending' | 'completed' | 'cancelled';
+export type SupplierReturnType = 'return' | 'exchange';
+export type SettlementType = 'payable' | 'refund' | 'credit_note' | 'even';
+
+export interface SupplierReturn {
+  id: string;
+  reference: string;
+  supplier_id: string;
+  purchase_id: string | null;
+  return_type: SupplierReturnType;
+  status: SupplierReturnStatus;
+  return_value_lkr: number;
+  replacement_value_lkr: number;
+  difference_lkr: number;
+  settlement_type: SettlementType | null;
+  settlement_notes?: string;
+  notes?: string;
+  created_at: string;
+  completed_at?: string;
+  suppliers?: Pick<Supplier, 'name'>;
+  purchases?: Pick<Purchase, 'reference'>;
+}
+
+export interface SupplierReturnItem {
+  id: string;
+  return_id: string;
+  product_id: string;
+  item_type: 'return' | 'replacement';
+  quantity: number;
+  unit_value_lkr: number;
+  created_at: string;
+  products?: Product;
+}
+
+export interface Expense {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  method: string;
+  location_id?: string;
+  notes: string;
+  created_by?: string;
+  reference?: string;
+  created_at: string;
+  locations?: Pick<Location, 'name'>;
+}
+
+export type OtherIncomeSource = 'supplier_refund' | 'credit_note' | 'discount_received' | 'other';
+
+export interface OtherIncome {
+  id: string;
+  source_type: OtherIncomeSource;
+  amount: number;
+  method: string;
+  supplier_id?: string;
+  notes: string;
+  created_by?: string;
+  created_at: string;
+  suppliers?: Pick<Supplier, 'name'>;
+}
+
+export interface PurchaseDiscountApproval {
+  id: string;
+  purchase_id: string;
+  discount_type: 'item' | 'bill';
+  discount_percent?: number;
+  discount_amount?: number;
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: string;
+  approved_by?: string;
+  notes?: string;
+  created_at: string;
+  resolved_at?: string;
 }
 
 export interface AuditLog {
@@ -215,6 +322,32 @@ export interface AuditLog {
   user_label: string;
   notes: string;
   created_at: string;
+}
+
+export type StockTransferStatus = 'pending' | 'completed' | 'cancelled';
+
+export interface StockTransfer {
+  id: string;
+  reference: string;
+  from_location_id: string;
+  to_location_id: string;
+  status: StockTransferStatus;
+  notes: string;
+  requested_by: string;
+  approved_by?: string;
+  created_at: string;
+  completed_at?: string;
+  from_location?: Pick<Location, 'name' | 'type'>;
+  to_location?: Pick<Location, 'name' | 'type'>;
+}
+
+export interface StockTransferItem {
+  id: string;
+  transfer_id: string;
+  product_id: string;
+  quantity: number;
+  created_at: string;
+  products?: Product;
 }
 
 export interface Carton {

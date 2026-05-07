@@ -16,7 +16,12 @@ export const checkout = async (
   subtotal: number,
   discount: number,
   total: number,
-  paymentMethod: string
+  paymentDetails: {
+    method: 'cash' | 'card' | 'cheque' | 'credit' | 'online' | 'bank_transfer';
+    cheque_number?: string;
+    bank_name?: string;
+    due_date?: string;
+  }
 ) => {
   try {
     const productIds = [...new Set(cart.map((item) => item.product.id))];
@@ -77,7 +82,7 @@ export const checkout = async (
         subtotal,
         discount,
         total,
-        payment_status: paymentMethod === 'credit' ? 'unpaid' : 'paid',
+        payment_status: paymentDetails.method === 'credit' ? 'unpaid' : 'paid',
       })
       .select('id')
       .single();
@@ -117,15 +122,18 @@ export const checkout = async (
     }
 
     // 4. Insert Payment (if not credit)
-    if (paymentMethod !== 'credit') {
+    if (paymentDetails.method !== 'credit') {
       const { error: paymentError } = await supabase
         .from('payments')
         .insert({
           invoice_id: invoiceId,
           customer_id: customerId,
           amount: total,
-          method: paymentMethod as 'cash' | 'bank_transfer' | 'cheque',
+          method: paymentDetails.method,
           reference: invoiceNo,
+          cheque_number: paymentDetails.cheque_number || null,
+          bank_name: paymentDetails.bank_name || null,
+          due_date: paymentDetails.due_date || null,
           paid_at: new Date().toISOString(),
         });
 

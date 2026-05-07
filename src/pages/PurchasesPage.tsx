@@ -4,11 +4,12 @@ import {
   Plus, Search, X, Loader2, AlertCircle, CheckCircle2,
   Package, ChevronRight, Trash2, RefreshCw,
 } from 'lucide-react';
-import { getPurchases, createPurchase, deletePurchase } from '../services/purchaseService';
-import { getSuppliers } from '../services/supplierService';
+import { getPurchases, createPurchase, deletePurchase, requestDiscountApproval } from '../services/purchaseService';
+import { getSuppliers, getLocations } from '../services/supplierService';
 import { getProducts, createProduct } from '../services/productService';
 import { getInventory, getMovementRates } from '../services/inventoryService';
-import type { Purchase, Product, ProductStock } from '../types';
+import { usePermissions } from '../utils/permissions';
+import type { Purchase, Product, ProductStock, Location } from '../types';
 import type { SupplierWithBalance } from '../services/supplierService';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { cn } from '../lib/utils';
@@ -20,13 +21,13 @@ const fmtRmb = (n: number) =>
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20' },
-  confirmed:  { label: 'Confirmed',  cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' },
-  in_transit: { label: 'In Transit', cls: 'text-amber-400 bg-amber-500/10 border border-amber-500/20' },
+  ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' },
   received:   { label: 'Received',   cls: 'text-green-400 bg-green-500/10 border border-green-500/20' },
-  closed:     { label: 'Closed',     cls: 'text-slate-400 bg-slate-500/10 border border-slate-500/20' },
+  completed:  { label: 'Completed',  cls: 'text-purple-400 bg-purple-500/10 border border-purple-500/20' },
+  cancelled:  { label: 'Cancelled',  cls: 'text-red-400 bg-red-500/10 border border-red-500/20' },
 };
 
-const ALL_STATUSES = ['all', 'draft', 'confirmed', 'in_transit', 'received', 'closed'] as const;
+const ALL_STATUSES = ['all', 'draft', 'ordered', 'received', 'completed', 'cancelled'] as const;
 type StatusFilter = (typeof ALL_STATUSES)[number];
 
 interface NewItemRow {
@@ -62,18 +63,23 @@ export const PurchasesPage: React.FC = () => {
   const navigate = useNavigate();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierWithBalance[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventory, setInventory] = useState<ProductStock[]>([]);
   const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const { role, roleLabel } = usePermissions();
 
   // Panel state
   const [panelOpen, setPanelOpen] = useState(false);
   const [form, setForm] = useState({
     supplier_id: '',
+    location_id: '',
+    rep_name: '',
     exchange_rate: '48',
+    discount_amount: '0',
     notes: '',
   });
   const [items, setItems] = useState<NewItemRow[]>([{ ...EMPTY_ITEM }]);
@@ -98,15 +104,17 @@ export const PurchasesPage: React.FC = () => {
   async function load() {
     setLoading(true);
     try {
-      const [p, s, pr, inv, mv] = await Promise.all([
+      const [p, s, locs, pr, inv, mv] = await Promise.all([
         getPurchases(), 
         getSuppliers(), 
+        getLocations(),
         getProducts(),
         getInventory(),
         getMovementRates()
       ]);
       setPurchases(p);
       setSuppliers(s);
+      setLocations(locs);
       setProducts(pr);
       setInventory(inv);
       setMovementRates(mv);
@@ -141,8 +149,7 @@ export const PurchasesPage: React.FC = () => {
 
   // ── New purchase form ────────────────────────────────────────────
   function openPanel() {
-    setForm({ supplier_id: '', exchange_rate: '48', notes: '' });
-    setItems([{ ...EMPTY_ITEM }]);
+  setForm({ supplier_id: '', location_id: '', rep_name: '', exchange_rate: '48', discount_amount: '0', notes: '' });
     setFormError('');
     setQuickProductOpen(false);
     setQuickProductError('');
@@ -216,6 +223,24 @@ export const PurchasesPage: React.FC = () => {
 
   const exchRate = parseFloat(form.exchange_rate) || 0;
 
+  // Products sorted: low/zero stock first (need to reorder), then alphabetical
+  const sortedProducts = useMemo(() => {
+    const stockMap: Record<string, number> = {};
+    for (const inv of inventory) {
+      const total =
+        (inv.cartons_in - inv.cartons_sold + inv.carton_adj) * inv.pieces_per_carton +
+        (inv.pieces_in - inv.pieces_sold + inv.piece_adj);
+      stockMap[inv.product_id] = total;
+    }
+    return [...products].sort((a, b) => {
+      const sa = stockMap[a.id] ?? 0;
+      const sb = stockMap[b.id] ?? 0;
+      if (sa === 0 && sb > 0) return -1;
+      if (sa > 0 && sb === 0) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [products, inventory]);
+
   const totals = useMemo(() => {
     const rmb = items.reduce((s, i) => s + i.quantity_units * i.unit_price_rmb, 0);
     return { rmb, lkr: rmb * exchRate };
@@ -227,17 +252,51 @@ export const PurchasesPage: React.FC = () => {
     const validItems = items.filter((i) => i.product_id && i.quantity_units > 0 && i.unit_price_rmb > 0);
     if (validItems.length === 0) { setFormError('Add at least one item with product, quantity and price'); return; }
 
+    const discountVal = Number(form.discount_amount) || 0;
+    const percent = totals.lkr > 0 ? (discountVal / totals.lkr) * 100 : 0;
+    
+    let needsApproval = false;
+    let appliedDiscount = discountVal;
+
+    if (percent > 15) {
+      setFormError(`Discount exceeds maximum allowed limit (15%). You entered ${percent.toFixed(1)}%.`);
+      return;
+    }
+
+    if (role === 'officer' || role === 'pos_operator') {
+      if (percent > 10) {
+        needsApproval = true;
+        appliedDiscount = 0; // Applied after manager approval
+      }
+    }
+
     setSaving(true);
     setFormError('');
     try {
       const purchase = await createPurchase({
         supplier_id: form.supplier_id,
+        location_id: form.location_id || undefined,
+        rep_name: form.rep_name || undefined,
         exchange_rate: exchRate,
+        discount_amount: appliedDiscount,
         notes: form.notes,
         items: validItems,
       });
+
+      if (needsApproval) {
+        await requestDiscountApproval({
+          purchase_id: purchase.id,
+          discount_type: 'bill',
+          discount_amount: discountVal,
+          discount_percent: percent,
+          requested_by: roleLabel,
+        });
+        showToast(`${purchase.reference} drafted. Discount requires Manager approval.`, true);
+      } else {
+        showToast(`${purchase.reference} drafted`);
+      }
+
       setPanelOpen(false);
-      showToast(`${purchase.reference} created`);
       load();
     } catch (e: any) {
       setFormError(e.message);
@@ -266,8 +325,8 @@ export const PurchasesPage: React.FC = () => {
 
   // KPI summary
   const totalOrders = purchases.length;
-  const totalValue = purchases.filter((p) => p.status !== 'draft').reduce((s, p) => s + Number(p.total_lkr), 0);
-  const inTransit = purchases.filter((p) => p.status === 'in_transit').length;
+  const totalValue = purchases.filter((p) => p.status !== 'draft' && p.status !== 'cancelled').reduce((s, p) => s + Number(p.total_lkr), 0);
+  const activeOrders = purchases.filter((p) => p.status === 'ordered').length;
 
   return (
     <div className="pos-standard-page p-6 space-y-6 relative">
@@ -313,8 +372,8 @@ export const PurchasesPage: React.FC = () => {
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Total Orders', value: totalOrders, sub: 'all time' },
-          { label: 'In Transit', value: inTransit, sub: 'shipments', accent: inTransit > 0 },
-          { label: 'Total Value', value: fmt(totalValue), sub: 'confirmed+', mono: true },
+          { label: 'Ordered', value: activeOrders, sub: 'active', accent: activeOrders > 0 },
+          { label: 'Total Value', value: fmt(totalValue), sub: 'ordered+', mono: true },
         ].map((k) => (
           <div key={k.label} className="bg-[#1d222a] border border-[#2b313a] rounded-2xl p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{k.label}</p>
@@ -457,7 +516,7 @@ export const PurchasesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Supplier + rate */}
+              {/* Supplier + Location */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
@@ -473,14 +532,41 @@ export const PurchasesPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Exchange Rate (1 RMB → LKR) *</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Destination *</label>
+                  <select
+                    value={form.location_id}
+                    onChange={(e) => setForm((p) => ({ ...p, location_id: e.target.value }))}
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
+                  >
+                    <option value="">Select location…</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Rate + Rep */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Exchange Rate (LKR for 1 RMB) *</label>
                   <input
                     type="number"
-                    min="0"
+                    min="1"
                     step="0.01"
                     value={form.exchange_rate}
                     onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))}
                     className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Purchase Rep (Optional)</label>
+                  <input
+                    type="text"
+                    value={form.rep_name}
+                    onChange={(e) => setForm((p) => ({ ...p, rep_name: e.target.value }))}
+                    placeholder="E.g., John Doe"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
                   />
                 </div>
               </div>
@@ -615,11 +701,17 @@ export const PurchasesPage: React.FC = () => {
                               className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
                             >
                               <option value="">Select product…</option>
-                              {products.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.item_code} — {p.name}
-                                </option>
-                              ))}
+                              {sortedProducts.map((p) => {
+                                const inv = inventory.find(i => i.product_id === p.id);
+                                const stock = inv
+                                  ? (inv.cartons_in - inv.cartons_sold + inv.carton_adj) * inv.pieces_per_carton + (inv.pieces_in - inv.pieces_sold + inv.piece_adj)
+                                  : 0;
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {stock <= 0 ? '⚠ ' : ''}{p.item_code} — {p.name}{stock > 0 ? ` (${stock} in stock)` : ' (out of stock)'}
+                                  </option>
+                                );
+                              })}
                             </select>
                             <button
                               type="button"

@@ -2,21 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle2, AlertCircle, Loader2, Package,
-  Truck, Lock, ClipboardList, Calculator, Plus, Trash2,
-  TrendingUp,
+  Lock, ClipboardList, Calculator, Plus, Trash2,
+  TrendingUp, XCircle, CheckCheck, Printer, X
 } from 'lucide-react';
+import { PurchaseBillPrint } from '../components/PurchaseBillPrint';
 import {
   getPurchaseById,
-  confirmPurchase,
-  markInTransit,
+  orderPurchase,
+  cancelPurchase,
   receivePurchase,
   addPurchaseCost,
   deletePurchaseCost,
   finalizeCostingAndClose,
+  getPendingApprovals,
+  resolveDiscountApproval,
+  updatePurchaseDiscount,
   type ReceiveItemInput,
 } from '../services/purchaseService';
-import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton } from '../types';
+import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton, PurchaseDiscountApproval, SupplierPayment } from '../types';
+import { supabase } from '../lib/supabase';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -26,10 +32,10 @@ const fmtRmb = (n: number) =>
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20',   icon: ClipboardList },
-  confirmed:  { label: 'Confirmed',  cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20',   icon: CheckCircle2 },
-  in_transit: { label: 'In Transit', cls: 'text-amber-400 bg-amber-500/10 border border-amber-500/20', icon: Truck },
+  ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20',   icon: CheckCircle2 },
   received:   { label: 'Received',   cls: 'text-green-400 bg-green-500/10 border border-green-500/20', icon: Package },
-  closed:     { label: 'Closed',     cls: 'text-slate-400 bg-slate-500/10 border border-slate-500/20', icon: Lock },
+  completed:  { label: 'Completed',  cls: 'text-purple-400 bg-purple-500/10 border border-purple-500/20', icon: CheckCheck },
+  cancelled:  { label: 'Cancelled',  cls: 'text-red-400 bg-red-500/10 border border-red-500/20', icon: XCircle },
 };
 
 const COST_TYPES = ['shipping', 'clearing', 'tax', 'other'] as const;
@@ -43,7 +49,11 @@ export const PurchaseDetailPage: React.FC = () => {
   const [costs, setCosts] = useState<PurchaseCost[]>([]);
   const [received, setReceived] = useState<PurchaseReceive[]>([]);
   const [cartons, setCartons] = useState<Carton[]>([]);
+  const [approvals, setApprovals] = useState<PurchaseDiscountApproval[]>([]);
+  const [payments, setPayments] = useState<SupplierPayment[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const { can, roleLabel } = usePermissions();
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -62,6 +72,7 @@ export const PurchaseDetailPage: React.FC = () => {
   const [costForm, setCostForm] = useState({ cost_type: 'shipping' as typeof COST_TYPES[number], amount_lkr: '', notes: '' });
   const [addingCost, setAddingCost] = useState(false);
   const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -80,6 +91,16 @@ export const PurchaseDetailPage: React.FC = () => {
         rf[i.product_id] = { received: String(i.quantity_units), damaged: '0', notes: '' };
       }
       setReceiveForm(rf);
+
+      const pendingApps = await getPendingApprovals(id);
+      setApprovals(pendingApps);
+
+      const { data: pmts } = await supabase
+        .from('supplier_payments')
+        .select('*')
+        .eq('purchase_id', id)
+        .order('paid_at', { ascending: false });
+      setPayments((pmts ?? []) as SupplierPayment[]);
     } catch (e: any) {
       showToast(e.message, false);
     } finally {
@@ -91,28 +112,33 @@ export const PurchaseDetailPage: React.FC = () => {
 
   // ── Status actions ───────────────────────────────────────────────
 
-  async function handleConfirm() {
+  async function handleOrder() {
     if (!purchase) return;
+    if (approvals.length > 0) { showToast('Cannot proceed: pending discount approval', false); return; }
     setActionLoading(true);
     try {
-      await confirmPurchase(purchase.id);
-      showToast('Purchase confirmed');
+      await orderPurchase(purchase.id);
+      showToast('Purchase ordered');
       load();
     } catch (e: any) { showToast(e.message, false); } finally { setActionLoading(false); }
   }
 
-  async function handleMarkInTransit() {
+  async function handleCancel() {
     if (!purchase) return;
+    const confirm = window.confirm('Are you sure you want to cancel this purchase?');
+    if (!confirm) return;
+    
     setActionLoading(true);
     try {
-      await markInTransit(purchase.id);
-      showToast('Marked as In Transit');
+      await cancelPurchase(purchase.id);
+      showToast('Purchase cancelled');
       load();
     } catch (e: any) { showToast(e.message, false); } finally { setActionLoading(false); }
   }
 
   async function handleReceive() {
     if (!purchase) return;
+    if (approvals.length > 0) { showToast('Cannot proceed: pending discount approval', false); return; }
     const receiveItems: ReceiveItemInput[] = items.map((item) => {
       const rf = receiveForm[item.product_id] ?? { received: '0', damaged: '0', notes: '' };
       const product = item.products as any;
@@ -164,12 +190,28 @@ export const PurchaseDetailPage: React.FC = () => {
 
   async function handleFinalize() {
     if (!purchase) return;
+    if (approvals.length > 0) { showToast('Cannot proceed: pending discount approval', false); return; }
     setActionLoading(true);
     try {
       await finalizeCostingAndClose(purchase.id, items, received, costs, purchase.exchange_rate);
-      showToast('Purchase closed — cost prices updated');
+      showToast('Purchase completed — cost prices updated');
       load();
     } catch (e: any) { showToast(e.message, false); } finally { setActionLoading(false); }
+  }
+
+  async function handleResolveApproval(approvalId: string, status: 'approved' | 'rejected', amount: number) {
+    try {
+      await resolveDiscountApproval(approvalId, status, roleLabel);
+      if (status === 'approved') {
+        await updatePurchaseDiscount(purchase!.id, amount);
+        showToast('Discount approved');
+      } else {
+        showToast('Discount rejected');
+      }
+      load();
+    } catch (e: any) {
+      showToast(e.message, false);
+    }
   }
 
   // ── Computed values ──────────────────────────────────────────────
@@ -206,8 +248,10 @@ export const PurchaseDetailPage: React.FC = () => {
   const supplier = (purchase.suppliers as any);
 
   // Step indicator
-  const STEPS = ['draft', 'confirmed', 'in_transit', 'received', 'closed'];
-  const stepIdx = STEPS.indexOf(purchase.status);
+  const STEPS = ['draft', 'ordered', 'received', 'completed'];
+  // (cancelled is not in the linear progression)
+  const isCancelled = purchase.status === 'cancelled';
+  const stepIdx = isCancelled ? -1 : STEPS.indexOf(purchase.status);
 
   return (
     <div className="pos-standard-page p-6 space-y-6 max-w-4xl mx-auto">
@@ -247,29 +291,40 @@ export const PurchaseDetailPage: React.FC = () => {
             <p className="text-xs text-gray-500 mt-0.5">
               {supplier?.name ?? '—'} · Created {new Date(purchase.created_at).toLocaleDateString()}
             </p>
+            {purchase.rep_name && (
+                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                  Rep: <span className="text-gray-300">{purchase.rep_name}</span>
+                </div>
+              )}
           </div>
         </div>
 
         {/* Primary action button */}
-        <div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPrintOpen(true)}
+            className="flex items-center gap-2 px-4 py-3 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-2xl text-sm font-bold hover:text-white hover:bg-[#252a33] transition-all"
+          >
+            <Printer size={14} /> Print Bill
+          </button>
           {purchase.status === 'draft' && (
             <button
-              onClick={handleConfirm}
+              onClick={handleOrder}
               disabled={actionLoading}
               className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
             >
               {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              Confirm Order
+              Place Order
             </button>
           )}
-          {purchase.status === 'confirmed' && (
+          {purchase.status === 'ordered' && (
             <button
-              onClick={handleMarkInTransit}
+              onClick={handleCancel}
               disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-3.5 bg-red-500/10 text-red-500 border border-red-500/30 rounded-2xl text-sm font-bold hover:bg-red-500/20 transition-all active:scale-[0.98] disabled:opacity-50"
             >
-              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Truck size={14} />}
-              Mark In Transit
+              {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={14} />}
+              Cancel Order
             </button>
           )}
           {purchase.status === 'received' && (
@@ -365,12 +420,42 @@ export const PurchaseDetailPage: React.FC = () => {
         </table>
       </div>
 
-      {/* ── IN TRANSIT: Receive form ─────────────────────────────── */}
-      {purchase.status === 'in_transit' && (
-        <div className="bg-[#171c23] border border-amber-500/20 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-[#2b313a] bg-amber-500/5">
-            <h2 className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-              <Truck size={13} /> Receive Confirmation
+      {approvals.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="text-amber-400" size={24} />
+            <div>
+              <p className="text-amber-400 font-bold text-sm">Pending Manager Approval</p>
+              <p className="text-amber-500/80 text-xs mt-0.5">
+                {approvals[0].requested_by} requested a {approvals[0].discount_percent}% discount ({fmt(approvals[0].discount_amount || 0)}). This purchase is locked until approved.
+              </p>
+            </div>
+          </div>
+          {can('approve_discounts') && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleResolveApproval(approvals[0].id, 'rejected', approvals[0].discount_amount || 0)}
+                className="px-4 py-2 bg-[#1d222a] border border-[#2b313a] text-red-400 hover:bg-red-500/10 rounded-xl text-xs font-bold transition-all"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => handleResolveApproval(approvals[0].id, 'approved', approvals[0].discount_amount || 0)}
+                className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 rounded-xl text-xs font-bold transition-all"
+              >
+                Approve Discount
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ORDERED: Receive form ─────────────────────────────── */}
+      {purchase.status === 'ordered' && (
+        <div className="bg-[#171c23] border border-blue-500/20 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[#2b313a] bg-blue-500/5">
+            <h2 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+              <Package size={13} /> Receive Confirmation
             </h2>
             <p className="text-[10px] text-gray-500 mt-0.5">Enter actual quantities received. Damaged units will be logged separately.</p>
           </div>
@@ -451,7 +536,7 @@ export const PurchaseDetailPage: React.FC = () => {
         </div>
       )}
       {/* ── RECEIVED: Show receive summary ───────────────────────── */}
-      {(purchase.status === 'received' || purchase.status === 'closed') && received.length > 0 && (
+      {(purchase.status === 'received' || purchase.status === 'completed') && received.length > 0 && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a]">
             <h2 className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center gap-2">
@@ -492,7 +577,7 @@ export const PurchaseDetailPage: React.FC = () => {
       )}
 
       {/* ── RECEIVED: Generated Cartons ─────────────────────────── */}
-      {(purchase.status === 'received' || purchase.status === 'closed') && cartons.length > 0 && (
+      {(purchase.status === 'received' || purchase.status === 'completed') && cartons.length > 0 && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a]">
             <h2 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
@@ -500,7 +585,7 @@ export const PurchaseDetailPage: React.FC = () => {
             </h2>
             <p className="text-[10px] text-gray-500 mt-0.5">Tracking codes for each received carton.</p>
           </div>
-          <div className="p-5 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-3">
             {cartons.map((c) => (
               <div key={c.id} className="bg-[#1d222a] border border-[#2b313a] rounded-lg p-2 flex flex-col gap-1">
                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{(c.products as any)?.model || 'ITEM'}</p>
@@ -632,8 +717,8 @@ export const PurchaseDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── CLOSED: Cost breakdown ───────────────────────────────── */}
-      {purchase.status === 'closed' && (
+      {/* ── COMPLETED: Cost breakdown ───────────────────────────────── */}
+      {purchase.status === 'completed' && (
         <div className="bg-[#171c23] border border-[#f8fafc]/20 rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#f8fafc]/5">
             <h2 className="text-xs font-bold text-[#f8fafc] uppercase tracking-widest flex items-center gap-2">
@@ -671,7 +756,7 @@ export const PurchaseDetailPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
               <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-              <p className="text-xs text-green-400">Purchase closed. Product cost prices and MSP have been updated.</p>
+              <p className="text-xs text-green-400">Purchase completed. Product cost prices and MSP have been updated.</p>
             </div>
           </div>
         </div>
@@ -682,10 +767,32 @@ export const PurchaseDetailPage: React.FC = () => {
         onClose={() => setFinalizeConfirmOpen(false)}
         onConfirm={handleFinalize}
         title="Finalize Costing?"
-        message="This will close the purchase, update product cost prices and MSP based on the added costs. This action cannot be undone."
+        message="This will complete the purchase, update product cost prices and MSP based on the added costs. This action cannot be undone."
         confirmText="Finalize & Close"
         variant="warning"
       />
+
+      {/* Print Bill Modal */}
+      {printOpen && purchase && (
+        <>
+          <div className="fixed inset-0 z-[140] bg-black/70 backdrop-blur-sm" onClick={() => setPrintOpen(false)} />
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="relative w-full max-w-2xl">
+              <button onClick={() => setPrintOpen(false)} className="no-print absolute -top-10 right-0 p-2 text-white hover:text-gray-300"><X size={18} /></button>
+              <PurchaseBillPrint
+                purchase={purchase}
+                items={items}
+                costs={costs}
+                received={received}
+                supplier={supplier as any}
+                location={(purchase.locations as any) ?? undefined}
+                payments={payments}
+                onClose={() => setPrintOpen(false)}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

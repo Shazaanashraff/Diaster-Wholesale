@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
-import { getCurrentRole, usePermissions } from '../utils/permissions';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X, ArrowLeftRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment, getMovementRates, getStockLedger, transferStoreToShop, type StockLedgerEntry } from '../services/inventoryService';
+import { getInventory, insertStockAdjustment, getMovementRates, getStockLedger, type StockLedgerEntry } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -20,6 +21,7 @@ function readThreshold(): number {
 }
 
 export const InventoryPage: React.FC = () => {
+  const navigate = useNavigate();
   const [inventory, setInventory] = useState<ProductStock[]>([]);
   const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -39,13 +41,6 @@ export const InventoryPage: React.FC = () => {
   const [adjReason, setAdjReason] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
   const [adjError, setAdjError] = useState<string | null>(null);
-
-  // ── Store -> Shop transfer ──
-  const [transferProductId, setTransferProductId] = useState('');
-  const [transferUnits, setTransferUnits] = useState('');
-  const [transferNote, setTransferNote] = useState('');
-  const [transferSaving, setTransferSaving] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -158,46 +153,6 @@ export const InventoryPage: React.FC = () => {
   function getEffectiveReorderLevel(row: ProductStock): number {
     const perProduct = Math.max(0, Number(row.reorder_level ?? 0));
     return perProduct > 0 ? perProduct : threshold;
-  }
-
-  async function handleTransferSubmit() {
-    if (!transferProductId) {
-      setTransferError('Select a product to transfer.');
-      return;
-    }
-
-    const units = Math.max(0, parseInt(transferUnits, 10) || 0);
-    if (units <= 0) {
-      setTransferError('Enter a valid transfer quantity.');
-      return;
-    }
-
-    try {
-      setTransferSaving(true);
-      setTransferError(null);
-      await transferStoreToShop({
-        product_id: transferProductId,
-        units,
-        note: transferNote,
-        transferred_by: getCurrentRole(),
-      });
-      setTransferUnits('');
-      setTransferNote('');
-      const [inventoryRows, movementRows, ledgerRows] = await Promise.all([
-        getInventory(),
-        getMovementRates(),
-        getStockLedger(undefined, 250),
-      ]);
-      setInventory(inventoryRows);
-      setMovementRates(movementRows);
-      setLedger(ledgerRows);
-      setToast('Store to shop transfer logged');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to transfer stock';
-      setTransferError(message);
-    } finally {
-      setTransferSaving(false);
-    }
   }
 
   const visibleInventory = inventory
@@ -600,45 +555,16 @@ export const InventoryPage: React.FC = () => {
         </div>
 
         <div className="mt-8 border-t border-[#1f242c] pt-6">
-          <h4 className="text-sm font-bold text-white mb-3">Store → Shop Transfer</h4>
-          <div className="space-y-3">
-            <select
-              value={transferProductId}
-              onChange={(e) => setTransferProductId(e.target.value)}
-              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
-            >
-              <option value="">Select product</option>
-              {inventory.map((row) => (
-                <option key={row.product_id} value={row.product_id}>
-                  {row.item_code} — {row.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              min="1"
-              value={transferUnits}
-              onChange={(e) => setTransferUnits(e.target.value)}
-              placeholder="Transfer units"
-              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 placeholder:text-gray-500 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40 font-mono"
-            />
-            <input
-              value={transferNote}
-              onChange={(e) => setTransferNote(e.target.value)}
-              placeholder="Optional note"
-              className="w-full bg-[#171c23] border border-[#2b313a] text-gray-300 placeholder:text-gray-500 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40"
-            />
-            {transferError && <p className="text-[10px] font-semibold text-red-400">{transferError}</p>}
-            <button
-              type="button"
-              onClick={handleTransferSubmit}
-              disabled={transferSaving}
-              className="w-full px-4 py-2.5 rounded-xl bg-primary text-gray-900 text-[11px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {transferSaving && <Loader2 size={14} className="animate-spin" />}
-              Transfer to Shop
-            </button>
-          </div>
+          <h4 className="text-sm font-bold text-white mb-1">Stock Transfers</h4>
+          <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">Move stock between warehouse and shop locations with approval tracking.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/stock-transfers')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1d222a] border border-[#2b313a] text-gray-300 text-[11px] font-bold hover:text-white hover:bg-[#2b313a] transition-all"
+          >
+            <ArrowLeftRight size={13} />
+            Go to Stock Transfers
+          </button>
         </div>
 
         <div className="mt-auto pt-6">
