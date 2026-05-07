@@ -22,7 +22,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 interface TransferItemRow { product_id: string; quantity: number; }
 
 export const StockTransfersPage: React.FC = () => {
-  const { role, roleLabel, can } = usePermissions();
+  const { role, roleLabel } = usePermissions();
   const isManager = role === 'admin' || role === 'officer';
 
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
