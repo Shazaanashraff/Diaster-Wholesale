@@ -31,15 +31,13 @@ export const ProductsPage: React.FC = () => {
   const costPriceRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const piecesPerCartonRef = useRef<HTMLInputElement>(null);
-  const reorderLevelRef = useRef<HTMLInputElement>(null);
-  const marginPctRef = useRef<HTMLInputElement>(null);
-  const openingQuantityRef = useRef<HTMLInputElement>(null);
+  const quantityRef = useRef<HTMLInputElement>(null);
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
-  const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail' | 'margin'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail'>('name');
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
@@ -53,7 +51,6 @@ export const ProductsPage: React.FC = () => {
     .sort((a, b) => {
       if (sortBy === 'wholesale') return a.wholesale_price - b.wholesale_price;
       if (sortBy === 'retail')    return a.retail_price   - b.retail_price;
-      if (sortBy === 'margin')    return (b.retail_price - b.wholesale_price) - (a.retail_price - a.wholesale_price);
       return a.name.localeCompare(b.name);
     });
 
@@ -97,9 +94,7 @@ export const ProductsPage: React.FC = () => {
     const cost_price = parseFloat(costPriceRef.current?.value || '0') || 0;
     const description = descriptionRef.current?.value.trim() || '';
     const pieces_per_carton = parseInt(piecesPerCartonRef.current?.value || '1') || 1;
-    const reorder_level = Math.max(0, parseInt(reorderLevelRef.current?.value || '0', 10) || 0);
-    const margin_pct = parseFloat(marginPctRef.current?.value || '20') || 20;
-    const openingQuantity = Math.max(0, parseInt(openingQuantityRef.current?.value || '0', 10) || 0);
+    const quantity = Math.max(0, parseInt(quantityRef.current?.value || '0', 10) || 0);
 
     if (!name) return;
 
@@ -118,8 +113,6 @@ export const ProductsPage: React.FC = () => {
           cost_price,
           description,
           pieces_per_carton,
-          reorder_level,
-          margin_pct,
         });
         setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
@@ -141,15 +134,13 @@ export const ProductsPage: React.FC = () => {
           description,
           category: 'general',
           pieces_per_carton,
-          reorder_level,
-          margin_pct,
         });
 
-        if (openingQuantity > 0) {
+        if (quantity > 0) {
           await insertStockAdjustment({
             product_id: createdProduct.id,
-            adjustment_pieces: openingQuantity,
-            reason: '[OPENING] Initial quantity at product creation',
+            adjustment_pieces: quantity,
+            reason: '[CREATE] Initial quantity at product creation',
             adjusted_by: 'admin',
           });
         }
@@ -167,7 +158,7 @@ export const ProductsPage: React.FC = () => {
             : [...prev, createdProduct].sort((a, b) => a.name.localeCompare(b.name))
         );
         closeModal();
-        setError(`Product saved, but opening quantity was not saved: ${message}`);
+        setError(`Product saved, but quantity was not saved: ${message}`);
         return;
       }
       setError(message);
@@ -278,8 +269,7 @@ export const ProductsPage: React.FC = () => {
                     {([
                       { key: 'name',      label: 'Name' },
                       { key: 'wholesale', label: 'Wholesale ↑' },
-                      { key: 'retail',    label: 'Retail ↑' },
-                      { key: 'margin',    label: 'Margin ↓' },
+                      { key: 'retail',    label: 'Selling ↑' },
                     ] as const).map(s => (
                       <button
                         key={s.key}
@@ -400,9 +390,8 @@ export const ProductsPage: React.FC = () => {
                     <div className="flex items-center gap-10">
                       {(product.cost_price ?? 0) > 0 && (
                         <div className="text-right">
-                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost / MSP</p>
+                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost Price</p>
                           <p className="text-sm font-bold text-amber-400 font-mono">LKR {product.cost_price!.toFixed(2)}</p>
-                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {Number(product.msp ?? 0).toFixed(2)}</p>
                         </div>
                       )}
                       <div className="text-right">
@@ -410,7 +399,7 @@ export const ProductsPage: React.FC = () => {
                         <p className="text-xl font-bold text-gray-300 tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Retail</p>
+                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Selling</p>
                         <p className="text-2xl font-bold text-primary tracking-tighter">LKR {product.retail_price.toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -483,7 +472,7 @@ export const ProductsPage: React.FC = () => {
           <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Dealer Price (LKR)
+                <Tag size={12} className="text-primary" /> Wholesale Price (LKR)
               </label>
               <input
                 ref={wholesaleRef}
@@ -519,7 +508,7 @@ export const ProductsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Package size={12} className="text-primary" /> Qty per Carton
@@ -533,53 +522,22 @@ export const ProductsPage: React.FC = () => {
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Package size={12} className="text-primary" /> Reorder Level (Units)
-              </label>
-              <input
-                ref={reorderLevelRef}
-                type="number"
-                min="0"
-                defaultValue={editingProduct?.reorder_level ?? 0}
-                placeholder="0"
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Default Margin %
-              </label>
-              <input
-                ref={marginPctRef}
-                type="number"
-                min="0"
-                step="0.5"
-                defaultValue={editingProduct?.margin_pct ?? 20}
-                placeholder="20"
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
-              />
-            </div>
+            {!editingProduct && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <Hash size={12} className="text-primary" /> Qty (pieces)
+                </label>
+                <input
+                  ref={quantityRef}
+                  type="number"
+                  min="0"
+                  defaultValue={0}
+                  placeholder="0"
+                  className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+                />
+              </div>
+            )}
           </div>
-
-          {!editingProduct && (
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Hash size={12} className="text-primary" /> Opening Stock (Units)
-              </label>
-              <input
-                ref={openingQuantityRef}
-                type="number"
-                min="0"
-                defaultValue={0}
-                placeholder="0"
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
-              />
-              <p className="text-[10px] text-gray-500 font-medium pl-1">
-                Adds opening stock immediately when this product is created.
-              </p>
-            </div>
-          )}
 
           <div className="space-y-2">
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
@@ -637,6 +595,3 @@ export const ProductsPage: React.FC = () => {
     </div>
   );
 };
-
-
-

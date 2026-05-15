@@ -4,7 +4,10 @@ import { getProducts } from '../services/productService';
 import { getCustomers } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
 import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
-import { checkout } from '../services/posService';
+import {
+  checkout, checkoutOffline, syncOfflineSales, getOfflinePendingCount,
+  getCustomerLoyalty, computeRedemptionValue, checkCreditLimit,
+} from '../services/posService';
 import type { Product, Customer } from '../types';
 import { Modal } from '../components/Modal';
 import { computeStock } from '../utils/stockUtils';
@@ -24,7 +27,13 @@ import {
   QrCode,
   Trash2,
   LoaderCircle,
+  X,
+  PlusCircle,
+  WifiOff,
+  RefreshCw,
+  Star,
 } from 'lucide-react';
+import type { PaymentSplit } from '../services/posService';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -67,9 +76,21 @@ export const POSPage: React.FC = () => {
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
 
-  // Transaction state
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'cheque' | 'credit' | 'online'>('cash');
-  const [chequeDetails, setChequeDetails] = useState({ cheque_number: '', bank_name: '', due_date: '' });
+  // Transaction state — payment
+  type PayMethod = PaymentSplit['method'] | 'credit';
+  interface UISplit {
+    id: string;
+    method: PayMethod;
+    amount: string;   // empty = auto-fill full total on submit
+    bank_name: string;
+    cheque_number: string;
+    due_date: string;
+  }
+  const mkSplit = (method: PayMethod): UISplit => ({
+    id: Math.random().toString(36).slice(2),
+    method, amount: '', bank_name: '', cheque_number: '', due_date: '',
+  });
+  const [paymentSplits, setPaymentSplits] = useState<UISplit[]>([mkSplit('cash')]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
@@ -82,6 +103,18 @@ export const POSPage: React.FC = () => {
   const [approvalError, setApprovalError] = useState('');
 
   const [availableBatches, setAvailableBatches] = useState<Record<string, any[]>>({});
+
+  // Network + offline
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Loyalty
+  const [customerLoyalty, setCustomerLoyalty] = useState<{ points: number } | null>(null);
+  const [redeemPoints, setRedeemPoints] = useState(0);
+
+  // Credit limit info
+  const [creditLimitInfo, setCreditLimitInfo] = useState<{ available: number; limit: number } | null>(null);
 
   useEffect(() => {
     const cartProductIds = [...new Set(cart.map(i => i.product.id))];
@@ -101,6 +134,46 @@ export const POSPage: React.FC = () => {
       });
     });
   }, [cart.length]);
+
+  // Network status
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOnline(true);
+      handleSync();
+    };
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    getOfflinePendingCount().then(setOfflinePendingCount);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  async function handleSync() {
+    setIsSyncing(true);
+    try {
+      await syncOfflineSales(() => {});
+      const count = await getOfflinePendingCount();
+      setOfflinePendingCount(count);
+    } catch { /* silent */ }
+    setIsSyncing(false);
+  }
+
+  // Load customer loyalty when customer is selected
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setCustomerLoyalty(null);
+      setRedeemPoints(0);
+      setCreditLimitInfo(null);
+      return;
+    }
+    getCustomerLoyalty(selectedCustomerId).then(l => setCustomerLoyalty({ points: l.points }));
+    checkCreditLimit(selectedCustomerId, 0, 0).then(r =>
+      setCreditLimitInfo({ available: r.available, limit: r.limit })
+    );
+  }, [selectedCustomerId]);
 
   useEffect(() => {
     let active = true;
@@ -311,20 +384,39 @@ export const POSPage: React.FC = () => {
   }, 0);
 
   const discount = pricingApproved ? discountAmt : 0;
-  const total = subtotal - discount;
+  const maxRedeemable = customerLoyalty ? Math.min(customerLoyalty.points, Math.floor(subtotal - discount)) : 0;
+  const safeRedeem = Math.min(redeemPoints, maxRedeemable);
+  const redemptionValue = computeRedemptionValue(safeRedeem);
+  const total = Math.max(0, subtotal - discount - redemptionValue);
   const isBelowCost = total < estimatedCostFloor;
   const hasBelowWholesaleItemPrice = cart.some(
     (item) => Number(item.unitPrice ?? item.product.wholesale_price) < Number(item.product.wholesale_price)
   );
   const isBelowWholesale = total < wholesaleFloor || hasBelowWholesaleItemPrice;
   const needsApproval = (discountAmt > 0 || isBelowWholesale) && !pricingApproved;
+  const isFullCredit = paymentSplits.length === 1 && paymentSplits[0].method === 'credit';
+  const nonCreditSplits = paymentSplits.filter(s => s.method !== 'credit');
+  const hasCreditSplit = paymentSplits.some(s => s.method === 'credit');
+  const enteredPaymentAmount = nonCreditSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+  const autoFillSinglePayment =
+    !hasCreditSplit
+    && nonCreditSplits.length === 1
+    && !nonCreditSplits[0].amount;
+  const effectivePaymentAmount = autoFillSinglePayment ? total : enteredPaymentAmount;
+  const creditAmount = Math.max(0, total - effectivePaymentAmount);
+  const chequeValid = paymentSplits
+    .filter(s => s.method === 'cheque')
+    .every(s => !!s.cheque_number && !!s.bank_name && !!s.due_date);
+  const splitPaymentValid = isFullCredit || !hasCreditSplit || enteredPaymentAmount > 0;
   const canProcessTransaction =
     cart.length > 0
     && !!selectedCustomerId
     && btnPhase === 'idle'
     && !isBelowCost
     && !needsApproval
-    && (paymentMethod !== 'cheque' || (!!chequeDetails.cheque_number && !!chequeDetails.bank_name && !!chequeDetails.due_date));
+    && chequeValid
+    && splitPaymentValid
+    && (isFullCredit || paymentSplits.some(s => s.method !== 'credit'));
 
   function handleDiscountChange(val: string) {
     const num = parseFloat(val) || 0;
@@ -359,20 +451,55 @@ export const POSPage: React.FC = () => {
     setBtnPhase('loading');
 
     try {
-      await checkout(
+      // Build concrete payment splits; if only one non-credit method is selected, blank amount means full total.
+      const rawSplits = paymentSplits.filter(s => s.method !== 'credit');
+      let finalSplits: PaymentSplit[];
+      if (!hasCreditSplit && rawSplits.length === 1 && !rawSplits[0].amount) {
+        finalSplits = [{ method: rawSplits[0].method as PaymentSplit['method'], amount: total, bank_name: rawSplits[0].bank_name || undefined, cheque_number: rawSplits[0].cheque_number || undefined, due_date: rawSplits[0].due_date || undefined }];
+      } else {
+        finalSplits = rawSplits
+          .map(s => ({ method: s.method as PaymentSplit['method'], amount: parseFloat(s.amount) || 0, bank_name: s.bank_name || undefined, cheque_number: s.cheque_number || undefined, due_date: s.due_date || undefined }))
+          .filter(s => s.amount > 0);
+      }
+
+      if (!isOnline) {
+        // Offline path: single-method only, no loyalty
+        const offlineMethod = paymentSplits[0].method === 'credit' ? 'credit' : paymentSplits[0].method;
+        const customerName = customers.find(c => c.id === selectedCustomerId)?.name ?? 'Walk-in';
+        await checkoutOffline(cart, selectedCustomerId, customerName,
+          isWholesale, subtotal, discount, total, offlineMethod, total);
+        const count = await getOfflinePendingCount();
+        setOfflinePendingCount(count);
+        // Show success using same flow
+        setValidationMessage(null);
+        setBtnPhase('done');
+        setTimeout(() => {
+          setCart([]);
+          setSelectedCustomerId('');
+          setDiscountAmt(0);
+          setRedeemPoints(0);
+          setPricingApproved(false);
+          setPaymentSplits([mkSplit('cash')]);
+          setBtnPhase('idle');
+        }, 1600);
+        return;
+      }
+
+      const { earnedPoints } = await checkout(
         cart,
         selectedCustomerId,
         isWholesale,
         subtotal,
         discount,
         total,
-        {
-          method: paymentMethod,
-          cheque_number: paymentMethod === 'cheque' ? chequeDetails.cheque_number : undefined,
-          bank_name: paymentMethod === 'cheque' ? chequeDetails.bank_name : undefined,
-          due_date: paymentMethod === 'cheque' ? chequeDetails.due_date : undefined,
-        }
+        finalSplits,
+        safeRedeem > 0 ? { redeemPoints: safeRedeem } : undefined
       );
+
+      // Refresh loyalty display
+      if (earnedPoints > 0 || safeRedeem > 0) {
+        getCustomerLoyalty(selectedCustomerId).then(l => setCustomerLoyalty({ points: l.points }));
+      }
 
       if (isInventoryEnforced) {
         setStockPiecesByProduct((prev) => {
@@ -391,7 +518,9 @@ export const POSPage: React.FC = () => {
         setCart([]);
         setSelectedCustomerId('');
         setDiscountAmt(0);
+        setRedeemPoints(0);
         setPricingApproved(false);
+        setPaymentSplits([mkSplit('cash')]);
         setBtnPhase('idle');
       }, 1600);
     } catch (error) {
@@ -409,7 +538,7 @@ export const POSPage: React.FC = () => {
     setDiscountAmt(0);
     setPricingApproved(false);
     setValidationMessage(null);
-    setChequeDetails({ cheque_number: '', bank_name: '', due_date: '' });
+    setPaymentSplits([mkSplit('cash')]);
   };
 
   if (loading) {
@@ -562,6 +691,31 @@ export const POSPage: React.FC = () => {
         </section>
 
         <aside className="pos-bill">
+          {/* Offline banner */}
+          {!isOnline && (
+            <div style={{
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#f87171',
+            }}>
+              <WifiOff size={13} />
+              <span style={{ flex: 1, fontWeight: 700 }}>Offline — sale will sync when connected</span>
+              {offlinePendingCount > 0 && <span style={{ fontWeight: 700 }}>{offlinePendingCount} pending</span>}
+            </div>
+          )}
+          {isOnline && offlinePendingCount > 0 && (
+            <div style={{
+              background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
+              borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#fbbf24',
+            }}>
+              <span style={{ flex: 1, fontWeight: 700 }}>{offlinePendingCount} offline sale{offlinePendingCount > 1 ? 's' : ''} pending sync</span>
+              <button type="button" onClick={handleSync} disabled={isSyncing}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fbbf24', padding: 0 }}>
+                <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          )}
           <div className="pos-bill-head">
             <div>
               <h2>Digital Goods POS</h2>
@@ -593,6 +747,37 @@ export const POSPage: React.FC = () => {
               ))}
             </select>
           </div>
+
+          {/* Loyalty points */}
+          {customerLoyalty && customerLoyalty.points > 0 && !isOnline === false && (
+            <div style={{
+              background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)',
+              borderRadius: 10, padding: '8px 12px', margin: '4px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
+            }}>
+              <Star size={12} style={{ color: '#a78bfa', flexShrink: 0 }} />
+              <span style={{ color: '#c4b5fd', flex: 1 }}>
+                <strong>{customerLoyalty.points}</strong> loyalty pts available
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#7c3aed', fontSize: 10 }}>Redeem</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={maxRedeemable}
+                  value={redeemPoints || ''}
+                  onChange={e => setRedeemPoints(Math.min(maxRedeemable, Math.max(0, parseInt(e.target.value) || 0)))}
+                  placeholder="0"
+                  style={{
+                    width: 60, background: '#1d222a', border: '1px solid rgba(139,92,246,0.3)',
+                    borderRadius: 6, padding: '3px 6px', color: '#c4b5fd',
+                    fontSize: 11, fontFamily: 'monospace', outline: 'none', textAlign: 'right',
+                  }}
+                />
+                <span style={{ color: '#6b7280', fontSize: 10 }}>= LKR {safeRedeem.toFixed(0)}</span>
+              </div>
+            </div>
+          )}
 
           <div className="pos-cart-list custom-scrollbar">
             {cart.length === 0 && <p className="pos-cart-empty">No items yet</p>}
@@ -710,6 +895,12 @@ export const POSPage: React.FC = () => {
                 )}
               </div>
             </div>
+            {safeRedeem > 0 && (
+              <div>
+                <span style={{ color: '#a78bfa' }}>Loyalty ({safeRedeem} pts)</span>
+                <strong style={{ color: '#a78bfa' }}>− LKR <AnimatedNumber value={redemptionValue} /></strong>
+              </div>
+            )}
             <div className="total">
               <span>Total</span>
               <strong>LKR <AnimatedNumber value={total} /></strong>
@@ -788,6 +979,23 @@ export const POSPage: React.FC = () => {
             </div>
           )}
 
+          {/* Credit limit info */}
+          {(isFullCredit || hasCreditSplit || creditAmount > 0.01) && creditLimitInfo && (
+            <div style={{
+              background: creditLimitInfo.available >= creditAmount ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${creditLimitInfo.available >= creditAmount ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.3)'}`,
+              borderRadius: 10, padding: '7px 12px', fontSize: 11,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ color: '#9ca3af' }}>Credit limit: <strong style={{ color: '#e5e7eb' }}>
+                LKR {creditLimitInfo.limit.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+              </strong></span>
+              <span style={{ color: creditLimitInfo.available >= creditAmount ? '#6ee7b7' : '#f87171', fontWeight: 700 }}>
+                Available: LKR {creditLimitInfo.available.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+
           {needsApproval && (
             <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
               Discount or below-wholesale pricing requires admin approval before checkout
@@ -805,32 +1013,138 @@ export const POSPage: React.FC = () => {
           )}
 
           {validationMessage && <div className="pos-error">{validationMessage}</div>}
-
-          <div className="pos-pay-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-            <button type="button" className={cn(paymentMethod === 'cash' && 'active')} onClick={() => setPaymentMethod('cash')}>
-              <Wallet size={16} /> Cash
-            </button>
-            <button type="button" className={cn(paymentMethod === 'card' && 'active')} onClick={() => setPaymentMethod('card')}>
-              <CreditCard size={16} /> Card
-            </button>
-            <button type="button" className={cn(paymentMethod === 'cheque' && 'active')} onClick={() => setPaymentMethod('cheque')}>
-              <CreditCard size={16} /> Cheque
-            </button>
-            <button type="button" className={cn(paymentMethod === 'online' && 'active')} onClick={() => setPaymentMethod('online')}>
-              <QrCode size={16} /> Online
-            </button>
-            <button type="button" className={cn(paymentMethod === 'credit' && 'active')} onClick={() => setPaymentMethod('credit')}>
-              <CreditCard size={16} /> Credit
-            </button>
-          </div>
-
-          {paymentMethod === 'cheque' && (
-            <div className="flex flex-col gap-2 mb-4">
-              <input type="text" placeholder="Cheque Number" value={chequeDetails.cheque_number} onChange={e => setChequeDetails(p => ({...p, cheque_number: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40" />
-              <input type="text" placeholder="Bank Name" value={chequeDetails.bank_name} onChange={e => setChequeDetails(p => ({...p, bank_name: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40" />
-              <input type="date" value={chequeDetails.due_date} onChange={e => setChequeDetails(p => ({...p, due_date: e.target.value}))} className="w-full bg-[#1d222a] border border-[#2b313a] text-xs text-gray-300 rounded-xl px-3 py-2.5 outline-none focus:border-primary/40 text-gray-400" />
+          {!splitPaymentValid && (
+            <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+              Enter the cash, card, online, or cheque amount before putting the balance on credit.
             </div>
           )}
+
+          {/* Payment */}
+          {(() => {
+            const primary = paymentSplits[0];
+            const secondaries = paymentSplits.slice(1);
+            const outstanding = Math.max(0, total - effectivePaymentAmount);
+
+            const updatePrimary = (field: string, val: string) =>
+              setPaymentSplits(prev => [{ ...prev[0], [field]: val }, ...prev.slice(1)]);
+            const updateSecondary = (id: string, field: string, val: string) =>
+              setPaymentSplits(prev => [prev[0], ...prev.slice(1).map(s => s.id === id ? { ...s, [field]: val } : s)]);
+            const removeSecondary = (id: string) =>
+              setPaymentSplits(prev => [prev[0], ...prev.slice(1).filter(s => s.id !== id)]);
+            const addSecondary = (method: PayMethod) => {
+              setPaymentSplits(prev => [...prev.filter(s => s.method !== method), mkSplit(method)]);
+            };
+            const setMethod = (method: PayMethod) => {
+              if (method === 'credit') {
+                setPaymentSplits([mkSplit('credit')]);
+              } else {
+                setPaymentSplits(prev => [{ ...prev[0], method }, ...prev.slice(1).filter(s => s.method !== 'credit')]);
+              }
+            };
+
+            const inputStyle = { width: '100%', background: '#1d222a', border: '1px solid #2b313a', borderRadius: 10, padding: '8px 12px', color: '#f1f5f9', fontSize: 12, outline: 'none', fontFamily: 'monospace' } as const;
+            const SplitFields = ({ split, onChange }: { split: UISplit; onChange: (f: string, v: string) => void }) => (
+              <>
+                {split.method === 'cheque' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                    <input type="text" placeholder="Cheque Number" value={split.cheque_number} onChange={e => onChange('cheque_number', e.target.value)} style={inputStyle} />
+                    <input type="text" placeholder="Bank Name" value={split.bank_name} onChange={e => onChange('bank_name', e.target.value)} style={inputStyle} />
+                    <input type="date" value={split.due_date} onChange={e => onChange('due_date', e.target.value)} style={{ ...inputStyle, color: split.due_date ? '#f1f5f9' : '#6b7280' }} />
+                  </div>
+                )}
+                {split.method === 'online' && (
+                  <input type="text" placeholder="Bank Name (e.g. BOC, HNB, Sampath)" value={split.bank_name} onChange={e => onChange('bank_name', e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
+                )}
+              </>
+            );
+
+            return (
+              <>
+                {/* Method selector */}
+                <div className="pos-pay-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+                  {([['cash','Cash',Wallet],['card','Card',CreditCard],['online','Online',QrCode],['cheque','Cheque',CreditCard],['credit','Credit',CreditCard]] as [PayMethod,string,typeof Wallet][]).map(([m, label, Icon]) => (
+                    <button key={m} type="button" className={cn(primary.method === m && 'active')} onClick={() => setMethod(m)}>
+                      <Icon size={16} /> {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Primary method details + amount */}
+                {!isFullCredit && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: '#9aa5b1', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>Amount</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder={`${total.toFixed(2)}`}
+                        value={primary.amount}
+                        onChange={e => updatePrimary('amount', e.target.value)}
+                        style={{ flex: 1, background: '#1d222a', border: '1px solid #2b313a', borderRadius: 10, padding: '7px 12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace', outline: 'none' }}
+                      />
+                    </div>
+                    <SplitFields split={primary} onChange={(f, v) => updatePrimary(f, v)} />
+
+                    {/* Secondary splits */}
+                    {secondaries.map(s => (
+                      <div key={s.id} style={{ background: '#12161d', border: '1px solid #2b313a', borderRadius: 10, padding: '8px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa5b1', textTransform: 'uppercase', minWidth: 40 }}>{s.method}</span>
+                          {s.method === 'credit' ? (
+                            <div style={{ flex: 1, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 8, padding: '5px 10px', color: '#c4b5fd', fontSize: 12, fontFamily: 'monospace', textAlign: 'right' }}>
+                              LKR {outstanding.toFixed(2)}
+                            </div>
+                          ) : (
+                            <input type="number" min="0" step="0.01" placeholder="Amount" value={s.amount} onChange={e => updateSecondary(s.id, 'amount', e.target.value)}
+                              style={{ flex: 1, background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8, padding: '5px 10px', color: '#f1f5f9', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                          )}
+                          <button type="button" onClick={() => removeSecondary(s.id)} style={{ color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                        <SplitFields split={s} onChange={(f, v) => updateSecondary(s.id, f, v)} />
+                      </div>
+                    ))}
+
+                    {/* Add second method button */}
+                    {secondaries.length === 0 && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {(['cash','card','online','cheque','credit'] as PayMethod[]).filter(m => m !== primary.method).map(m => (
+                          <button key={m} type="button" onClick={() => addSecondary(m)}
+                            style={{ flex: 1, fontSize: 10, fontWeight: 600, color: '#6b7280', background: '#12161d', border: '1px dashed #2b313a', borderRadius: 8, padding: '5px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                            <PlusCircle size={10} /> {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Outstanding balance indicator */}
+                    {outstanding > 0.01 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '7px 12px' }}>
+                        <div>
+                          <p style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Credit balance</p>
+                          <p style={{ fontSize: 10, color: '#92400e', marginTop: 1 }}>Added to customer account</p>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#fbbf24' }}>LKR {outstanding.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Full credit banner */}
+                {isFullCredit && (
+                  <div style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 10, padding: '10px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>Full Credit</p>
+                      <p style={{ fontSize: 10, color: '#7c5ccc', marginTop: 1 }}>Full amount added to customer outstanding</p>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#a78bfa' }}>LKR {total.toFixed(2)}</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           <button
             type="button"

@@ -15,9 +15,7 @@ export interface Product {
   retail_price: number;
   pieces_per_carton: number;
   reorder_level?: number;
-  margin_pct?: number;
   cost_price?: number;
-  msp?: number;
   created_at: string;
   updated_at: string;
 }

@@ -19,6 +19,7 @@ import {
   CornerUpLeft,
   Wallet,
   ArrowLeftRight,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCurrentRole, can, type Permission } from '../utils/permissions';
@@ -39,6 +40,7 @@ interface SidebarProps {
 const ALL_NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard,   label: 'Dashboard',   path: '/' },
   { icon: MonitorSmartphone, label: 'Digital POS', path: '/pos',       requires: 'pos' },
+  { icon: ClipboardList,     label: 'Cashier',     path: '/cashier',   requires: 'pos' },
   { icon: Boxes,             label: 'Inventory',   path: '/inventory', requires: 'view_inventory' },
   { icon: Package2,          label: 'Products',    path: '/products',  requires: 'manage_products' },
   { icon: Users,             label: 'Customers',   path: '/customers', requires: 'view_customers' },
@@ -48,7 +50,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: Building2,       label: 'Suppliers',         path: '/suppliers',         requires: ['manage_suppliers', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: CornerUpLeft,    label: 'Supplier Returns',  path: '/supplier-returns',  requires: 'manage_procurement',   section: 'Procurement' },
   { icon: ArrowLeftRight,  label: 'Stock Transfers',   path: '/stock-transfers',   requires: 'manage_procurement',   section: 'Procurement' },
-  { icon: Wallet,          label: 'Expenses',          path: '/expenses',          requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
+  { icon: Wallet,          label: 'Day Transactions',  path: '/day-transactions',  requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: Upload,          label: 'Bulk Import',       path: '/import',            requires: 'bulk_import',          section: 'Admin' },
   { icon: Download,        label: 'Updates',           path: '/updates',                                             section: 'Admin' },
 ];

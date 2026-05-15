@@ -24,7 +24,7 @@ export async function getPurchaseById(id: string): Promise<{
       supabase.from('purchases').select('*, suppliers(*)').eq('id', id).single(),
       supabase
         .from('purchase_items')
-        .select('*, products(id, name, model, item_code, sku, pieces_per_carton, cost_price, msp, margin_pct)')
+        .select('*, products(id, name, model, item_code, sku, pieces_per_carton, cost_price)')
         .eq('purchase_id', id),
       supabase.from('purchase_costs').select('*').eq('purchase_id', id),
       supabase
@@ -240,7 +240,7 @@ export async function finalizeCostingAndClose(
 
   if (totalSellable === 0) throw new Error('No sellable units received.');
 
-  // Compute per-item cost price and MSP, update products
+  // Compute per-item cost price and update products
   for (const item of items) {
     const receiveRow = received.find((r) => r.product_id === item.product_id);
     const sellable = receiveRow
@@ -257,13 +257,9 @@ export async function finalizeCostingAndClose(
 
     const costPrice = (itemLkr + allocatedCosts) / sellable;
 
-    const product = item.products as any;
-    const marginPct = Number(product?.margin_pct ?? 20);
-    const msp = costPrice * (1 + marginPct / 100);
-
     await supabase
       .from('products')
-      .update({ cost_price: costPrice, msp })
+      .update({ cost_price: costPrice })
       .eq('id', item.product_id);
   }
 

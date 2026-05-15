@@ -756,7 +756,7 @@ export const PurchaseDetailPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
               <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-              <p className="text-xs text-green-400">Purchase completed. Product cost prices and MSP have been updated.</p>
+              <p className="text-xs text-green-400">Purchase completed. Product cost prices have been updated.</p>
             </div>
           </div>
         </div>
@@ -767,7 +767,7 @@ export const PurchaseDetailPage: React.FC = () => {
         onClose={() => setFinalizeConfirmOpen(false)}
         onConfirm={handleFinalize}
         title="Finalize Costing?"
-        message="This will complete the purchase, update product cost prices and MSP based on the added costs. This action cannot be undone."
+        message="This will complete the purchase and update product cost prices based on the added costs. This action cannot be undone."
         confirmText="Finalize & Close"
         variant="warning"
       />

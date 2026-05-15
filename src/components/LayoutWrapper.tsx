@@ -12,10 +12,13 @@ interface LayoutWrapperProps {
 export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier'].some(
     (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
   );
-  const isProductsRoute = ['/products', '/customers', '/reports', '/suppliers', '/purchases'].some(
+  const isProductsRoute = [
+    '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier',
+    '/returns', '/supplier-returns', '/expenses', '/stock-transfers', '/day-transactions',
+  ].some(
     (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
   );
   const [hydrated, setHydrated] = useState(false);
@@ -32,9 +35,21 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
     }
   }, [isProductsRoute]);
 
+  const isSandbox = import.meta.env.VITE_APP_MODE === 'sandbox';
+
   return (
     <div className="pos-shell pos-theme app-cosy">
-      <div className={cn("pos-frame pos-frame-2col", hydrated && "pos-frame-ready")}>
+      {isSandbox && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#f59e0b', color: '#000', textAlign: 'center',
+          padding: '4px 12px', fontSize: '12px', fontWeight: 700,
+          letterSpacing: '0.08em', userSelect: 'none',
+        }}>
+          SANDBOX — test data only, production is untouched
+        </div>
+      )}
+      <div className={cn("pos-frame pos-frame-2col", hydrated && "pos-frame-ready")} style={isSandbox ? { paddingTop: '26px' } : undefined}>
         <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(p => !p)} />
         <div
           className={cn(

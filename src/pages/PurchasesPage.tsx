@@ -203,7 +203,6 @@ export const PurchasesPage: React.FC = () => {
         pieces_per_carton,
         reorder_level,
         description,
-        margin_pct: 20,
       });
 
       setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));

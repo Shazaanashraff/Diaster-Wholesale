@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS products (
   category      TEXT NOT NULL DEFAULT 'general',
   wholesale_price NUMERIC(12,2) NOT NULL DEFAULT 0,
   retail_price    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  cost_price    NUMERIC(12,2) NOT NULL DEFAULT 0,
   pieces_per_carton INT NOT NULL DEFAULT 1,
   reorder_level  INT NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),

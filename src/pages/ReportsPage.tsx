@@ -32,6 +32,7 @@ import { PurchaseHistoryReport }      from './reports/PurchaseHistoryReport';
 import { CustomerLedgerAggregateReport } from './reports/CustomerLedgerAggregateReport';
 import { FastMovingReport }           from './reports/FastMovingReport';
 import { SlowMovingReport }           from './reports/SlowMovingReport';
+import { DailyFinanceReport }         from './reports/DailyFinanceReport';
 
 const CATEGORIES = [
   {
@@ -42,8 +43,9 @@ const CATEGORIES = [
       { id: 'pl',           label: 'Profit & Loss',   component: ProfitLossReport },
       { id: 'sales-profit', label: 'Sales Profit',    component: SalesProfitReport },
       { id: 'batch-profit', label: 'Batch Profit',    component: BatchProfitReport },
-      { id: 'expense',      label: 'Expenses',        component: ExpenseReport },
-      { id: 'cash-flow',    label: 'Cash Flow',       component: CashFlowReport },
+      { id: 'expense',        label: 'Expenses',        component: ExpenseReport },
+      { id: 'cash-flow',      label: 'Cash Flow',       component: CashFlowReport },
+      { id: 'daily-finance',  label: 'Daily Finance',   component: DailyFinanceReport },
     ],
   },
   {

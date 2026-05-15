@@ -126,10 +126,20 @@ export async function searchReturnableInvoices(searchTerm: string): Promise<Retu
   return ((data ?? []) as InvoiceQueryRow[]).map(mapInvoice);
 }
 
+export type RefundMethod = 'cash' | 'bank_transfer' | 'credit_note' | 'no_refund';
+
+export const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
+  cash: 'Cash Refund',
+  bank_transfer: 'Bank Transfer',
+  credit_note: 'Credit Note (Add to Balance)',
+  no_refund: 'No Refund',
+};
+
 export async function processInvoiceReturn(
   invoiceId: string,
   reason: string,
-  adjustedBy: string
+  adjustedBy: string,
+  refundMethod: RefundMethod = 'cash'
 ): Promise<void> {
   const { data, error } = await supabase
     .from('invoices')
@@ -195,20 +205,38 @@ export async function processInvoiceReturn(
   }
 
   if (invoice.payment_status === 'paid' || invoice.payment_status === 'partial') {
-    const { error: paymentError } = await supabase
-      .from('payments')
-      .insert({
-        invoice_id: invoice.id,
-        customer_id: invoice.customer_id,
-        amount: -Math.abs(invoice.total),
-        method: 'credit',
-        reference: `RETURN-${invoice.invoice_no}`,
-        paid_at: now,
-      });
+    if (refundMethod !== 'no_refund') {
+      const paymentMethod = refundMethod === 'credit_note' ? 'credit' : refundMethod;
+      const { error: paymentError } = await supabase
+        .from('payments')
+        .insert({
+          invoice_id: invoice.id,
+          customer_id: invoice.customer_id,
+          amount: -Math.abs(invoice.total),
+          method: paymentMethod,
+          reference: `RETURN-${invoice.invoice_no}`,
+          paid_at: now,
+        });
 
-    if (paymentError) {
-      console.error('processInvoiceReturn payment error:', paymentError.message);
-      throw new Error(paymentError.message);
+      if (paymentError) {
+        console.error('processInvoiceReturn payment error:', paymentError.message);
+        throw new Error(paymentError.message);
+      }
+
+      // credit_note: add refund to customer outstanding (they can use it later)
+      if (refundMethod === 'credit_note') {
+        const { data: cust } = await supabase
+          .from('customers')
+          .select('outstanding_balance')
+          .eq('id', invoice.customer_id)
+          .single();
+        if (cust) {
+          await supabase
+            .from('customers')
+            .update({ outstanding_balance: Math.max(0, Number(cust.outstanding_balance) - invoice.total) })
+            .eq('id', invoice.customer_id);
+        }
+      }
     }
   }
 
