@@ -4,7 +4,7 @@ import {
   Plus, Search, X, Loader2, AlertCircle, CheckCircle2,
   Package, ChevronRight, Trash2, RefreshCw,
 } from 'lucide-react';
-import { getPurchases, createPurchase, deletePurchase, forceDeletePurchase, requestDiscountApproval } from '../services/purchaseService';
+import { getPurchases, createPurchase, deletePurchase, forceDeletePurchase } from '../services/purchaseService';
 import { getSuppliers, getLocations } from '../services/supplierService';
 import { getProducts, createProduct } from '../services/productService';
 import { getInventory, getMovementRates } from '../services/inventoryService';
@@ -16,9 +16,6 @@ import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
   'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtRmb = (n: number) =>
-  '¥ ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20' },
   ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' },
@@ -194,7 +191,7 @@ export const PurchasesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const { role, roleLabel } = usePermissions();
+  const { role } = usePermissions();
 
   // Panel state
   const [panelOpen, setPanelOpen] = useState(false);

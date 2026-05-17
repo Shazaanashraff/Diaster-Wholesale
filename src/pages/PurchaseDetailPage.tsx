@@ -27,9 +27,6 @@ import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
   'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtRmb = (n: number) =>
-  '¥ ' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20',   icon: ClipboardList },
   ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20',   icon: CheckCircle2 },
