@@ -17,6 +17,8 @@ interface CashFlowTransaction {
 
 export const CashFlowReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<{
     cashIn: number;
     cashOut: number;
@@ -25,7 +27,7 @@ export const CashFlowReport: React.FC = () => {
 
   useEffect(() => {
     async function load() {
-      const { from, to } = getReportDateRange(period);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
       
       const [payments, expenses] = await Promise.all([
         supabase.from('payments').select('amount, created_at, method').gte('created_at', from || '').lte('created_at', to || ''),
@@ -43,7 +45,7 @@ export const CashFlowReport: React.FC = () => {
       setData({ cashIn, cashOut, transactions: all });
     }
     load();
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const headers = ['Date', 'Type', 'Description', 'Amount'];
   const rows = data.transactions.map((r) => [
@@ -55,7 +57,7 @@ export const CashFlowReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Cash Flow Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Cash_Flow_Report" headers={headers} rows={rows} />
         </div>
       </div>

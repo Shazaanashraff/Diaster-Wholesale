@@ -133,7 +133,8 @@ export const checkout = async (
   discount: number,
   total: number,
   paymentSplits: PaymentSplit[],   // empty = full credit / unpaid
-  loyalty?: LoyaltyOptions
+  loyalty?: LoyaltyOptions,
+  salespersonName?: string
 ): Promise<{ invoiceId: string; earnedPoints: number }> => {
   // Stock validation
   await validateStock(cart);
@@ -173,6 +174,7 @@ export const checkout = async (
       discount,
       total: netTotal,
       payment_status: paymentStatus,
+      salesperson_name: salespersonName || null,
     })
     .select('id')
     .single();
@@ -367,3 +369,46 @@ export const syncOfflineSales = async (
 };
 
 export { getPendingCount as getOfflinePendingCount };
+
+// ─── Cancel invoice ───────────────────────────────────────────────────────────
+
+export async function cancelInvoice(invoiceId: string): Promise<void> {
+  const { data: inv, error: fetchErr } = await supabase
+    .from('invoices')
+    .select('id, total, payment_status, customer_id')
+    .eq('id', invoiceId)
+    .single();
+
+  if (fetchErr || !inv) throw new Error('Invoice not found');
+  if (inv.payment_status === 'cancelled') throw new Error('Invoice is already cancelled');
+
+  // If there was an unpaid balance, reverse it on the customer account
+  const { data: payments } = await supabase
+    .from('payments')
+    .select('amount')
+    .eq('invoice_id', invoiceId);
+
+  const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const outstanding = Math.max(0, Number(inv.total) - totalPaid);
+
+  if (outstanding > 0 && inv.customer_id) {
+    const { data: cust } = await supabase
+      .from('customers')
+      .select('outstanding_balance')
+      .eq('id', inv.customer_id)
+      .single();
+    if (cust) {
+      await supabase
+        .from('customers')
+        .update({ outstanding_balance: Math.max(0, Number(cust.outstanding_balance) - outstanding) })
+        .eq('id', inv.customer_id);
+    }
+  }
+
+  const { error } = await supabase
+    .from('invoices')
+    .update({ payment_status: 'cancelled' })
+    .eq('id', invoiceId);
+
+  if (error) throw new Error(error.message);
+}

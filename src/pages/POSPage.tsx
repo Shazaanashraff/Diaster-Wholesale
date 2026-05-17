@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getProducts } from '../services/productService';
-import { getCustomers } from '../services/customerService';
+import { getCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
 import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
 import {
   checkout, checkoutOffline, syncOfflineSales, getOfflinePendingCount,
   getCustomerLoyalty, computeRedemptionValue, checkCreditLimit,
 } from '../services/posService';
+import { getSalespeople, type Salesperson } from '../services/salespersonService';
 import type { Product, Customer } from '../types';
 import { Modal } from '../components/Modal';
 import { computeStock } from '../utils/stockUtils';
@@ -32,6 +33,7 @@ import {
   WifiOff,
   RefreshCw,
   Star,
+  UserCheck,
 } from 'lucide-react';
 import type { PaymentSplit } from '../services/posService';
 import { cn } from '../lib/utils';
@@ -62,6 +64,7 @@ export const POSPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [productPage, setProductPage] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +118,17 @@ export const POSPage: React.FC = () => {
 
   // Credit limit info
   const [creditLimitInfo, setCreditLimitInfo] = useState<{ available: number; limit: number } | null>(null);
+
+  // Salesperson
+  const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string>('');
+
+  // Inline new-customer form
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustType, setNewCustType] = useState<'wholesale' | 'retail'>('wholesale');
+  const [newCustSaving, setNewCustSaving] = useState(false);
 
   useEffect(() => {
     const cartProductIds = [...new Set(cart.map(i => i.product.id))];
@@ -182,16 +196,18 @@ export const POSPage: React.FC = () => {
       const startedAt = Date.now();
 
       try {
-        const [fetchedProducts, fetchedCustomers, fetchedInventory] = await Promise.all([
-          getProducts(),
-          getCustomers(),
-          getInventory(),
+        const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
+          getProducts().catch((e) => { console.error('getProducts failed:', e); return [] as Product[]; }),
+          getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
+          getInventory().catch((e) => { console.error('getInventory failed:', e); return []; }),
+          getSalespeople().catch(() => [] as Salesperson[]),
         ]);
 
         if (!active) return;
 
         setProducts(fetchedProducts);
         setCustomers(fetchedCustomers);
+        setSalespeople(fetchedSalespeople);
 
         if (fetchedInventory.length > 0) {
           const stockMap: Record<string, number> = {};
@@ -202,9 +218,13 @@ export const POSPage: React.FC = () => {
           setStockPiecesByProduct(stockMap);
           setIsInventoryEnforced(true);
 
-          const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
-          if (!active) return;
-          setAvgCostByProduct(costMap);
+          try {
+            const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
+            if (!active) return;
+            setAvgCostByProduct(costMap);
+          } catch {
+            // non-fatal — POS works without cost floor data
+          }
         } else {
           setStockPiecesByProduct({});
           setAvgCostByProduct({});
@@ -212,11 +232,6 @@ export const POSPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error loading POS data', err);
-        if (!active) return;
-        setProducts([]);
-        setStockPiecesByProduct({});
-        setAvgCostByProduct({});
-        setIsInventoryEnforced(false);
       } finally {
         if (!active) return;
         const elapsed = Date.now() - startedAt;
@@ -268,17 +283,25 @@ export const POSPage: React.FC = () => {
     return [{ id: 'all', title: 'All menu', items: products.length }, ...items].slice(0, 8);
   }, [products]);
 
+  const PAGE_SIZE = 6;
+
   const categoryProducts = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return products.filter((p) => {
       const categoryMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
-      const searchMatch = !q || 
-        (p.name?.toLowerCase().includes(q)) || 
-        (p.item_code?.toLowerCase().includes(q)) || 
+      const searchMatch = !q ||
+        (p.name?.toLowerCase().includes(q)) ||
+        (p.item_code?.toLowerCase().includes(q)) ||
         (p.sku?.toLowerCase().includes(q));
       return categoryMatch && searchMatch;
     });
   }, [selectedCategory, searchQuery, products]);
+
+  // Reset to page 0 whenever the filtered list changes
+  useEffect(() => { setProductPage(0); }, [selectedCategory, searchQuery]);
+
+  const totalPages = Math.ceil(categoryProducts.length / PAGE_SIZE);
+  const pagedProducts = categoryProducts.slice(productPage * PAGE_SIZE, (productPage + 1) * PAGE_SIZE);
 
   const getCartPiecesForProduct = (productId: string): number => {
     return cart
@@ -437,12 +460,67 @@ export const POSPage: React.FC = () => {
     }
   }
 
+  // ── Payment split helpers ──────────────────────────────────────────────────
+  function updateSplit(id: string, field: string, val: string) {
+    setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+  }
+  function updateSplitMethod(id: string, method: PayMethod) {
+    setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, method, bank_name: '', cheque_number: '', due_date: '' } : s));
+  }
+  function removeSplit(id: string) {
+    setPaymentSplits(prev => prev.length > 1 ? prev.filter(s => s.id !== id) : prev);
+  }
+  function addSplit() {
+    setPaymentSplits(prev => [...prev, mkSplit('cash')]);
+  }
+
   function updateCartUnitPrice(index: number, value: string) {
     const parsed = Math.max(0, parseFloat(value) || 0);
     setCart((prev) =>
       prev.map((item, i) => (i === index ? { ...item, unitPrice: parsed } : item))
     );
     setPricingApproved(false);
+  }
+
+  function updateCartQuantity(index: number, value: string) {
+    const raw = parseInt(value, 10);
+    const qty = isNaN(raw) || raw < 0 ? 0 : raw;
+    setCart((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (isInventoryEnforced) {
+          const available = stockPiecesByProduct[item.product.id] ?? 0;
+          return { ...item, quantityPieces: Math.min(qty, available) };
+        }
+        return { ...item, quantityPieces: qty };
+      })
+    );
+    setPricingApproved(false);
+  }
+
+  async function handleCreateCustomer() {
+    if (!newCustName.trim()) return;
+    setNewCustSaving(true);
+    try {
+      const created = await createCustomer({
+        name: newCustName.trim(),
+        phone: newCustPhone.trim(),
+        email: '',
+        address: '',
+        type: newCustType,
+        credit_limit: 0,
+        is_active: true,
+      } as any);
+      setCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedCustomerId(created.id);
+      setShowNewCustomer(false);
+      setNewCustName('');
+      setNewCustPhone('');
+      setNewCustType('wholesale');
+    } catch (e) {
+      console.error('Failed to create customer:', e);
+    }
+    setNewCustSaving(false);
   }
 
   const processTransaction = async () => {
@@ -480,6 +558,7 @@ export const POSPage: React.FC = () => {
           setRedeemPoints(0);
           setPricingApproved(false);
           setPaymentSplits([mkSplit('cash')]);
+          setSelectedSalesperson('');
           setBtnPhase('idle');
         }, 1600);
         return;
@@ -493,7 +572,8 @@ export const POSPage: React.FC = () => {
         discount,
         total,
         finalSplits,
-        safeRedeem > 0 ? { redeemPoints: safeRedeem } : undefined
+        safeRedeem > 0 ? { redeemPoints: safeRedeem } : undefined,
+        selectedSalesperson || undefined
       );
 
       // Refresh loyalty display
@@ -521,6 +601,7 @@ export const POSPage: React.FC = () => {
         setRedeemPoints(0);
         setPricingApproved(false);
         setPaymentSplits([mkSplit('cash')]);
+        setSelectedSalesperson('');
         setBtnPhase('idle');
       }, 1600);
     } catch (error) {
@@ -608,8 +689,8 @@ export const POSPage: React.FC = () => {
           </div>
 
           <AnimatePresence mode="wait">
-            <motion.div 
-              key={selectedCategory}
+            <motion.div
+              key={`${selectedCategory}-${productPage}`}
               className="pos-product-grid mt-3"
               initial="hidden"
               animate="show"
@@ -620,7 +701,7 @@ export const POSPage: React.FC = () => {
                 exit: { transition: { staggerChildren: 0.03, staggerDirection: -1 } }
               }}
             >
-              {categoryProducts.slice(0, 12).map((product) => {
+              {pagedProducts.map((product) => {
                 const qtyUnits = pieceQuantities[product.id] || 0;
                 const piecesPerCarton = product.pieces_per_carton || 1;
 
@@ -688,6 +769,40 @@ export const POSPage: React.FC = () => {
               })}
             </motion.div>
           </AnimatePresence>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-1 pt-3 pb-1">
+            <button
+              type="button"
+              onClick={() => setProductPage(p => Math.max(0, p - 1))}
+              disabled={productPage === 0}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
+                productPage === 0
+                  ? 'border-[#2b313a] text-gray-600 cursor-not-allowed opacity-40'
+                  : 'border-[#2b313a] text-gray-300 hover:border-primary/40 hover:text-white'
+              )}
+            >
+              <Minus size={12} /> Prev
+            </button>
+            <span className="text-[11px] text-gray-500 font-mono">
+              {productPage + 1} / {Math.max(1, totalPages)}
+              <span className="text-gray-600 ml-1.5">({categoryProducts.length})</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setProductPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={productPage >= totalPages - 1}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
+                productPage >= totalPages - 1
+                  ? 'border-[#2b313a] text-gray-600 cursor-not-allowed opacity-40'
+                  : 'border-[#2b313a] text-gray-300 hover:border-primary/40 hover:text-white'
+              )}
+            >
+              Next <Plus size={12} />
+            </button>
+          </div>
         </section>
 
         <aside className="pos-bill">
@@ -720,6 +835,11 @@ export const POSPage: React.FC = () => {
             <div>
               <h2>Digital Goods POS</h2>
               <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Direct Customer'}</p>
+              {selectedSalesperson && (
+                <p style={{ fontSize: 10, color: '#6ee7b7', fontWeight: 700, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <UserCheck size={10} /> Sold by {selectedSalesperson}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => navigate('/returns')}
@@ -735,18 +855,117 @@ export const POSPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pos-customer-select">
-            <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
-              <option value="" disabled>
-                Select customer
-              </option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div className="pos-customer-select" style={{ flex: 1 }}>
+              <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
+                <option value="" disabled>Select customer</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>{customer.name}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNewCustomer(v => !v)}
+              title="New customer"
+              style={{
+                flexShrink: 0, width: 36, borderRadius: 10,
+                background: showNewCustomer ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                border: showNewCustomer ? '1px solid rgba(99,102,241,0.4)' : '1px solid #2b313a',
+                color: showNewCustomer ? '#818cf8' : '#6b7280',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 18, fontWeight: 300,
+              }}
+            >
+              {showNewCustomer ? <X size={14} /> : <PlusCircle size={14} />}
+            </button>
           </div>
+
+          {/* Inline new-customer form */}
+          {showNewCustomer && (
+            <div style={{
+              background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)',
+              borderRadius: 12, padding: '12px 12px 10px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                New Customer
+              </p>
+              <input
+                type="text"
+                placeholder="Name *"
+                value={newCustName}
+                onChange={e => setNewCustName(e.target.value)}
+                autoFocus
+                style={{
+                  background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8,
+                  padding: '7px 10px', color: '#f1f5f9', fontSize: 12, outline: 'none', width: '100%',
+                }}
+              />
+              <input
+                type="tel"
+                placeholder="Phone (optional)"
+                value={newCustPhone}
+                onChange={e => setNewCustPhone(e.target.value)}
+                style={{
+                  background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8,
+                  padding: '7px 10px', color: '#f1f5f9', fontSize: 12, outline: 'none', width: '100%',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['wholesale', 'retail'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => setNewCustType(t)}
+                    style={{
+                      flex: 1, padding: '5px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      cursor: 'pointer', textTransform: 'capitalize',
+                      background: newCustType === t ? 'rgba(99,102,241,0.2)' : '#1d222a',
+                      border: newCustType === t ? '1px solid rgba(99,102,241,0.4)' : '1px solid #2b313a',
+                      color: newCustType === t ? '#818cf8' : '#6b7280',
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateCustomer}
+                disabled={!newCustName.trim() || newCustSaving}
+                style={{
+                  background: newCustName.trim() ? '#6366f1' : '#2b313a',
+                  border: 'none', borderRadius: 8, padding: '8px',
+                  color: newCustName.trim() ? '#fff' : '#4b5563',
+                  fontSize: 12, fontWeight: 700, cursor: newCustName.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {newCustSaving ? 'Saving…' : 'Add & Select'}
+              </button>
+            </div>
+          )}
+
+          {/* Salesperson selector */}
+          {salespeople.length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: selectedSalesperson ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${selectedSalesperson ? 'rgba(16,185,129,0.25)' : '#2b313a'}`,
+              borderRadius: 10, padding: '6px 10px',
+            }}>
+              <UserCheck size={13} style={{ color: selectedSalesperson ? '#6ee7b7' : '#6b7280', flexShrink: 0 }} />
+              <select
+                value={selectedSalesperson}
+                onChange={(e) => setSelectedSalesperson(e.target.value)}
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  color: selectedSalesperson ? '#e5e7eb' : '#6b7280',
+                  fontSize: 12, fontWeight: selectedSalesperson ? 600 : 400, cursor: 'pointer',
+                }}
+              >
+                <option value="">Select salesperson</option>
+                {salespeople.map((sp) => (
+                  <option key={sp.id} value={sp.name}>{sp.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Loyalty points */}
           {customerLoyalty && customerLoyalty.points > 0 && !isOnline === false && (
@@ -811,9 +1030,18 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
-                        <p className="text-[10px] text-gray-500">
-                          {item.quantityPieces} units
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[9px] text-gray-500 uppercase">Qty</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantityPieces || ''}
+                            onChange={(e) => updateCartQuantity(index, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            className="w-16 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          />
+                          <span className="text-[9px] text-gray-600">units</span>
+                        </div>
                         <div className="mt-1 flex items-center gap-1.5">
                           <span className="text-[9px] text-gray-500 uppercase">Sale price</span>
                           <input
@@ -1019,130 +1247,149 @@ export const POSPage: React.FC = () => {
             </div>
           )}
 
-          {/* Payment */}
+          {/* ── Payment ──────────────────────────────────────────── */}
           {(() => {
-            const primary = paymentSplits[0];
-            const secondaries = paymentSplits.slice(1);
             const outstanding = Math.max(0, total - effectivePaymentAmount);
-
-            const updatePrimary = (field: string, val: string) =>
-              setPaymentSplits(prev => [{ ...prev[0], [field]: val }, ...prev.slice(1)]);
-            const updateSecondary = (id: string, field: string, val: string) =>
-              setPaymentSplits(prev => [prev[0], ...prev.slice(1).map(s => s.id === id ? { ...s, [field]: val } : s)]);
-            const removeSecondary = (id: string) =>
-              setPaymentSplits(prev => [prev[0], ...prev.slice(1).filter(s => s.id !== id)]);
-            const addSecondary = (method: PayMethod) => {
-              setPaymentSplits(prev => [...prev.filter(s => s.method !== method), mkSplit(method)]);
-            };
-            const setMethod = (method: PayMethod) => {
-              if (method === 'credit') {
-                setPaymentSplits([mkSplit('credit')]);
-              } else {
-                setPaymentSplits(prev => [{ ...prev[0], method }, ...prev.slice(1).filter(s => s.method !== 'credit')]);
-              }
-            };
-
-            const inputStyle = { width: '100%', background: '#1d222a', border: '1px solid #2b313a', borderRadius: 10, padding: '8px 12px', color: '#f1f5f9', fontSize: 12, outline: 'none', fontFamily: 'monospace' } as const;
-            const SplitFields = ({ split, onChange }: { split: UISplit; onChange: (f: string, v: string) => void }) => (
-              <>
-                {split.method === 'cheque' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                    <input type="text" placeholder="Cheque Number" value={split.cheque_number} onChange={e => onChange('cheque_number', e.target.value)} style={inputStyle} />
-                    <input type="text" placeholder="Bank Name" value={split.bank_name} onChange={e => onChange('bank_name', e.target.value)} style={inputStyle} />
-                    <input type="date" value={split.due_date} onChange={e => onChange('due_date', e.target.value)} style={{ ...inputStyle, color: split.due_date ? '#f1f5f9' : '#6b7280' }} />
-                  </div>
-                )}
-                {split.method === 'online' && (
-                  <input type="text" placeholder="Bank Name (e.g. BOC, HNB, Sampath)" value={split.bank_name} onChange={e => onChange('bank_name', e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
-                )}
-              </>
-            );
+            const SL_BANKS = [
+              'BOC – Bank of Ceylon', 'NSB – National Savings Bank', "People's Bank",
+              'HNB – Hatton National Bank', 'Sampath Bank', 'Commercial Bank',
+              'Seylan Bank', 'NDB – National Development Bank', 'DFCC Bank',
+              'Pan Asia Bank', 'Union Bank', 'Amana Bank', 'MCB Bank', 'Other',
+            ];
+            const fieldStyle: React.CSSProperties = { background: '#0d1016', border: '1px solid #2b313a', borderRadius: 7, padding: '5px 8px', color: '#f1f5f9', fontSize: 11, outline: 'none', fontFamily: 'monospace', width: '100%' };
 
             return (
-              <>
-                {/* Method selector */}
-                <div className="pos-pay-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-                  {([['cash','Cash',Wallet],['card','Card',CreditCard],['online','Online',QrCode],['cheque','Cheque',CreditCard],['credit','Credit',CreditCard]] as [PayMethod,string,typeof Wallet][]).map(([m, label, Icon]) => (
-                    <button key={m} type="button" className={cn(primary.method === m && 'active')} onClick={() => setMethod(m)}>
-                      <Icon size={16} /> {label}
-                    </button>
-                  ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+                {/* Section header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Payment Lines</span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#9ca3af' }}>Due <strong style={{ color: '#f1f5f9' }}>LKR {total.toFixed(2)}</strong></span>
                 </div>
 
-                {/* Primary method details + amount */}
-                {!isFullCredit && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: '#9aa5b1', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>Amount</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder={`${total.toFixed(2)}`}
-                        value={primary.amount}
-                        onChange={e => updatePrimary('amount', e.target.value)}
-                        style={{ flex: 1, background: '#1d222a', border: '1px solid #2b313a', borderRadius: 10, padding: '7px 12px', color: '#f1f5f9', fontSize: 13, fontFamily: 'monospace', outline: 'none' }}
-                      />
-                    </div>
-                    <SplitFields split={primary} onChange={(f, v) => updatePrimary(f, v)} />
-
-                    {/* Secondary splits */}
-                    {secondaries.map(s => (
-                      <div key={s.id} style={{ background: '#12161d', border: '1px solid #2b313a', borderRadius: 10, padding: '8px 10px' }}>
+                {/* Lines table */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {paymentSplits.map((split, idx) => {
+                    const isCreditLine = split.method === 'credit';
+                    const isSingleLine = paymentSplits.length === 1;
+                    return (
+                      <div key={split.id} style={{
+                        background: '#12161d', border: '1px solid #2b313a',
+                        borderRadius: 10, padding: '8px 10px',
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                      }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#9aa5b1', textTransform: 'uppercase', minWidth: 40 }}>{s.method}</span>
-                          {s.method === 'credit' ? (
-                            <div style={{ flex: 1, background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 8, padding: '5px 10px', color: '#c4b5fd', fontSize: 12, fontFamily: 'monospace', textAlign: 'right' }}>
-                              LKR {outstanding.toFixed(2)}
+                          <span style={{ fontSize: 10, color: '#4b5563', fontFamily: 'monospace', minWidth: 12 }}>{idx + 1}</span>
+
+                          <select
+                            value={split.method}
+                            onChange={e => updateSplitMethod(split.id, e.target.value as PayMethod)}
+                            style={{
+                              flex: '0 0 86px', background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 6px', color: '#d1d5db',
+                              fontSize: 11, fontWeight: 600, outline: 'none', cursor: 'pointer',
+                            }}
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="online">Online</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="credit">Credit</option>
+                          </select>
+
+                          {isCreditLine ? (
+                            <div style={{
+                              flex: 1, background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 8px', color: '#9ca3af',
+                              fontSize: 12, fontFamily: 'monospace', textAlign: 'right',
+                            }}>
+                              {outstanding > 0 ? outstanding.toFixed(2) : '0.00'}
+                            </div>
+                          ) : isSingleLine ? (
+                            <div style={{
+                              flex: 1, background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 8px', color: '#e5e7eb',
+                              fontSize: 12, fontFamily: 'monospace', textAlign: 'right',
+                            }}>
+                              {total.toFixed(2)}
                             </div>
                           ) : (
-                            <input type="number" min="0" step="0.01" placeholder="Amount" value={s.amount} onChange={e => updateSecondary(s.id, 'amount', e.target.value)}
-                              style={{ flex: 1, background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8, padding: '5px 10px', color: '#f1f5f9', fontSize: 12, fontFamily: 'monospace', outline: 'none' }} />
+                            <input
+                              type="number" min="0" step="0.01"
+                              placeholder="0.00"
+                              value={split.amount}
+                              onChange={e => updateSplit(split.id, 'amount', e.target.value)}
+                              onFocus={e => e.target.select()}
+                              style={{ flex: 1, ...fieldStyle, textAlign: 'right' }}
+                            />
                           )}
-                          <button type="button" onClick={() => removeSecondary(s.id)} style={{ color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0 }}>
-                            <X size={13} />
-                          </button>
-                        </div>
-                        <SplitFields split={s} onChange={(f, v) => updateSecondary(s.id, f, v)} />
-                      </div>
-                    ))}
 
-                    {/* Add second method button */}
-                    {secondaries.length === 0 && (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {(['cash','card','online','cheque','credit'] as PayMethod[]).filter(m => m !== primary.method).map(m => (
-                          <button key={m} type="button" onClick={() => addSecondary(m)}
-                            style={{ flex: 1, fontSize: 10, fontWeight: 600, color: '#6b7280', background: '#12161d', border: '1px dashed #2b313a', borderRadius: 8, padding: '5px 4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                            <PlusCircle size={10} /> {m}
-                          </button>
-                        ))}
+                          {!isSingleLine && (
+                            <button type="button" onClick={() => removeSplit(split.id)}
+                              style={{ color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0, padding: 2, flexShrink: 0 }}>
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        {split.method === 'cheque' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 18 }}>
+                            <input type="text" placeholder="Cheque number" value={split.cheque_number}
+                              onChange={e => updateSplit(split.id, 'cheque_number', e.target.value)} style={fieldStyle} />
+                            <select value={split.bank_name} onChange={e => updateSplit(split.id, 'bank_name', e.target.value)}
+                              style={{ ...fieldStyle, color: split.bank_name ? '#e5e7eb' : '#6b7280', cursor: 'pointer' }}>
+                              <option value="">Select bank…</option>
+                              {SL_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                            <input type="date" value={split.due_date}
+                              onChange={e => updateSplit(split.id, 'due_date', e.target.value)}
+                              style={{ ...fieldStyle, color: split.due_date ? '#e5e7eb' : '#6b7280' }} />
+                          </div>
+                        )}
+
+                        {split.method === 'online' && (
+                          <div style={{ paddingLeft: 18 }}>
+                            <select value={split.bank_name} onChange={e => updateSplit(split.id, 'bank_name', e.target.value)}
+                              style={{ ...fieldStyle, color: split.bank_name ? '#e5e7eb' : '#6b7280', cursor: 'pointer' }}>
+                              <option value="">Select bank…</option>
+                              {SL_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add line */}
+                <button type="button" onClick={addSplit}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    background: 'none', border: '1px dashed #2b313a', borderRadius: 8,
+                    padding: '6px', color: '#4b5563', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <PlusCircle size={11} /> Add Payment Line
+                </button>
+
+                {/* Summary strip — only shown when there's something to communicate */}
+                {(paymentSplits.length > 1 || outstanding > 0.01) && (
+                  <div style={{ borderTop: '1px solid #1f242c', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {paymentSplits.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: '#6b7280' }}>Paid</span>
+                        <span style={{ fontFamily: 'monospace', color: '#d1d5db' }}>LKR {effectivePaymentAmount.toFixed(2)}</span>
                       </div>
                     )}
-
-                    {/* Outstanding balance indicator */}
                     {outstanding > 0.01 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 10, padding: '7px 12px' }}>
-                        <div>
-                          <p style={{ fontSize: 10, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Credit balance</p>
-                          <p style={{ fontSize: 10, color: '#92400e', marginTop: 1 }}>Added to customer account</p>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#fbbf24' }}>LKR {outstanding.toFixed(2)}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: '#9ca3af' }}>Balance on credit</span>
+                        <span style={{ fontFamily: 'monospace', color: '#d1d5db' }}>LKR {outstanding.toFixed(2)}</span>
                       </div>
                     )}
                   </div>
                 )}
-
-                {/* Full credit banner */}
-                {isFullCredit && (
-                  <div style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 10, padding: '10px 14px', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa' }}>Full Credit</p>
-                      <p style={{ fontSize: 10, color: '#7c5ccc', marginTop: 1 }}>Full amount added to customer outstanding</p>
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#a78bfa' }}>LKR {total.toFixed(2)}</span>
-                  </div>
-                )}
-              </>
+              </div>
             );
           })()}
 

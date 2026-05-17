@@ -7,20 +7,22 @@ import { ExportBar } from './shared/ExportBar';
 
 export const SalesProfitReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      const { from, to } = getReportDateRange(period);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
       const res = await getSalesProfitReport(from || undefined, to || undefined);
       setData(res);
     }
     load();
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
-  const headers = ['Invoice', 'Product', 'Qty', 'Selling Price', 'Cost Price', 'Total Revenue', 'Total Cost', 'Profit'];
+  const headers = ['Invoice', 'Product', 'Sold By', 'Qty', 'Selling Price', 'Cost Price', 'Total Revenue', 'Total Cost', 'Profit'];
   const rows = data.map(r => [
-    r.invoice_no, r.product, r.quantity, 
+    r.invoice_no, r.product, r.salesperson_name ?? '—', r.quantity,
     fmtCurrency(r.selling_price), fmtCurrency(r.cost_price),
     fmtCurrency(r.total_revenue), fmtCurrency(r.total_cost),
     fmtCurrency(r.profit)
@@ -31,7 +33,7 @@ export const SalesProfitReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Sales Profit Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Sales_Profit_Report" headers={headers} rows={rows} />
         </div>
       </div>
@@ -40,6 +42,7 @@ export const SalesProfitReport: React.FC = () => {
         columns={[
           { header: 'Invoice', accessor: 'invoice_no' },
           { header: 'Product', accessor: 'product' },
+          { header: 'Sold By', accessor: (r) => r.salesperson_name ?? '—', className: 'text-gray-400' },
           { header: 'Qty', accessor: 'quantity', className: 'text-center' },
           { header: 'Selling Price', accessor: (r) => fmtCurrency(r.selling_price), className: 'text-right' },
           { header: 'Cost Price', accessor: (r) => fmtCurrency(r.cost_price), className: 'text-right' },

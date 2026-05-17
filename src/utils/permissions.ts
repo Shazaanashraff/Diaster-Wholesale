@@ -34,7 +34,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import', 'manage_returns',
   ],
   pos_operator: [
-    'pos', 'view_customers', 'manage_returns',
+    'pos', 'manage_returns',
   ],
   warehouse: [
     'view_inventory', 'manage_inventory', 'manage_procurement',

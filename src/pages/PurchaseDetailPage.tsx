@@ -191,9 +191,10 @@ export const PurchaseDetailPage: React.FC = () => {
   async function handleFinalize() {
     if (!purchase) return;
     if (approvals.length > 0) { showToast('Cannot proceed: pending discount approval', false); return; }
+    setFinalizeConfirmOpen(false);
     setActionLoading(true);
     try {
-      await finalizeCostingAndClose(purchase.id, items, received, costs, purchase.exchange_rate);
+      await finalizeCostingAndClose(purchase.id, items, received, costs, 1);
       showToast('Purchase completed — cost prices updated');
       load();
     } catch (e: any) { showToast(e.message, false); } finally { setActionLoading(false); }
@@ -223,7 +224,7 @@ export const PurchaseDetailPage: React.FC = () => {
   );
   const estimatedCPPerUnit = useMemo(() => {
     if (!purchase || totalSellable === 0) return 0;
-    return (Number(purchase.total_lkr) + totalAddlCosts) / totalSellable;
+    return (Number(purchase.total_rmb) + totalAddlCosts) / totalSellable;
   }, [purchase, totalAddlCosts, totalSellable]);
 
   if (loading) {
@@ -330,9 +331,8 @@ export const PurchaseDetailPage: React.FC = () => {
           {purchase.status === 'received' && (
             <button
               onClick={() => setFinalizeConfirmOpen(true)}
-              disabled={actionLoading || costs.length === 0}
+              disabled={actionLoading}
               className="flex items-center gap-2 px-6 py-3.5 bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl text-sm font-bold hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50"
-              title={costs.length === 0 ? 'Add at least one cost first' : ''}
             >
               {actionLoading ? <Loader2 size={12} className="animate-spin" /> : <Lock size={14} />}
               Finalize & Close
@@ -366,7 +366,7 @@ export const PurchaseDetailPage: React.FC = () => {
           {[
             { label: 'Supplier', value: supplier?.name ?? '—' },
             { label: 'Country', value: supplier?.country ?? '—' },
-            { label: 'Exchange Rate', value: `1 RMB = ${Number(purchase.exchange_rate).toFixed(2)} LKR`, mono: true },
+            { label: 'Total (LKR)', value: fmt(Number(purchase.total_rmb)), mono: true },
             { label: 'Status', value: statusCfg.label },
           ].map((f) => (
             <div key={f.label}>
@@ -385,14 +385,13 @@ export const PurchaseDetailPage: React.FC = () => {
         <div className="px-5 py-3.5 border-b border-[#2b313a] flex items-center justify-between">
           <h2 className="text-xs font-bold text-white uppercase tracking-widest">Order Items</h2>
           <div className="flex gap-4 text-xs">
-            <span className="text-gray-500">Total RMB: <span className="font-mono font-bold text-white">{fmtRmb(purchase.total_rmb)}</span></span>
-            <span className="text-gray-500">Total LKR: <span className="font-mono font-bold text-primary">{fmt(purchase.total_lkr)}</span></span>
+            <span className="text-gray-500">Total: <span className="font-mono font-bold text-primary">{fmt(purchase.total_rmb)}</span></span>
           </div>
         </div>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#1d222a]">
-              {['Product', 'Model', 'Qty (Units)', 'Cartons (Ref)', 'Unit Price (RMB)', 'Total LKR'].map((h) => (
+              {['Product', 'Model', 'Qty (Units)', 'Cartons', 'Unit Price (LKR)', 'Total (LKR)'].map((h) => (
                 <th key={h} className="px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
               ))}
             </tr>
@@ -401,7 +400,7 @@ export const PurchaseDetailPage: React.FC = () => {
             {items.map((item) => {
               const product = item.products as any;
               const cartonId = `${purchase.reference}-${product?.model ?? 'UNK'}`;
-              const lineLkr = item.quantity_units * item.unit_price_rmb * Number(purchase.exchange_rate);
+              const lineLkr = item.quantity_units * item.unit_price_rmb;
               return (
                 <tr key={item.id} className="hover:bg-[#1d222a] transition-colors">
                   <td className="px-5 py-3.5">
@@ -411,7 +410,7 @@ export const PurchaseDetailPage: React.FC = () => {
                   <td className="px-5 py-3.5 text-xs font-mono text-gray-400">{product?.model ?? '—'}</td>
                   <td className="px-5 py-3.5 text-xs font-mono text-white">{item.quantity_units.toLocaleString()}</td>
                   <td className="px-5 py-3.5 text-xs font-mono text-gray-500">{item.quantity_cartons}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">{fmtRmb(item.unit_price_rmb)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">{fmt(item.unit_price_rmb)}</td>
                   <td className="px-5 py-3.5 text-xs font-mono text-white">{fmt(lineLkr)}</td>
                 </tr>
               );
@@ -697,7 +696,7 @@ export const PurchaseDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="bg-[#1d222a] rounded-xl p-3">
                   <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase Cost (LKR)</p>
-                  <p className="font-mono font-bold text-white mt-1">{fmt(purchase.total_lkr)}</p>
+                  <p className="font-mono font-bold text-white mt-1">{fmt(purchase.total_rmb)}</p>
                 </div>
                 <div className="bg-[#1d222a] rounded-xl p-3">
                   <p className="text-[9px] text-gray-600 uppercase tracking-widest">Additional Costs</p>
@@ -743,7 +742,7 @@ export const PurchaseDetailPage: React.FC = () => {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-[#1d222a] rounded-xl p-3">
                 <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase LKR</p>
-                <p className="font-mono font-bold text-white text-xs mt-1">{fmt(purchase.total_lkr)}</p>
+                <p className="font-mono font-bold text-white text-xs mt-1">{fmt(purchase.total_rmb)}</p>
               </div>
               <div className="bg-[#1d222a] rounded-xl p-3">
                 <p className="text-[9px] text-gray-600 uppercase tracking-widest">Sellable Units</p>

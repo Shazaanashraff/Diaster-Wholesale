@@ -33,6 +33,7 @@ import { CustomerLedgerAggregateReport } from './reports/CustomerLedgerAggregate
 import { FastMovingReport }           from './reports/FastMovingReport';
 import { SlowMovingReport }           from './reports/SlowMovingReport';
 import { DailyFinanceReport }         from './reports/DailyFinanceReport';
+import { SalesByPersonReport }        from './reports/SalesByPersonReport';
 
 const CATEGORIES = [
   {
@@ -69,6 +70,7 @@ const CATEGORIES = [
       { id: 'daily-sales',        label: 'Daily Sales',         component: DailySalesReport },
       { id: 'sales-by-product',   label: 'By Product',          component: SalesByProductReport },
       { id: 'sales-by-customer',  label: 'By Customer',         component: SalesByCustomerReport },
+      { id: 'sales-by-person',    label: 'By Salesperson',      component: SalesByPersonReport },
       { id: 'sales-by-mode',      label: 'Wholesale vs Retail', comingSoon: true },
       { id: 'invoice-report',     label: 'Invoice Report',      comingSoon: true },
     ],

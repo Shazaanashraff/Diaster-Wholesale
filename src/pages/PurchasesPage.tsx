@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Search, X, Loader2, AlertCircle, CheckCircle2,
   Package, ChevronRight, Trash2, RefreshCw,
 } from 'lucide-react';
-import { getPurchases, createPurchase, deletePurchase, requestDiscountApproval } from '../services/purchaseService';
+import { getPurchases, createPurchase, deletePurchase, forceDeletePurchase, requestDiscountApproval } from '../services/purchaseService';
 import { getSuppliers, getLocations } from '../services/supplierService';
 import { getProducts, createProduct } from '../services/productService';
 import { getInventory, getMovementRates } from '../services/inventoryService';
@@ -34,10 +34,10 @@ interface NewItemRow {
   product_id: string;
   quantity_units: number;
   quantity_cartons: number;
-  unit_price_rmb: number;
+  unit_price_lkr: number;
 }
 
-const EMPTY_ITEM: NewItemRow = { product_id: '', quantity_units: 0, quantity_cartons: 0, unit_price_rmb: 0 };
+const EMPTY_ITEM: NewItemRow = { product_id: '', quantity_units: 0, quantity_cartons: 0, unit_price_lkr: 0 };
 
 interface QuickProductForm {
   name: string;
@@ -59,6 +59,130 @@ const EMPTY_QUICK_PRODUCT: QuickProductForm = {
   description: '',
 };
 
+// ── Searchable product combobox ──────────────────────────────────────────────
+interface ProductSearchSelectProps {
+  products: Product[];
+  stockMap: Record<string, number>;
+  value: string;
+  onChange: (id: string) => void;
+}
+
+const ProductSearchSelect: React.FC<ProductSearchSelectProps> = ({ products, stockMap, value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = products.find(p => p.id === value);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return products;
+    const q = query.toLowerCase();
+    return products.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      (p.item_code ?? '').toLowerCase().includes(q) ||
+      (p.sku ?? '').toLowerCase().includes(q)
+    );
+  }, [products, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  function handleOpen() {
+    setOpen(true);
+    setQuery('');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function handleSelect(id: string) {
+    onChange(id);
+    setOpen(false);
+    setQuery('');
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="w-full bg-[#1d222a] border border-[#2b313a] text-xs rounded-lg px-2 py-2 text-left focus:outline-none focus:border-primary/40 flex items-center justify-between gap-1"
+      >
+        <span className={selected ? 'text-gray-200 truncate' : 'text-gray-500'}>
+          {selected ? `${selected.item_code ? selected.item_code + ' — ' : ''}${selected.name}` : 'Search product…'}
+        </span>
+        <Search size={11} className="text-gray-600 shrink-0" />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-[150] w-full min-w-[260px] bg-[#171c23] border border-[#2b313a] rounded-xl shadow-2xl overflow-hidden">
+          <div className="p-2 border-b border-[#2b313a]">
+            <div className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] rounded-lg px-2 py-1.5">
+              <Search size={11} className="text-gray-500 shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Type to search…"
+                className="bg-transparent text-xs text-gray-200 outline-none w-full placeholder-gray-600"
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery('')} className="text-gray-600 hover:text-gray-400">
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          </div>
+          <ul className="max-h-56 overflow-y-auto custom-scrollbar">
+            {filtered.length === 0 ? (
+              <li className="px-3 py-4 text-center text-xs text-gray-600">No products match "{query}"</li>
+            ) : filtered.map(p => {
+              const stock = stockMap[p.id] ?? 0;
+              const isSelected = p.id === value;
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(p.id)}
+                    className={cn(
+                      'w-full text-left px-3 py-2.5 flex items-center justify-between gap-2 hover:bg-[#1d222a] transition-colors',
+                      isSelected && 'bg-primary/10'
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-200 truncate">
+                        {stock === 0 && <span className="text-amber-500 mr-1">⚠</span>}
+                        {p.item_code ? <span className="text-gray-500 mr-1">{p.item_code}</span> : null}
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] text-gray-600 mt-0.5">
+                        {stock > 0 ? `${stock} in stock` : 'out of stock'}
+                        {p.wholesale_price ? ` · LKR ${Number(p.wholesale_price).toFixed(2)}` : ''}
+                      </p>
+                    </div>
+                    {isSelected && <span className="text-primary text-[10px] font-bold shrink-0">✓</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const PurchasesPage: React.FC = () => {
   const navigate = useNavigate();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -78,8 +202,6 @@ export const PurchasesPage: React.FC = () => {
     supplier_id: '',
     location_id: '',
     rep_name: '',
-    exchange_rate: '48',
-    discount_amount: '0',
     notes: '',
   });
   const [items, setItems] = useState<NewItemRow[]>([{ ...EMPTY_ITEM }]);
@@ -149,7 +271,7 @@ export const PurchasesPage: React.FC = () => {
 
   // ── New purchase form ────────────────────────────────────────────
   function openPanel() {
-  setForm({ supplier_id: '', location_id: '', rep_name: '', exchange_rate: '48', discount_amount: '0', notes: '' });
+    setForm({ supplier_id: '', location_id: '', rep_name: '', notes: '' });
     setFormError('');
     setQuickProductOpen(false);
     setQuickProductError('');
@@ -220,8 +342,6 @@ export const PurchasesPage: React.FC = () => {
     }
   }
 
-  const exchRate = parseFloat(form.exchange_rate) || 0;
-
   // Products sorted: low/zero stock first (need to reorder), then alphabetical
   const sortedProducts = useMemo(() => {
     const stockMap: Record<string, number> = {};
@@ -240,34 +360,24 @@ export const PurchasesPage: React.FC = () => {
     });
   }, [products, inventory]);
 
-  const totals = useMemo(() => {
-    const rmb = items.reduce((s, i) => s + i.quantity_units * i.unit_price_rmb, 0);
-    return { rmb, lkr: rmb * exchRate };
-  }, [items, exchRate]);
+  const stockMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const inv of inventory) {
+      m[inv.product_id] =
+        (inv.cartons_in - inv.cartons_sold + inv.carton_adj) * inv.pieces_per_carton +
+        (inv.pieces_in - inv.pieces_sold + inv.piece_adj);
+    }
+    return m;
+  }, [inventory]);
+
+  const totalLkr = useMemo(() =>
+    items.reduce((s, i) => s + i.quantity_units * i.unit_price_lkr, 0),
+  [items]);
 
   async function handleCreate() {
     if (!form.supplier_id) { setFormError('Select a supplier'); return; }
-    if (!exchRate || exchRate <= 0) { setFormError('Enter a valid exchange rate'); return; }
-    const validItems = items.filter((i) => i.product_id && i.quantity_units > 0 && i.unit_price_rmb > 0);
+    const validItems = items.filter((i) => i.product_id && i.quantity_units > 0 && i.unit_price_lkr > 0);
     if (validItems.length === 0) { setFormError('Add at least one item with product, quantity and price'); return; }
-
-    const discountVal = Number(form.discount_amount) || 0;
-    const percent = totals.lkr > 0 ? (discountVal / totals.lkr) * 100 : 0;
-    
-    let needsApproval = false;
-    let appliedDiscount = discountVal;
-
-    if (percent > 15) {
-      setFormError(`Discount exceeds maximum allowed limit (15%). You entered ${percent.toFixed(1)}%.`);
-      return;
-    }
-
-    if (role === 'officer' || role === 'pos_operator') {
-      if (percent > 10) {
-        needsApproval = true;
-        appliedDiscount = 0; // Applied after manager approval
-      }
-    }
 
     setSaving(true);
     setFormError('');
@@ -276,24 +386,18 @@ export const PurchasesPage: React.FC = () => {
         supplier_id: form.supplier_id,
         location_id: form.location_id || undefined,
         rep_name: form.rep_name || undefined,
-        exchange_rate: exchRate,
-        discount_amount: appliedDiscount,
+        exchange_rate: 1,
+        discount_amount: 0,
         notes: form.notes,
-        items: validItems,
+        items: validItems.map(i => ({
+          product_id: i.product_id,
+          quantity_units: i.quantity_units,
+          quantity_cartons: i.quantity_cartons,
+          unit_price_rmb: i.unit_price_lkr,
+        })),
       });
 
-      if (needsApproval) {
-        await requestDiscountApproval({
-          purchase_id: purchase.id,
-          discount_type: 'bill',
-          discount_amount: discountVal,
-          discount_percent: percent,
-          requested_by: roleLabel,
-        });
-        showToast(`${purchase.reference} drafted. Discount requires Manager approval.`, true);
-      } else {
-        showToast(`${purchase.reference} drafted`);
-      }
+      showToast(`${purchase.reference} drafted`);
 
       setPanelOpen(false);
       load();
@@ -312,7 +416,11 @@ export const PurchasesPage: React.FC = () => {
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
-      await deletePurchase(deleteTarget.id);
+      if (role === 'admin' && deleteTarget.status !== 'draft') {
+        await forceDeletePurchase(deleteTarget.id);
+      } else {
+        await deletePurchase(deleteTarget.id);
+      }
       showToast(`${deleteTarget.reference} deleted`);
       load();
     } catch (err: any) {
@@ -324,7 +432,7 @@ export const PurchasesPage: React.FC = () => {
 
   // KPI summary
   const totalOrders = purchases.length;
-  const totalValue = purchases.filter((p) => p.status !== 'draft' && p.status !== 'cancelled').reduce((s, p) => s + Number(p.total_lkr), 0);
+  const totalValue = purchases.filter((p) => p.status !== 'draft' && p.status !== 'cancelled').reduce((s, p) => s + Number(p.total_rmb), 0);
   const activeOrders = purchases.filter((p) => p.status === 'ordered').length;
 
   return (
@@ -428,7 +536,7 @@ export const PurchasesPage: React.FC = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#f8fafc]/5 border-b border-[#2b313a]">
-              {['Reference', 'Supplier', 'Status', 'Exchange Rate', 'Total RMB', 'Total LKR', 'Date', ''].map((h) => (
+              {['Reference', 'Supplier', 'Status', 'Total (LKR)', 'Date', ''].map((h) => (
                 <th key={h} className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 last:text-right">
                   {h}
                 </th>
@@ -437,10 +545,10 @@ export const PurchasesPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-[#2b313a]">
             {loading ? (
-              <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-600">Loading…</td></tr>
+              <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-600">Loading…</td></tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center">
+                <td colSpan={6} className="px-5 py-12 text-center">
                   <Package size={28} className="mx-auto text-slate-700 mb-2" />
                   <p className="text-sm text-slate-600 font-semibold">No purchases found.</p>
                 </td>
@@ -464,17 +572,13 @@ export const PurchasesPage: React.FC = () => {
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-slate-400">
-                    1 RMB = {Number(p.exchange_rate).toFixed(2)} LKR
-                  </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-slate-300">{fmtRmb(p.total_rmb)}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-slate-100">{fmt(p.total_lkr)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-slate-100">{fmt(p.total_rmb)}</td>
                   <td className="px-5 py-3.5 text-xs text-slate-500">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                      {p.status === 'draft' && (
+                      {(p.status === 'draft' || role === 'admin') && (
                         <button
                           onClick={(e) => handleDeleteRequest(p, e)}
                           className="p-1.5 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -515,68 +619,57 @@ export const PurchasesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Supplier + Location */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
-                  <select
-                    value={form.supplier_id}
-                    onChange={(e) => setForm((p) => ({ ...p, supplier_id: e.target.value }))}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                  >
-                    <option value="">Select supplier…</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Destination *</label>
-                  <select
-                    value={form.location_id}
-                    onChange={(e) => setForm((p) => ({ ...p, location_id: e.target.value }))}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                  >
-                    <option value="">Select location…</option>
-                    {locations.map((loc) => (
-                      <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
-                    ))}
-                  </select>
-                </div>
+              {/* Supplier */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
+                <select
+                  value={form.supplier_id}
+                  onChange={(e) => setForm((p) => ({ ...p, supplier_id: e.target.value }))}
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
+                >
+                  <option value="">Select supplier…</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}{s.country ? ` (${s.country})` : ''}</option>
+                  ))}
+                </select>
               </div>
 
-              {/* Rate + Rep */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Exchange Rate (LKR for 1 RMB) *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    value={form.exchange_rate}
-                    onChange={(e) => setForm((p) => ({ ...p, exchange_rate: e.target.value }))}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Purchase Rep (Optional)</label>
-                  <input
-                    type="text"
-                    value={form.rep_name}
-                    onChange={(e) => setForm((p) => ({ ...p, rep_name: e.target.value }))}
-                    placeholder="E.g., John Doe"
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                  />
-                </div>
+              {/* Destination */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Destination</label>
+                <select
+                  value={form.location_id}
+                  onChange={(e) => setForm((p) => ({ ...p, location_id: e.target.value }))}
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
+                >
+                  <option value="">Select location…</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
+                  ))}
+                </select>
               </div>
 
+              {/* Purchase Rep */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Purchase Rep</label>
+                <input
+                  type="text"
+                  value={form.rep_name}
+                  onChange={(e) => setForm((p) => ({ ...p, rep_name: e.target.value }))}
+                  placeholder="Name of the purchasing representative"
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
+                />
+              </div>
+
+              {/* Notes */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Notes</label>
-                <input
+                <textarea
                   value={form.notes}
                   onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                  placeholder="Optional notes…"
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
+                  placeholder="Optional notes about this purchase…"
+                  rows={2}
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40 resize-none"
                 />
               </div>
 
@@ -682,50 +775,37 @@ export const PurchasesPage: React.FC = () => {
 
                 <div className="space-y-2">
                   {/* Column headers */}
-                  <div className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 px-1">
-                    {['Product', 'Units', 'Cartons', 'Price (RMB)', ''].map((h) => (
+                  <div className="grid grid-cols-[2fr_80px_90px_110px_24px] gap-2 px-1">
+                    {['Product', 'Units', 'Qty/Carton', 'Price (LKR)', ''].map((h) => (
                       <span key={h} className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{h}</span>
                     ))}
                   </div>
 
                   {items.map((item, idx) => {
-                    const lineLkr = item.quantity_units * item.unit_price_rmb * exchRate;
+                    const lineTotal = item.quantity_units * item.unit_price_lkr;
                     return (
                       <React.Fragment key={idx}>
-                        <div className="grid grid-cols-[2fr_80px_80px_100px_24px] gap-2 items-center">
+                        <div className="grid grid-cols-[2fr_80px_90px_110px_24px] gap-2 items-center">
                           <div className="flex items-center gap-1">
-                            <select
+                            <ProductSearchSelect
+                              products={sortedProducts}
+                              stockMap={stockMap}
                               value={item.product_id}
-                              onChange={(e) => setItem(idx, { product_id: e.target.value })}
-                              className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
-                            >
-                              <option value="">Select product…</option>
-                              {sortedProducts.map((p) => {
-                                const inv = inventory.find(i => i.product_id === p.id);
-                                const stock = inv
-                                  ? (inv.cartons_in - inv.cartons_sold + inv.carton_adj) * inv.pieces_per_carton + (inv.pieces_in - inv.pieces_sold + inv.piece_adj)
-                                  : 0;
-                                return (
-                                  <option key={p.id} value={p.id}>
-                                    {stock <= 0 ? '⚠ ' : ''}{p.item_code} — {p.name}{stock > 0 ? ` (${stock} in stock)` : ' (out of stock)'}
-                                  </option>
-                                );
-                              })}
-                            </select>
+                              onChange={(id) => {
+                                const prod = products.find(p => p.id === id);
+                                setItem(idx, {
+                                  product_id: id,
+                                  quantity_cartons: prod?.pieces_per_carton ?? item.quantity_cartons,
+                                });
+                              }}
+                            />
                             <button
                               type="button"
                               onClick={() => openQuickProductForRow(idx)}
-                              className="text-gray-500 hover:text-primary transition-colors p-1"
+                              className="text-gray-500 hover:text-primary transition-colors p-1 shrink-0"
                               title="Quick create product"
                             >
                               <Plus size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.preventDefault(); getProducts().then(setProducts); }}
-                              className="text-gray-500 hover:text-primary transition-colors p-1"
-                              title="Refresh products list"
-                            >
-                              <RefreshCw size={12} />
                             </button>
                           </div>
                           <input
@@ -734,29 +814,29 @@ export const PurchasesPage: React.FC = () => {
                             value={item.quantity_units || ''}
                             onChange={(e) => setItem(idx, { quantity_units: parseInt(e.target.value) || 0 })}
                             placeholder="0"
-                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono text-center"
                           />
                           <input
                             type="number"
-                            min="0"
+                            min="1"
                             value={item.quantity_cartons || ''}
                             onChange={(e) => setItem(idx, { quantity_cartons: parseInt(e.target.value) || 0 })}
                             placeholder="0"
-                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono text-center"
                           />
                           <div className="relative">
                             <input
                               type="number"
                               min="0"
-                              step="0.0001"
-                              value={item.unit_price_rmb || ''}
-                              onChange={(e) => setItem(idx, { unit_price_rmb: parseFloat(e.target.value) || 0 })}
+                              step="0.01"
+                              value={item.unit_price_lkr || ''}
+                              onChange={(e) => setItem(idx, { unit_price_lkr: parseFloat(e.target.value) || 0 })}
                               placeholder="0.00"
                               className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
                             />
-                            {item.unit_price_rmb > 0 && exchRate > 0 && (
-                              <span className="absolute -bottom-3 left-0 text-[8px] font-bold text-gray-500 whitespace-nowrap">
-                                ≈ {fmt(lineLkr)}
+                            {lineTotal > 0 && (
+                              <span className="absolute -bottom-3.5 left-0 text-[8px] font-bold text-gray-500 whitespace-nowrap">
+                                Line: {fmt(lineTotal)}
                               </span>
                             )}
                           </div>
@@ -769,23 +849,23 @@ export const PurchasesPage: React.FC = () => {
                           </button>
                         </div>
                         {item.product_id && (
-                          <div className="col-span-5 bg-[#1d222a]/50 p-2 rounded-lg mt-1 mb-2 border border-[#2b313a] flex items-center gap-4">
+                          <div className="col-span-5 bg-[#1d222a]/50 p-2 rounded-lg mt-1 mb-2 border border-[#2b313a] flex items-center gap-4 flex-wrap">
                             {(() => {
-                              const stock = inventory.find(i => i.product_id === item.product_id);
+                              const totalPieces = stockMap[item.product_id] ?? 0;
                               const movement = movementRates[item.product_id];
-                              const totalPieces = stock ? (stock.cartons_in * stock.pieces_per_carton + stock.pieces_in - stock.cartons_sold * stock.pieces_per_carton - stock.pieces_sold + stock.piece_adj) : 0;
+                              const prod = products.find(p => p.id === item.product_id);
                               return (
                                 <>
                                   <div className="text-[10px] text-gray-400">
-                                    Current Stock: <span className="font-bold text-white">{totalPieces} pcs</span>
+                                    Stock: <span className="font-bold text-white">{totalPieces} pcs</span>
                                   </div>
                                   <div className="w-px h-3 bg-[#2b313a]" />
                                   <div className="text-[10px] text-gray-400">
-                                    30d Movement: <span className="font-bold text-emerald-400">{movement ? movement.units30d : 0} pcs</span>
+                                    30d Sales: <span className="font-bold text-white">{movement?.units30d ?? 0} pcs</span>
                                   </div>
                                   <div className="w-px h-3 bg-[#2b313a]" />
                                   <div className="text-[10px] text-gray-400">
-                                    Wholesale Price: <span className="font-bold text-white">LKR {stock?.wholesale_price.toFixed(2) || 0}</span>
+                                    Cost: <span className="font-bold text-white">LKR {Number(prod?.cost_price ?? 0).toFixed(2)}</span>
                                   </div>
                                 </>
                               );
@@ -802,12 +882,8 @@ export const PurchasesPage: React.FC = () => {
             {/* Summary + actions */}
             <div className="border-t border-[#2b313a] p-5 space-y-4">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Total RMB</span>
-                <span className="font-mono font-bold text-white">{fmtRmb(totals.rmb)}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">Total LKR (at {exchRate} rate)</span>
-                <span className="font-mono font-bold text-primary">{fmt(totals.lkr)}</span>
+                <span className="text-gray-500">Total (LKR)</span>
+                <span className="font-mono font-bold text-primary text-base">{fmt(totalLkr)}</span>
               </div>
               <div className="flex gap-3">
                 <button
@@ -835,7 +911,11 @@ export const PurchasesPage: React.FC = () => {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete Purchase Order"
-        message={`Are you sure you want to delete "${deleteTarget?.reference}"? This action cannot be undone.`}
+        message={
+          deleteTarget && deleteTarget.status !== 'draft'
+            ? `"${deleteTarget.reference}" is currently ${deleteTarget.status}. Deleting it will permanently remove all associated records. Stock levels and payments will NOT be automatically reversed. Proceed only if you are certain.`
+            : `Are you sure you want to delete "${deleteTarget?.reference}"? This action cannot be undone.`
+        }
         confirmText="Delete Purchase"
       />
     </div>

@@ -9,11 +9,13 @@ import { ReportKPICard } from './shared/ReportKPICard';
 
 export const DamageReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      const { from, to } = getReportDateRange(period);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
       
       let query = supabase
         .from('stock_adjustments')
@@ -28,7 +30,7 @@ export const DamageReport: React.FC = () => {
       setData(res || []);
     }
     load();
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const totalDamaged = data.reduce((sum, r) => sum + Math.abs(r.adjustment_pieces), 0);
   const headers = ['Date', 'Product', 'Damaged Qty', 'Reason', 'User'];
@@ -42,7 +44,7 @@ export const DamageReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Damage Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Damage_Report" headers={headers} rows={rows} />
         </div>
       </div>

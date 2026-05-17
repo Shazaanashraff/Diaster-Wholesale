@@ -278,6 +278,11 @@ export async function deletePurchase(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function forceDeletePurchase(id: string): Promise<void> {
+  const { error } = await supabase.from('purchases').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ── Discount Approvals ────────────────────────────────────────────────────────
 
 export async function requestDiscountApproval(data: {

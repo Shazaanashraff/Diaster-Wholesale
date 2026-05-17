@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { cn } from '../../lib/utils';
 import {
@@ -10,10 +11,6 @@ import {
 
 const fmt = (n: number) =>
   'LKR ' + Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function dayBounds(dateStr: string) {
-  return { from: `${dateStr}T00:00:00`, to: `${dateStr}T23:59:59` };
-}
 
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Cash', card: 'Card', cheque: 'Cheque',
@@ -35,8 +32,9 @@ interface OtherIncRow  { id: string; source_type: string; amount: number; method
 interface MethodIncome { method: string; total: number }
 
 export const DailyFinanceReport: React.FC = () => {
-  const today = new Date().toISOString().slice(0, 10);
-  const [date, setDate]         = useState(today);
+  const [period, setPeriod]     = useState<ReportPeriod>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]     = useState('');
   const [loading, setLoading]   = useState(true);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -44,17 +42,17 @@ export const DailyFinanceReport: React.FC = () => {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { from, to } = dayBounds(date);
+    const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [pRes, eRes, oRes] = await Promise.all([
-      supabase.from('payments').select('method, bank_name, amount, paid_at, reference').gte('paid_at', from).lte('paid_at', to),
-      supabase.from('expenses').select('id, category, description, amount, method, created_at').gte('created_at', from).lte('created_at', to).order('created_at', { ascending: false }),
-      supabase.from('other_income').select('id, source_type, amount, method, notes, created_at').gte('created_at', from).lte('created_at', to).order('created_at', { ascending: false }),
+      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
+      (() => { let q = supabase.from('expenses').select('id, category, description, amount, method, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
+      (() => { let q = supabase.from('other_income').select('id, source_type, amount, method, notes, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
     ]);
     setPayments((pRes.data ?? []) as PaymentRow[]);
     setExpenses((eRes.data ?? []) as ExpenseRow[]);
     setOtherInc((oRes.data ?? []) as OtherIncRow[]);
     setLoading(false);
-  }, [date]);
+  }, [period, customFrom, customTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -105,17 +103,11 @@ export const DailyFinanceReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Daily Finance Report</h2>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={date}
-            max={today}
-            onChange={e => setDate(e.target.value)}
-            className="bg-[#1d222a] border border-[#2b313a] text-sm text-white rounded-xl px-4 py-2.5 outline-none focus:border-primary/40 font-mono"
-          />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <button onClick={load} disabled={loading} className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] text-xs text-gray-400 rounded-xl px-3 py-2.5 hover:text-white transition-colors">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
-          <ExportBar filename={`Daily_Finance_${date}`} headers={exportHeaders} rows={exportRows} />
+          <ExportBar filename="Daily_Finance_Report" headers={exportHeaders} rows={exportRows} />
         </div>
       </div>
 
