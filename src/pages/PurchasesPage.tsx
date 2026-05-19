@@ -598,76 +598,76 @@ export const PurchasesPage: React.FC = () => {
         <>
           <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm" onClick={() => setPanelOpen(false)} />
           <div
-            className="fixed right-0 top-0 h-full z-[110] w-[620px] bg-[#111315] border-l border-[#2b313a] flex flex-col shadow-2xl"
+            className="fixed right-0 top-0 h-full z-[110] w-[600px] bg-[#111315] border-l border-[#2b313a] flex flex-col shadow-2xl"
             style={{ animation: 'posFadeIn 180ms ease' }}
           >
             {/* Panel header */}
-            <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2b313a]">
               <h2 className="font-bold text-slate-100">New Purchase Order</h2>
               <button onClick={() => setPanelOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-[#2b313a] transition-colors">
                 <X size={15} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-3 space-y-3">
               {formError && (
                 <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
                   <AlertCircle size={12} /> {formError}
                 </div>
               )}
 
-              {/* Supplier */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
-                <select
-                  value={form.supplier_id}
-                  onChange={(e) => setForm((p) => ({ ...p, supplier_id: e.target.value }))}
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                >
-                  <option value="">Select supplier…</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}{s.country ? ` (${s.country})` : ''}</option>
-                  ))}
-                </select>
+              {/* Top fields: Supplier + Destination side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Supplier *</label>
+                  <select
+                    value={form.supplier_id}
+                    onChange={(e) => setForm((p) => ({ ...p, supplier_id: e.target.value }))}
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-slate-500/40"
+                  >
+                    <option value="">Select supplier…</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}{s.country ? ` (${s.country})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Destination</label>
+                  <select
+                    value={form.location_id}
+                    onChange={(e) => setForm((p) => ({ ...p, location_id: e.target.value }))}
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-slate-500/40"
+                  >
+                    <option value="">Select location…</option>
+                    {locations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Destination */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Destination</label>
-                <select
-                  value={form.location_id}
-                  onChange={(e) => setForm((p) => ({ ...p, location_id: e.target.value }))}
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                >
-                  <option value="">Select location…</option>
-                  {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.type})</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Purchase Rep */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Purchase Rep</label>
-                <input
-                  type="text"
-                  value={form.rep_name}
-                  onChange={(e) => setForm((p) => ({ ...p, rep_name: e.target.value }))}
-                  placeholder="Name of the purchasing representative"
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40"
-                />
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                  placeholder="Optional notes about this purchase…"
-                  rows={2}
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-slate-500/40 resize-none"
-                />
+              {/* Purchase Rep + Notes side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Purchase Rep</label>
+                  <input
+                    type="text"
+                    value={form.rep_name}
+                    onChange={(e) => setForm((p) => ({ ...p, rep_name: e.target.value }))}
+                    placeholder="Rep name"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-slate-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Notes</label>
+                  <input
+                    type="text"
+                    value={form.notes}
+                    onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="Optional notes…"
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-slate-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-slate-500/40"
+                  />
+                </div>
               </div>
 
               {/* Items */}
@@ -683,7 +683,7 @@ export const PurchasesPage: React.FC = () => {
                 </div>
 
                 {quickProductOpen && (
-                  <div className="mb-3 rounded-xl border border-[#2b313a] bg-[#171c23] p-3 space-y-3">
+                  <div className="mb-3 rounded-xl border border-[#2b313a] bg-[#171c23] p-3 space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Quick New Product</p>
                       <button
@@ -704,7 +704,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.name}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, name: e.target.value }))}
                         placeholder="Item name"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
                       />
                       <input
                         type="number"
@@ -712,7 +712,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.pieces_per_carton}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, pieces_per_carton: e.target.value }))}
                         placeholder="Qty per carton"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
                       />
                       <input
                         type="number"
@@ -721,7 +721,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.cost_price}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, cost_price: e.target.value }))}
                         placeholder="Cost price"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
                       />
                       <input
                         type="number"
@@ -730,7 +730,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.wholesale_price}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, wholesale_price: e.target.value }))}
                         placeholder="Wholesale price"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
                       />
                       <input
                         type="number"
@@ -739,7 +739,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.retail_price}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, retail_price: e.target.value }))}
                         placeholder="Selling price"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
                       />
                       <input
                         type="number"
@@ -747,7 +747,7 @@ export const PurchasesPage: React.FC = () => {
                         value={quickProductForm.reorder_level}
                         onChange={(e) => setQuickProductForm((p) => ({ ...p, reorder_level: e.target.value }))}
                         placeholder="Reorder level"
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
                       />
                     </div>
 
@@ -755,14 +755,14 @@ export const PurchasesPage: React.FC = () => {
                       value={quickProductForm.description}
                       onChange={(e) => setQuickProductForm((p) => ({ ...p, description: e.target.value }))}
                       placeholder="Optional description"
-                      className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40"
+                      className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
                     />
 
                     <button
                       type="button"
                       onClick={handleQuickCreateProduct}
                       disabled={quickProductSaving}
-                      className="px-3 py-2 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-lg bg-primary text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary/90 transition-colors disabled:opacity-60 flex items-center gap-1"
                     >
                       {quickProductSaving && <Loader2 size={10} className="animate-spin" />}
                       Create Item
@@ -770,10 +770,10 @@ export const PurchasesPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  {/* Column headers */}
-                  <div className="grid grid-cols-[2fr_80px_90px_110px_24px] gap-2 px-1">
-                    {['Product', 'Units', 'Qty/Carton', 'Price (LKR)', ''].map((h) => (
+                <div className="space-y-1.5">
+                  {/* Column headers — same grid as rows, no extra px so they align exactly */}
+                  <div className="grid grid-cols-[1fr_72px_80px_100px_20px] gap-2">
+                    {['Product', 'Units', 'Qty/Ctn', 'Price (LKR)', ''].map((h) => (
                       <span key={h} className="text-[9px] font-bold uppercase tracking-widest text-slate-600">{h}</span>
                     ))}
                   </div>
@@ -782,8 +782,8 @@ export const PurchasesPage: React.FC = () => {
                     const lineTotal = item.quantity_units * item.unit_price_lkr;
                     return (
                       <React.Fragment key={idx}>
-                        <div className="grid grid-cols-[2fr_80px_90px_110px_24px] gap-2 items-center">
-                          <div className="flex items-center gap-1">
+                        <div className="grid grid-cols-[1fr_72px_80px_100px_20px] gap-2 items-center">
+                          <div className="flex items-center gap-1 min-w-0">
                             <ProductSearchSelect
                               products={sortedProducts}
                               stockMap={stockMap}
@@ -799,10 +799,10 @@ export const PurchasesPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => openQuickProductForRow(idx)}
-                              className="text-gray-500 hover:text-primary transition-colors p-1 shrink-0"
+                              className="text-gray-500 hover:text-primary transition-colors p-0.5 shrink-0"
                               title="Quick create product"
                             >
-                              <Plus size={14} />
+                              <Plus size={13} />
                             </button>
                           </div>
                           <input
@@ -811,7 +811,7 @@ export const PurchasesPage: React.FC = () => {
                             value={item.quantity_units || ''}
                             onChange={(e) => setItem(idx, { quantity_units: parseInt(e.target.value) || 0 })}
                             placeholder="0"
-                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono text-center"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-1.5 py-1.5 focus:outline-none focus:border-primary/40 font-mono text-center w-full"
                           />
                           <input
                             type="number"
@@ -819,34 +819,27 @@ export const PurchasesPage: React.FC = () => {
                             value={item.quantity_cartons || ''}
                             onChange={(e) => setItem(idx, { quantity_cartons: parseInt(e.target.value) || 0 })}
                             placeholder="0"
-                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono text-center"
+                            className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-1.5 py-1.5 focus:outline-none focus:border-primary/40 font-mono text-center w-full"
                           />
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.unit_price_lkr || ''}
-                              onChange={(e) => setItem(idx, { unit_price_lkr: parseFloat(e.target.value) || 0 })}
-                              placeholder="0.00"
-                              className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-2 focus:outline-none focus:border-primary/40 font-mono"
-                            />
-                            {lineTotal > 0 && (
-                              <span className="absolute -bottom-3.5 left-0 text-[8px] font-bold text-gray-500 whitespace-nowrap">
-                                Line: {fmt(lineTotal)}
-                              </span>
-                            )}
-                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unit_price_lkr || ''}
+                            onChange={(e) => setItem(idx, { unit_price_lkr: parseFloat(e.target.value) || 0 })}
+                            placeholder="0.00"
+                            className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-1.5 py-1.5 focus:outline-none focus:border-primary/40 font-mono"
+                          />
                           <button
                             onClick={() => removeItemRow(idx)}
                             disabled={items.length === 1}
-                            className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20"
+                            className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20 flex items-center justify-center"
                           >
-                            <X size={13} />
+                            <X size={12} />
                           </button>
                         </div>
                         {item.product_id && (
-                          <div className="col-span-5 bg-[#1d222a]/50 p-2 rounded-lg mt-1 mb-2 border border-[#2b313a] flex items-center gap-4 flex-wrap">
+                          <div className="bg-[#1d222a]/50 px-2 py-1 rounded-lg border border-[#2b313a] flex items-center gap-3 flex-wrap">
                             {(() => {
                               const totalPieces = stockMap[item.product_id] ?? 0;
                               const movement = movementRates[item.product_id];
@@ -858,12 +851,20 @@ export const PurchasesPage: React.FC = () => {
                                   </div>
                                   <div className="w-px h-3 bg-[#2b313a]" />
                                   <div className="text-[10px] text-gray-400">
-                                    30d Sales: <span className="font-bold text-white">{movement?.units30d ?? 0} pcs</span>
+                                    30d: <span className="font-bold text-white">{movement?.units30d ?? 0} pcs</span>
                                   </div>
                                   <div className="w-px h-3 bg-[#2b313a]" />
                                   <div className="text-[10px] text-gray-400">
                                     Cost: <span className="font-bold text-white">LKR {Number(prod?.cost_price ?? 0).toFixed(2)}</span>
                                   </div>
+                                  {lineTotal > 0 && (
+                                    <>
+                                      <div className="w-px h-3 bg-[#2b313a]" />
+                                      <div className="text-[10px] text-gray-400 ml-auto">
+                                        Line: <span className="font-bold text-primary">{fmt(lineTotal)}</span>
+                                      </div>
+                                    </>
+                                  )}
                                 </>
                               );
                             })()}
@@ -877,7 +878,7 @@ export const PurchasesPage: React.FC = () => {
             </div>
 
             {/* Summary + actions */}
-            <div className="border-t border-[#2b313a] p-5 space-y-4">
+            <div className="border-t border-[#2b313a] px-4 py-3 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">Total (LKR)</span>
                 <span className="font-mono font-bold text-primary text-base">{fmt(totalLkr)}</span>
@@ -885,14 +886,14 @@ export const PurchasesPage: React.FC = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setPanelOpen(false)}
-                  className="flex-1 py-2.5 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl text-xs font-bold hover:text-white transition-colors"
+                  className="flex-1 py-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl text-xs font-bold hover:text-white transition-colors"
                 >
                   Discard
                 </button>
                 <button
                   onClick={handleCreate}
                   disabled={saving}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {saving && <Loader2 size={12} className="animate-spin" />}
                   Save as Draft

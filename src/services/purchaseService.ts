@@ -273,12 +273,24 @@ export async function finalizeCostingAndClose(
 
 // ── Delete draft ──────────────────────────────────────────────────────────────
 
+async function deletePurchaseDependents(id: string): Promise<void> {
+  await Promise.all([
+    supabase.from('purchase_receive').delete().eq('purchase_id', id),
+    supabase.from('purchase_items').delete().eq('purchase_id', id),
+    supabase.from('purchase_costs').delete().eq('purchase_id', id),
+    supabase.from('cartons').delete().eq('purchase_id', id),
+    supabase.from('purchase_discount_approvals').delete().eq('purchase_id', id),
+  ]);
+}
+
 export async function deletePurchase(id: string): Promise<void> {
+  await deletePurchaseDependents(id);
   const { error } = await supabase.from('purchases').delete().eq('id', id).eq('status', 'draft');
   if (error) throw new Error(error.message);
 }
 
 export async function forceDeletePurchase(id: string): Promise<void> {
+  await deletePurchaseDependents(id);
   const { error } = await supabase.from('purchases').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
