@@ -13,14 +13,18 @@ export const StockValuationReport: React.FC = () => {
     async function load() {
       
       const { data: stocks } = await supabase.from('product_stock').select('*');
+      const { data: products } = await supabase.from('products').select('id, cost_price');
       const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
+
+      const productCostMap: Record<string, number> = {};
+      (products || []).forEach(p => { if (p.cost_price) productCostMap[p.id] = Number(p.cost_price); });
 
       const costMap: Record<string, number> = {};
       (batches || []).forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
 
       const result = (stocks || []).map(s => {
         const available = (s.cartons_in * s.pieces_per_carton + s.pieces_in) - (s.cartons_sold * s.pieces_per_carton + s.pieces_sold) + s.piece_adj;
-        const unitCost = costMap[s.product_id] || 0;
+        const unitCost = costMap[s.product_id] || productCostMap[s.product_id] || 0;
         const valuation = available * unitCost;
 
         return {
