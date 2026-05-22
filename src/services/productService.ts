@@ -161,3 +161,48 @@ export async function archiveProduct(id: string): Promise<void> {
     throw new Error(error.message);
   }
 }
+
+const PRODUCT_LINK_TABLES = [
+  'invoice_items',
+  'sales_return_items',
+  'returns',
+  'supplier_return_items',
+  'purchase_items',
+  'purchase_receive',
+  'stock_batches',
+  'stock_adjustments',
+  'stock_transfer_items',
+  'cartons',
+];
+
+export async function getProductLinkCounts(productId: string): Promise<Record<string, number>> {
+  const results = await Promise.all(
+    PRODUCT_LINK_TABLES.map((table) =>
+      supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', productId)
+    )
+  );
+
+  const counts: Record<string, number> = {};
+  results.forEach((res, idx) => {
+    if (res.error) {
+      throw new Error(res.error.message);
+    }
+    counts[PRODUCT_LINK_TABLES[idx]] = res.count ?? 0;
+  });
+
+  return counts;
+}
+
+export async function clearProductStockAdjustments(productId: string): Promise<void> {
+  const { error } = await supabase
+    .from('stock_adjustments')
+    .delete()
+    .eq('product_id', productId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

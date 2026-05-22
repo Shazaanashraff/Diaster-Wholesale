@@ -8,6 +8,16 @@ export interface SupplierWithBalance extends Supplier {
   advance_balance: number;
 }
 
+function normalizePurchaseTotal(p: { total_lkr?: number; total_rmb?: number; exchange_rate?: number }): number {
+  const rate = Number(p.exchange_rate ?? 0);
+  const totalLkr = Number(p.total_lkr ?? 0);
+  const totalRmb = Number(p.total_rmb ?? 0);
+
+  if (rate > 0 && totalLkr > 0) return totalLkr / rate;
+  if (totalLkr > 0) return totalLkr;
+  return totalRmb;
+}
+
 export async function getLocations(): Promise<Location[]> {
   const { data, error } = await supabase
     .from('locations')
@@ -22,13 +32,13 @@ export async function getSuppliers(): Promise<SupplierWithBalance[]> {
   const [{ data: suppliers }, { data: purchaseTotals }, { data: paymentTotals }] =
     await Promise.all([
       supabase.from('suppliers').select('*').eq('is_active', true).order('name', { ascending: true }),
-      supabase.from('purchases').select('supplier_id, total_lkr').neq('status', 'draft').neq('status', 'cancelled'),
+      supabase.from('purchases').select('supplier_id, total_lkr, total_rmb, exchange_rate').neq('status', 'draft').neq('status', 'cancelled'),
       supabase.from('supplier_payments').select('supplier_id, amount'),
     ]);
 
   const purchased: Record<string, number> = {};
   for (const p of purchaseTotals ?? []) {
-    purchased[p.supplier_id] = (purchased[p.supplier_id] ?? 0) + Number(p.total_lkr);
+    purchased[p.supplier_id] = (purchased[p.supplier_id] ?? 0) + normalizePurchaseTotal(p);
   }
   const paid: Record<string, number> = {};
   for (const p of paymentTotals ?? []) {
@@ -154,6 +164,7 @@ export async function getSupplierLedger(supplierId: string): Promise<SupplierLed
 
   const purchaseRows = (purchases ?? []).map((p: any) => ({
     ...p,
+    total_lkr: normalizePurchaseTotal(p),
     item_count: Array.isArray(p.purchase_items) ? p.purchase_items.length : 0,
   }));
 

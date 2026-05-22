@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, deleteProduct, getProductLinkCounts, clearProductStockAdjustments } from '../services/productService';
 import { insertStockAdjustment } from '../services/inventoryService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { usePermissions } from '../utils/permissions';
 
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -18,6 +19,9 @@ export const ProductsPage: React.FC = () => {
 
   // ── Confirm delete ──
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
+  const [hardDeleteError, setHardDeleteError] = useState<string | null>(null);
+  const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
 
   // ── Form submission state ──
   const [saving, setSaving] = useState(false);
@@ -35,15 +39,24 @@ export const ProductsPage: React.FC = () => {
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
   const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail'>('name');
 
+  const { role } = usePermissions();
+  const isAdmin = role === 'admin';
+
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
-  const visibleProducts = products
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounced(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const visibleProducts = useMemo(() => products
     .filter(p => {
-      const q = searchQuery.toLowerCase();
+      const q = searchDebounced.toLowerCase();
       const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q);
       const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
       return matchesSearch && matchesCategory;
@@ -52,7 +65,7 @@ export const ProductsPage: React.FC = () => {
       if (sortBy === 'wholesale') return a.wholesale_price - b.wholesale_price;
       if (sortBy === 'retail')    return a.retail_price   - b.retail_price;
       return a.name.localeCompare(b.name);
-    });
+    }), [products, searchDebounced, filterCategory, sortBy]);
 
   const hasActiveFilters = filterCategory !== 'all' || sortBy !== 'name' || searchQuery !== '';
   const clearFilters = () => { setFilterCategory('all'); setSortBy('name'); setSearchQuery(''); };
@@ -125,7 +138,7 @@ export const ProductsPage: React.FC = () => {
           if (!duplicateWarning) { setSaving(false); return; }
         }
 
-        createdProduct = await createProduct({
+        const newProduct = await createProduct({
           name,
           model: '',
           wholesale_price,
@@ -135,32 +148,37 @@ export const ProductsPage: React.FC = () => {
           category: 'general',
           pieces_per_carton,
         });
+        createdProduct = newProduct;
 
         if (quantity > 0) {
           await insertStockAdjustment({
-            product_id: createdProduct.id,
+            product_id: newProduct.id,
             adjustment_pieces: quantity,
             reason: '[CREATE] Initial quantity at product creation',
             adjusted_by: 'admin',
           });
         }
 
-        setProducts((prev) => [...prev, createdProduct].sort((a, b) => a.name.localeCompare(b.name)));
+        setProducts((prev) => [...prev, newProduct].sort((a, b) => a.name.localeCompare(b.name)));
       }
 
       closeModal();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Operation failed';
-      if (createdProduct) {
-        setProducts((prev) =>
-          prev.some((p) => p.id === createdProduct.id)
-            ? prev
-            : [...prev, createdProduct].sort((a, b) => a.name.localeCompare(b.name))
-        );
-        closeModal();
-        setError(`Product saved, but quantity was not saved: ${message}`);
+      if (!createdProduct) {
+        setError(message);
         return;
       }
+
+      const created = createdProduct;
+      setProducts((prev) =>
+        prev.some((p) => p.id === created.id)
+          ? prev
+          : [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      closeModal();
+      setError(`Product saved, but quantity was not saved: ${message}`);
+      return;
       setError(message);
     } finally {
       setSaving(false);
@@ -184,6 +202,42 @@ export const ProductsPage: React.FC = () => {
       setDeleteError(err instanceof Error ? err.message : 'Failed to archive product');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleHardDeleteRequest = (product: Product) => {
+    setHardDeleteTarget(product);
+    setHardDeleteError(null);
+  };
+
+  const handleHardDelete = async () => {
+    if (!hardDeleteTarget) return;
+    try {
+      setHardDeleteLoading(true);
+      setHardDeleteError(null);
+
+      const counts = await getProductLinkCounts(hardDeleteTarget.id);
+      const blocked = Object.entries(counts).filter(([, count]) => count > 0);
+
+      const nonAdjustmentBlocked = blocked.filter(([name]) => name !== 'stock_adjustments');
+      if (nonAdjustmentBlocked.length > 0) {
+        const summary = nonAdjustmentBlocked.map(([name, count]) => `${name}: ${count}`).join(', ');
+        setHardDeleteError(`Linked records exist (${summary}). Remove them first.`);
+        return;
+      }
+
+      if ((counts.stock_adjustments ?? 0) > 0) {
+        await clearProductStockAdjustments(hardDeleteTarget.id);
+      }
+
+      await deleteProduct(hardDeleteTarget.id);
+      setProducts(prev => prev.filter(p => p.id !== hardDeleteTarget.id));
+      setHardDeleteTarget(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Hard delete failed';
+      setHardDeleteError(message);
+    } finally {
+      setHardDeleteLoading(false);
     }
   };
 
@@ -414,6 +468,15 @@ export const ProductsPage: React.FC = () => {
                           className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
                           <Trash2 size={20} />
                         </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleHardDeleteRequest(product)}
+                            className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
+                            title="Hard delete product"
+                          >
+                            <AlertTriangle size={20} />
+                          </button>
+                        )}
                         <div className="w-px h-8 bg-[#2b313a]"></div>
                         <button onClick={() => handleEdit(product)} className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center" title="More options">
                           <MoreVertical size={20} />
@@ -591,6 +654,18 @@ export const ProductsPage: React.FC = () => {
         variant="warning"
         isLoading={saving}
         error={deleteError}
+      />
+
+      <ConfirmModal
+        isOpen={!!hardDeleteTarget}
+        onClose={() => { setHardDeleteTarget(null); setHardDeleteError(null); }}
+        onConfirm={handleHardDelete}
+        title="Hard Delete Product"
+        message={`Permanently delete "${hardDeleteTarget?.name}". This cannot be undone. If only stock adjustments are linked, they will be cleared automatically.`}
+        confirmText="Hard Delete"
+        variant="danger"
+        isLoading={hardDeleteLoading}
+        error={hardDeleteError}
       />
     </div>
   );

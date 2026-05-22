@@ -16,6 +16,14 @@ import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
   'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const normalizePurchaseTotal = (p: Pick<Purchase, 'total_lkr' | 'total_rmb' | 'exchange_rate'>): number => {
+  const rate = Number(p.exchange_rate ?? 0);
+  const totalLkr = Number(p.total_lkr ?? 0);
+  const totalRmb = Number(p.total_rmb ?? 0);
+  if (rate > 0 && totalLkr > 0) return totalLkr / rate;
+  if (totalLkr > 0) return totalLkr;
+  return totalRmb;
+};
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20' },
   ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20' },
@@ -209,6 +217,8 @@ export const PurchasesPage: React.FC = () => {
   const [quickProductForm, setQuickProductForm] = useState<QuickProductForm>({ ...EMPTY_QUICK_PRODUCT });
   const [quickProductSaving, setQuickProductSaving] = useState(false);
   const [quickProductError, setQuickProductError] = useState('');
+  const [panelDataLoaded, setPanelDataLoaded] = useState(false);
+  const [panelDataLoading, setPanelDataLoading] = useState(false);
 
   // Confirm delete
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
@@ -223,24 +233,38 @@ export const PurchasesPage: React.FC = () => {
   async function load() {
     setLoading(true);
     try {
-      const [p, s, locs, pr, inv, mv] = await Promise.all([
-        getPurchases(), 
-        getSuppliers(), 
+      const p = await getPurchases();
+      setPurchases(p);
+    } catch (e: any) {
+      showToast(e.message, false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPanelData(force = false) {
+    if (panelDataLoading) return;
+    if (panelDataLoaded && !force) return;
+
+    setPanelDataLoading(true);
+    try {
+      const [s, locs, pr, inv, mv] = await Promise.all([
+        getSuppliers(),
         getLocations(),
         getProducts(),
         getInventory(),
-        getMovementRates()
+        getMovementRates(),
       ]);
-      setPurchases(p);
       setSuppliers(s);
       setLocations(locs);
       setProducts(pr);
       setInventory(inv);
       setMovementRates(mv);
+      setPanelDataLoaded(true);
     } catch (e: any) {
       showToast(e.message, false);
     } finally {
-      setLoading(false);
+      setPanelDataLoading(false);
     }
   }
 
@@ -274,6 +298,7 @@ export const PurchasesPage: React.FC = () => {
     setQuickProductError('');
     setQuickProductForm({ ...EMPTY_QUICK_PRODUCT });
     setPanelOpen(true);
+    loadPanelData();
   }
 
   function setItem(idx: number, patch: Partial<NewItemRow>) {
@@ -429,7 +454,9 @@ export const PurchasesPage: React.FC = () => {
 
   // KPI summary
   const totalOrders = purchases.length;
-  const totalValue = purchases.filter((p) => p.status !== 'draft' && p.status !== 'cancelled').reduce((s, p) => s + Number(p.total_rmb), 0);
+  const totalValue = purchases
+    .filter((p) => p.status !== 'draft' && p.status !== 'cancelled')
+    .reduce((s, p) => s + normalizePurchaseTotal(p), 0);
   const activeOrders = purchases.filter((p) => p.status === 'ordered').length;
 
   return (
@@ -569,7 +596,7 @@ export const PurchasesPage: React.FC = () => {
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-slate-100">{fmt(p.total_rmb)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-slate-100">{fmt(normalizePurchaseTotal(p))}</td>
                   <td className="px-5 py-3.5 text-xs text-slate-500">
                     {new Date(p.created_at).toLocaleDateString()}
                   </td>
@@ -613,6 +640,11 @@ export const PurchasesPage: React.FC = () => {
               {formError && (
                 <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
                   <AlertCircle size={12} /> {formError}
+                </div>
+              )}
+              {panelDataLoading && (
+                <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300">
+                  <Loader2 size={12} className="animate-spin" /> Loading suppliers and products…
                 </div>
               )}
 

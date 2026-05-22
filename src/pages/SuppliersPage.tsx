@@ -26,6 +26,10 @@ const STATUS_BADGE: Record<string, string> = {
   closed:     'text-slate-400 bg-slate-500/10 border border-slate-500/20',
 };
 
+const UPDATED_PO_REFERENCES = new Set([
+  'PO0013', 'PO0014', 'PO0015', 'PO0016', 'PO0018', 'PO0019',
+]);
+
 const EMPTY_FORM = {
   name: '', contact_person: '', phone: '', email: '', country: 'China', notes: '',
 };
@@ -459,7 +463,16 @@ export const SuppliersPage: React.FC = () => {
                       <tr><td colSpan={4} className="px-4 py-8 text-center text-xs text-gray-600">No purchases yet.</td></tr>
                     ) : ledger.purchases.map((p) => (
                       <tr key={p.id} className="hover:bg-[#1d222a] transition-colors">
-                        <td className="px-4 py-3 text-xs font-mono font-bold text-white">{p.reference}</td>
+                        <td className="px-4 py-3 text-xs font-mono font-bold text-white">
+                          <div className="flex items-center gap-2">
+                            <span>{p.reference}</span>
+                            {UPDATED_PO_REFERENCES.has(p.reference) && (
+                              <span className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-md border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                                Updated
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">
                           <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide', STATUS_BADGE[p.status])}>
                             {p.status.replace('_', ' ')}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../components/Modal';
 import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X, ArrowLeftRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -28,6 +28,7 @@ export const InventoryPage: React.FC = () => {
   const [ledger, setLedger] = useState<StockLedgerEntry[]>([]);
   const [ledgerLoading, setLedgerLoading] = useState(true);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [ledgerLoaded, setLedgerLoaded] = useState(false);
   const [historyProduct, setHistoryProduct] = useState<ProductStock | null>(null);
   const [historyRows, setHistoryRows] = useState<StockLedgerEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -47,6 +48,7 @@ export const InventoryPage: React.FC = () => {
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces'>('name');
@@ -60,6 +62,11 @@ export const InventoryPage: React.FC = () => {
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounced(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Persist threshold to localStorage whenever it changes
   useEffect(() => {
@@ -77,17 +84,29 @@ export const InventoryPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      setLedgerLoading(true);
+      setLedgerLoading(false);
       setLedgerError(null);
-      const [data, ledgerRows] = await Promise.all([getInventory(), getStockLedger(undefined, 250)]);
+      const data = await getInventory();
       setInventory(data);
-      setLedger(ledgerRows);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
-      setLedgerError(message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadLedger() {
+    try {
+      setLedgerLoading(true);
+      setLedgerError(null);
+      const ledgerRows = await getStockLedger(undefined, 250);
+      setLedger(ledgerRows);
+      setLedgerLoaded(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load ledger';
+      setLedgerError(message);
+    } finally {
       setLedgerLoading(false);
     }
   }
@@ -179,9 +198,9 @@ export const InventoryPage: React.FC = () => {
     return perProduct > 0 ? perProduct : threshold;
   }
 
-  const visibleInventory = inventory
+  const visibleInventory = useMemo(() => inventory
     .filter(row => {
-      const q = searchQuery.toLowerCase();
+      const q = searchDebounced.toLowerCase();
       const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q);
       const matchesFilter = !filterLowStock || computeStock(row).totalPieces < getEffectiveReorderLevel(row);
       return matchesSearch && matchesFilter;
@@ -190,7 +209,7 @@ export const InventoryPage: React.FC = () => {
       if (sortBy === 'cartons') return computeStock(b).availCartons - computeStock(a).availCartons;
       if (sortBy === 'pieces')  return computeStock(b).totalPieces  - computeStock(a).totalPieces;
       return a.name.localeCompare(b.name);
-    });
+    }), [inventory, searchDebounced, filterLowStock, sortBy, threshold]);
 
   const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '';
   const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); };
@@ -485,7 +504,18 @@ export const InventoryPage: React.FC = () => {
                     </tr>
                   ) : ledger.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">No ledger activity yet.</td>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">
+                        {!ledgerLoaded ? (
+                          <button
+                            onClick={loadLedger}
+                            className="px-3 py-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-lg text-xs font-bold hover:text-white hover:bg-[#252a33] transition-colors"
+                          >
+                            Load Ledger
+                          </button>
+                        ) : (
+                          'No ledger activity yet.'
+                        )}
+                      </td>
                     </tr>
                   ) : (
                     ledger.map((row) => (

@@ -61,6 +61,115 @@ WHERE reference IN ('PO0001', 'PO0002', 'PO0003', 'PO0004', 'PO0005', 'PO0006', 
 DELETE FROM sandbox.purchases 
 WHERE reference IN ('PO0001', 'PO0002', 'PO0003', 'PO0004', 'PO0005', 'PO0006', 'PO0007', 'PO0008', 'PO0009', 'PO0010', 'PO0011', 'PO0012');
 
+-- 2b) Fix purchase totals for PO0013-PO0019 (amounts in LKR)
+UPDATE public.purchases
+SET
+  total_lkr = 19939200.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 19939200.00
+    ELSE 19939200.00 / exchange_rate
+  END
+WHERE reference = 'PO0019';
+
+UPDATE public.purchases
+SET
+  total_lkr = 52439040.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 52439040.00
+    ELSE 52439040.00 / exchange_rate
+  END
+WHERE reference = 'PO0018';
+
+UPDATE public.purchases
+SET
+  total_lkr = 75153600.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 75153600.00
+    ELSE 75153600.00 / exchange_rate
+  END
+WHERE reference = 'PO0016';
+
+UPDATE public.purchases
+SET
+  total_lkr = 118426560.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 118426560.00
+    ELSE 118426560.00 / exchange_rate
+  END
+WHERE reference = 'PO0015';
+
+UPDATE public.purchases
+SET
+  total_lkr = 97920000.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 97920000.00
+    ELSE 97920000.00 / exchange_rate
+  END
+WHERE reference = 'PO0014';
+
+UPDATE public.purchases
+SET
+  total_lkr = 133920000.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 133920000.00
+    ELSE 133920000.00 / exchange_rate
+  END
+WHERE reference = 'PO0013';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 19939200.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 19939200.00
+    ELSE 19939200.00 / exchange_rate
+  END
+WHERE reference = 'PO0019';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 52439040.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 52439040.00
+    ELSE 52439040.00 / exchange_rate
+  END
+WHERE reference = 'PO0018';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 75153600.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 75153600.00
+    ELSE 75153600.00 / exchange_rate
+  END
+WHERE reference = 'PO0016';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 118426560.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 118426560.00
+    ELSE 118426560.00 / exchange_rate
+  END
+WHERE reference = 'PO0015';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 97920000.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 97920000.00
+    ELSE 97920000.00 / exchange_rate
+  END
+WHERE reference = 'PO0014';
+
+UPDATE sandbox.purchases
+SET
+  total_lkr = 133920000.00,
+  total_rmb = CASE
+    WHEN exchange_rate IS NULL OR exchange_rate = 0 THEN 133920000.00
+    ELSE 133920000.00 / exchange_rate
+  END
+WHERE reference = 'PO0013';
+
 -- 3) Delete related references manually before deleting mock products
 DELETE FROM public.invoice_items WHERE product_id IN (SELECT id FROM public.products WHERE name IN ('Test 2', 'YM 60 Ricecooker', 'ONLY CUP 6PCS SET 220CC', 'ONLY CUP 6 PCS SET 220CC', 'ONLY CUP 6PCS SET 160CC'));
 DELETE FROM public.purchase_items WHERE product_id IN (SELECT id FROM public.products WHERE name IN ('Test 2', 'YM 60 Ricecooker', 'ONLY CUP 6PCS SET 220CC', 'ONLY CUP 6 PCS SET 220CC', 'ONLY CUP 6PCS SET 160CC'));

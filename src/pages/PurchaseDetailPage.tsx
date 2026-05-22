@@ -13,6 +13,7 @@ import {
   receivePurchase,
   addPurchaseCost,
   deletePurchaseCost,
+  updatePurchaseItems,
   finalizeCostingAndClose,
   getPendingApprovals,
   resolveDiscountApproval,
@@ -27,6 +28,14 @@ import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
   'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const normalizePurchaseTotal = (p: Pick<Purchase, 'total_lkr' | 'total_rmb' | 'exchange_rate'>): number => {
+  const rate = Number(p.exchange_rate ?? 0);
+  const totalLkr = Number(p.total_lkr ?? 0);
+  const totalRmb = Number(p.total_rmb ?? 0);
+  if (rate > 0 && totalLkr > 0) return totalLkr / rate;
+  if (totalLkr > 0) return totalLkr;
+  return totalRmb;
+};
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
   draft:      { label: 'Draft',      cls: 'text-gray-400 bg-gray-500/10 border border-gray-500/20',   icon: ClipboardList },
   ordered:    { label: 'Ordered',    cls: 'text-blue-400 bg-blue-500/10 border border-blue-500/20',   icon: CheckCircle2 },
@@ -50,7 +59,14 @@ export const PurchaseDetailPage: React.FC = () => {
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { can, roleLabel } = usePermissions();
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [editItems, setEditItems] = useState<PurchaseItem[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const { can, roleLabel, role } = usePermissions();
+  const isAdmin = role === 'admin';
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -81,6 +97,9 @@ export const PurchaseDetailPage: React.FC = () => {
       setCosts(co);
       setReceived(re);
       setCartons(ca);
+      setEditMode(false);
+      setEditItems([]);
+      setEditError(null);
 
       // Init receive form from items
       const rf: typeof receiveForm = {};
@@ -212,6 +231,54 @@ export const PurchaseDetailPage: React.FC = () => {
     }
   }
 
+  function startEditItems() {
+    setEditItems(items.map((item) => ({ ...item })));
+    setEditMode(true);
+    setEditError(null);
+  }
+
+  function cancelEditItems() {
+    setEditMode(false);
+    setEditItems([]);
+    setEditError(null);
+  }
+
+  function updateEditItem(itemId: string, updates: Partial<PurchaseItem>) {
+    setEditItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  }
+
+  async function handleSaveItems() {
+    if (!purchase) return;
+
+    const cleaned = editItems.map((item) => ({
+      product_id: item.product_id,
+      quantity_units: Number(item.quantity_units) || 0,
+      quantity_cartons: Number(item.quantity_cartons) || 0,
+      unit_price_rmb: Number(item.unit_price_rmb) || 0,
+      discount_percent: item.discount_percent ?? 0,
+    }));
+
+    const validItems = cleaned.filter((i) => i.product_id && i.quantity_units > 0 && i.unit_price_rmb > 0);
+    if (validItems.length === 0) {
+      setEditError('Add at least one item with quantity and price.');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await updatePurchaseItems(purchase.id, validItems, purchase.exchange_rate || 1);
+      showToast('Purchase items updated');
+      setEditMode(false);
+      setEditItems([]);
+      load();
+    } catch (e: any) {
+      setEditError(e.message ?? 'Failed to update purchase items');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   // ── Computed values ──────────────────────────────────────────────
 
   const totalAddlCosts = useMemo(() => costs.reduce((s, c) => s + Number(c.amount_lkr), 0), [costs]);
@@ -219,10 +286,15 @@ export const PurchaseDetailPage: React.FC = () => {
     () => received.reduce((s, r) => s + Math.max(0, r.received_units - r.damaged_units), 0),
     [received]
   );
+  const editTotal = useMemo(
+    () => editItems.reduce((s, i) => s + Number(i.quantity_units) * Number(i.unit_price_rmb), 0),
+    [editItems]
+  );
   const estimatedCPPerUnit = useMemo(() => {
     if (!purchase || totalSellable === 0) return 0;
     return (Number(purchase.total_rmb) + totalAddlCosts) / totalSellable;
   }, [purchase, totalAddlCosts, totalSellable]);
+  const displayTotal = useMemo(() => (purchase ? normalizePurchaseTotal(purchase) : 0), [purchase]);
 
   if (loading) {
     return (
@@ -363,7 +435,7 @@ export const PurchaseDetailPage: React.FC = () => {
           {[
             { label: 'Supplier', value: supplier?.name ?? '—' },
             { label: 'Country', value: supplier?.country ?? '—' },
-            { label: 'Total (LKR)', value: fmt(Number(purchase.total_rmb)), mono: true },
+            { label: 'Total (LKR)', value: fmt(displayTotal), mono: true },
             { label: 'Status', value: statusCfg.label },
           ].map((f) => (
             <div key={f.label}>
@@ -381,10 +453,46 @@ export const PurchaseDetailPage: React.FC = () => {
       <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
         <div className="px-5 py-3.5 border-b border-[#2b313a] flex items-center justify-between">
           <h2 className="text-xs font-bold text-white uppercase tracking-widest">Order Items</h2>
-          <div className="flex gap-4 text-xs">
-            <span className="text-gray-500">Total: <span className="font-mono font-bold text-primary">{fmt(purchase.total_rmb)}</span></span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-gray-500">Total: <span className="font-mono font-bold text-primary">{fmt(editMode ? editTotal : displayTotal)}</span></span>
+            {isAdmin && !editMode && (
+              <button
+                onClick={startEditItems}
+                className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold"
+              >
+                Edit Items
+              </button>
+            )}
+            {isAdmin && editMode && (
+              <>
+                <button
+                  onClick={cancelEditItems}
+                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveItems}
+                  disabled={editSaving}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all text-[10px] font-bold flex items-center gap-1"
+                >
+                  {editSaving ? <Loader2 size={10} className="animate-spin" /> : null}
+                  Save Changes
+                </button>
+              </>
+            )}
           </div>
         </div>
+        {editMode && (
+          <div className="px-5 py-2 border-b border-[#2b313a] space-y-1">
+            {purchase.status !== 'draft' && (
+              <p className="text-[10px] text-amber-400">Edits will not adjust stock or finalized costs already posted.</p>
+            )}
+            {editError && (
+              <p className="text-[10px] text-red-400">{editError}</p>
+            )}
+          </div>
+        )}
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[#1d222a]">
@@ -394,7 +502,7 @@ export const PurchaseDetailPage: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#2b313a]">
-            {items.map((item) => {
+            {(editMode ? editItems : items).map((item) => {
               const product = item.products as any;
               const cartonId = `${purchase.reference}-${product?.model ?? 'UNK'}`;
               const lineLkr = item.quantity_units * item.unit_price_rmb;
@@ -405,9 +513,46 @@ export const PurchaseDetailPage: React.FC = () => {
                     <p className="text-[10px] text-gray-500 mt-0.5">ID: {cartonId}-*</p>
                   </td>
                   <td className="px-5 py-3.5 text-xs font-mono text-gray-400">{product?.model ?? '—'}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-white">{item.quantity_units.toLocaleString()}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-500">{item.quantity_cartons}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">{fmt(item.unit_price_rmb)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-white">
+                    {editMode ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.quantity_units}
+                        onChange={(e) => updateEditItem(item.id, { quantity_units: parseInt(e.target.value, 10) || 0 })}
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-24 font-mono"
+                      />
+                    ) : (
+                      item.quantity_units.toLocaleString()
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-gray-500">
+                    {editMode ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.quantity_cartons}
+                        onChange={(e) => updateEditItem(item.id, { quantity_cartons: parseInt(e.target.value, 10) || 0 })}
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-20 font-mono"
+                      />
+                    ) : (
+                      item.quantity_cartons
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">
+                    {editMode ? (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.unit_price_rmb}
+                        onChange={(e) => updateEditItem(item.id, { unit_price_rmb: parseFloat(e.target.value) || 0 })}
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-28 font-mono"
+                      />
+                    ) : (
+                      fmt(item.unit_price_rmb)
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-xs font-mono text-white">{fmt(lineLkr)}</td>
                 </tr>
               );
@@ -693,7 +838,7 @@ export const PurchaseDetailPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="bg-[#1d222a] rounded-xl p-3">
                   <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase Cost (LKR)</p>
-                  <p className="font-mono font-bold text-white mt-1">{fmt(purchase.total_rmb)}</p>
+                  <p className="font-mono font-bold text-white mt-1">{fmt(displayTotal)}</p>
                 </div>
                 <div className="bg-[#1d222a] rounded-xl p-3">
                   <p className="text-[9px] text-gray-600 uppercase tracking-widest">Additional Costs</p>
@@ -739,7 +884,7 @@ export const PurchaseDetailPage: React.FC = () => {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-[#1d222a] rounded-xl p-3">
                 <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase LKR</p>
-                <p className="font-mono font-bold text-white text-xs mt-1">{fmt(purchase.total_rmb)}</p>
+                <p className="font-mono font-bold text-white text-xs mt-1">{fmt(displayTotal)}</p>
               </div>
               <div className="bg-[#1d222a] rounded-xl p-3">
                 <p className="text-[9px] text-gray-600 uppercase tracking-widest">Sellable Units</p>
