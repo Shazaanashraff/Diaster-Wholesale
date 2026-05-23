@@ -9,6 +9,7 @@ import { getInventory } from '../services/inventoryService'; // Total stock (all
 import { usePermissions } from '../utils/permissions';
 import type { StockTransfer, Location, Product, ProductStock } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) => Number(n).toLocaleString('en-LK');
@@ -308,17 +309,20 @@ export const StockTransfersPage: React.FC = () => {
                     return (
                       <div key={idx} className={cn('rounded-xl border p-3 space-y-2', overStock ? 'border-red-500/30 bg-red-500/5' : 'border-[#2b313a] bg-[#1d222a]')}>
                         <div className="grid grid-cols-[2fr_80px_24px] gap-2 items-center">
-                          <select value={item.product_id} onChange={e => setItem(idx, { product_id: e.target.value })} className="bg-[#171c23] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40">
-                            <option value="">Select product…</option>
-                            {sortedProducts.map(p => {
+                          <SearchableSelect
+                            value={item.product_id}
+                            onChange={(val) => setItem(idx, { product_id: val })}
+                            placeholder="Select product..."
+                            options={sortedProducts.map(p => {
                               const stock = stockMap[p.id] ?? 0;
-                              return (
-                                <option key={p.id} value={p.id}>
-                                  {stock <= 0 ? '⚠ ' : ''}{p.item_code} — {p.name} ({stock} in stock)
-                                </option>
-                              );
+                              return {
+                                value: p.id,
+                                label: `${stock <= 0 ? '⚠ ' : ''}${p.item_code} — ${p.name} (${stock} in stock)`,
+                                searchLabel: `${p.item_code} ${p.name}`,
+                              };
                             })}
-                          </select>
+                            className="w-full"
+                          />
                           <input type="number" min="1" value={item.quantity || ''} onChange={e => setItem(idx, { quantity: parseInt(e.target.value) || 0 })} placeholder="Qty" className={cn('bg-[#171c23] border text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none font-mono', overStock ? 'border-red-500/50 focus:border-red-500' : 'border-[#2b313a] focus:border-primary/40')} />
                           <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20"><X size={11} /></button>
                         </div>

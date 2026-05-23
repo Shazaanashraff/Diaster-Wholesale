@@ -8,6 +8,7 @@ import type { SupplierReturn, SupplierReturnItem, Purchase, Product } from '../t
 import type { SupplierWithBalance } from '../services/supplierService';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { SupplierReturnPrint } from '../components/SupplierReturnPrint';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) => 'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -235,10 +236,17 @@ export const SupplierReturnsPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Supplier *</label>
-                  <select value={form.supplier_id} onChange={e => setForm(p => ({ ...p, supplier_id: e.target.value, purchase_id: '' }))} className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:border-primary/40">
-                    <option value="">Select supplier…</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={form.supplier_id}
+                    onChange={(val) => setForm(p => ({ ...p, supplier_id: val, purchase_id: '' }))}
+                    placeholder="Select supplier..."
+                    options={suppliers.map(s => ({
+                      value: s.id,
+                      label: s.name,
+                      searchLabel: s.name
+                    }))}
+                    className="w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Type *</label>
@@ -281,10 +289,17 @@ export const SupplierReturnsPage: React.FC = () => {
                         <button onClick={() => setItems(p => p.filter((_, i) => i !== idx))} disabled={items.length === 1} className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-20"><X size={11} /></button>
                       </div>
                       <div className="grid grid-cols-[2fr_70px_90px] gap-2">
-                        <select value={item.product_id} onChange={e => setItem(idx, { product_id: e.target.value })} className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40">
-                          <option value="">Select product…</option>
-                          {products.map(p => <option key={p.id} value={p.id}>{p.item_code} — {p.name}</option>)}
-                        </select>
+                        <SearchableSelect
+                          value={item.product_id}
+                          onChange={(val) => setItem(idx, { product_id: val })}
+                          placeholder="Select product..."
+                          options={products.map(p => ({
+                            value: p.id,
+                            label: `${p.item_code} — ${p.name}`,
+                            searchLabel: `${p.item_code} ${p.name}`
+                          }))}
+                          className="w-full"
+                        />
                         <input type="number" min="1" value={item.quantity || ''} onChange={e => setItem(idx, { quantity: parseInt(e.target.value) || 0 })} placeholder="Qty" className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono" />
                         <input type="number" min="0" step="0.01" value={item.unit_value_lkr || ''} onChange={e => setItem(idx, { unit_value_lkr: parseFloat(e.target.value) || 0 })} placeholder="Unit LKR" className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40 font-mono" />
                       </div>

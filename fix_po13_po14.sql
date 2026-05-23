@@ -213,7 +213,7 @@ BEGIN
       44640.00,
       'Received from PO: PO0013',
       now(),
-      (SELECT id FROM public.locations WHERE type = 'warehouse' ORDER BY created_at LIMIT 1)
+      (SELECT id FROM public.locations WHERE type = 'shop' ORDER BY created_at LIMIT 1)
     );
     RAISE NOTICE 'Restored stock_batches for PO0013 (220CC cups)';
   ELSE
@@ -233,7 +233,7 @@ BEGIN
       32640.00,
       'Received from PO: PO0014',
       now(),
-      (SELECT id FROM public.locations WHERE type = 'warehouse' ORDER BY created_at LIMIT 1)
+      (SELECT id FROM public.locations WHERE type = 'shop' ORDER BY created_at LIMIT 1)
     );
     RAISE NOTICE 'Restored stock_batches for PO0014 (160CC cups)';
   ELSE
