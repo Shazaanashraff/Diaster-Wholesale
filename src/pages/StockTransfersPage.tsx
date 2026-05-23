@@ -5,7 +5,7 @@ import {
 } from '../services/transferService';
 import { getLocations } from '../services/supplierService';
 import { getProducts } from '../services/productService';
-import { getInventory } from '../services/inventoryService';
+import { getInventory } from '../services/inventoryService'; // Total stock (all locations) — managers see this to plan transfers
 import { usePermissions } from '../utils/permissions';
 import type { StockTransfer, Location, Product, ProductStock } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';

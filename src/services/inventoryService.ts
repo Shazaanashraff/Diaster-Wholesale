@@ -22,6 +22,8 @@ export interface StockLedgerEntry {
 
 /**
  * Fetch all rows from the product_stock view, ordered by name (A-Z).
+ * Returns TOTAL stock across all locations (warehouse + shop).
+ * Used by admin/accountant Inventory page.
  */
 export async function getInventory(): Promise<ProductStock[]> {
   const { data, error } = await supabase
@@ -31,6 +33,24 @@ export async function getInventory(): Promise<ProductStock[]> {
 
   if (error) {
     console.error('getInventory error:', error.message);
+    throw new Error(error.message);
+  }
+
+  return data as ProductStock[];
+}
+
+/**
+ * Fetch stock from the shop_stock view — only products physically in the shop.
+ * Used by POS cashier. Stock only appears here after a Warehouse→Shop transfer.
+ */
+export async function getShopInventory(): Promise<ProductStock[]> {
+  const { data, error } = await supabase
+    .from('shop_stock')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('getShopInventory error:', error.message);
     throw new Error(error.message);
   }
 

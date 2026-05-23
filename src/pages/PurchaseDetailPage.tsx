@@ -20,7 +20,8 @@ import {
   updatePurchaseDiscount,
   type ReceiveItemInput,
 } from '../services/purchaseService';
-import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton, PurchaseDiscountApproval, SupplierPayment } from '../types';
+import { getProducts } from '../services/productService';
+import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton, PurchaseDiscountApproval, SupplierPayment, Product } from '../types';
 import { supabase } from '../lib/supabase';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { usePermissions } from '../utils/permissions';
@@ -64,6 +65,8 @@ export const PurchaseDetailPage: React.FC = () => {
   const [editItems, setEditItems] = useState<PurchaseItem[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [editProducts, setEditProducts] = useState<Product[]>([]);
+  const [editProductsLoading, setEditProductsLoading] = useState(false);
 
   const { can, roleLabel, role } = usePermissions();
   const isAdmin = role === 'admin';
@@ -231,10 +234,24 @@ export const PurchaseDetailPage: React.FC = () => {
     }
   }
 
+  async function loadEditProducts() {
+    if (editProductsLoading || editProducts.length > 0) return;
+    setEditProductsLoading(true);
+    try {
+      const list = await getProducts();
+      setEditProducts(list);
+    } catch (e: any) {
+      showToast(e.message ?? 'Failed to load products', false);
+    } finally {
+      setEditProductsLoading(false);
+    }
+  }
+
   function startEditItems() {
     setEditItems(items.map((item) => ({ ...item })));
     setEditMode(true);
     setEditError(null);
+    loadEditProducts();
   }
 
   function cancelEditItems() {
@@ -245,6 +262,28 @@ export const PurchaseDetailPage: React.FC = () => {
 
   function updateEditItem(itemId: string, updates: Partial<PurchaseItem>) {
     setEditItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  }
+
+  function addEditItemRow() {
+    if (!purchase) return;
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setEditItems((prev) => ([
+      ...prev,
+      {
+        id: tempId,
+        purchase_id: purchase.id,
+        product_id: '',
+        quantity_units: 0,
+        quantity_cartons: 0,
+        unit_price_rmb: 0,
+        discount_percent: 0,
+        created_at: new Date().toISOString(),
+      },
+    ]));
+  }
+
+  function removeEditItemRow(itemId: string) {
+    setEditItems((prev) => prev.filter((item) => item.id !== itemId));
   }
 
   async function handleSaveItems() {
@@ -260,7 +299,7 @@ export const PurchaseDetailPage: React.FC = () => {
 
     const validItems = cleaned.filter((i) => i.product_id && i.quantity_units > 0 && i.unit_price_rmb > 0);
     if (validItems.length === 0) {
-      setEditError('Add at least one item with quantity and price.');
+      setEditError('Add at least one item with product, quantity, and price.');
       return;
     }
 
@@ -466,6 +505,12 @@ export const PurchaseDetailPage: React.FC = () => {
             {isAdmin && editMode && (
               <>
                 <button
+                  onClick={addEditItemRow}
+                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold flex items-center gap-1"
+                >
+                  <Plus size={10} /> Add Item
+                </button>
+                <button
                   onClick={cancelEditItems}
                   className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold"
                 >
@@ -509,8 +554,29 @@ export const PurchaseDetailPage: React.FC = () => {
               return (
                 <tr key={item.id} className="hover:bg-[#1d222a] transition-colors">
                   <td className="px-5 py-3.5">
-                    <p className="text-xs font-semibold text-white">{product?.name ?? item.product_id}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">ID: {cartonId}-*</p>
+                    {editMode ? (
+                      <div className="space-y-1">
+                        <select
+                          value={item.product_id}
+                          onChange={(e) => updateEditItem(item.id, { product_id: e.target.value })}
+                          disabled={editProductsLoading}
+                          className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
+                        >
+                          <option value="">Select product…</option>
+                          {editProducts.map((p) => (
+                            <option key={p.id} value={p.id}>{p.item_code ? `${p.item_code} — ` : ''}{p.name}</option>
+                          ))}
+                        </select>
+                        {editProductsLoading && (
+                          <p className="text-[10px] text-gray-500">Loading products…</p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold text-white">{product?.name ?? item.product_id}</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">ID: {cartonId}-*</p>
+                      </>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-xs font-mono text-gray-400">{product?.model ?? '—'}</td>
                   <td className="px-5 py-3.5 text-xs font-mono text-white">
@@ -553,7 +619,20 @@ export const PurchaseDetailPage: React.FC = () => {
                       fmt(item.unit_price_rmb)
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-white">{fmt(lineLkr)}</td>
+                  <td className="px-5 py-3.5 text-xs font-mono text-white">
+                    <div className="flex items-center gap-2">
+                      <span>{fmt(lineLkr)}</span>
+                      {editMode && (
+                        <button
+                          onClick={() => removeEditItemRow(item.id)}
+                          className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Remove item"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}

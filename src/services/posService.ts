@@ -33,8 +33,10 @@ export interface LoyaltyOptions {
 async function validateStock(cart: CartItem[]): Promise<void> {
   const productIds = [...new Set(cart.map(i => i.product.id))];
 
+  // shop_stock only shows stock physically transferred to the shop.
+  // Warehouse stock is invisible to POS until a Stock Transfer is approved.
   const { data: stockRows, error } = await supabase
-    .from('product_stock')
+    .from('shop_stock')
     .select('product_id, pieces_per_carton, cartons_in, pieces_in, cartons_sold, pieces_sold, carton_adj, piece_adj')
     .in('product_id', productIds);
 

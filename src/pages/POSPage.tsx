@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getProducts } from '../services/productService';
 import { getCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
-import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
+import { getShopInventory, getAverageCostPerPiece } from '../services/inventoryService';
 import {
   checkout, checkoutOffline, syncOfflineSales, getOfflinePendingCount,
   getCustomerLoyalty, computeRedemptionValue, checkCreditLimit,
@@ -196,7 +196,7 @@ export const POSPage: React.FC = () => {
         const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
           getProducts().catch((e) => { console.error('getProducts failed:', e); return [] as Product[]; }),
           getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
-          getInventory().catch((e) => { console.error('getInventory failed:', e); return []; }),
+          getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
           getSalespeople().catch(() => [] as Salesperson[]),
         ]);
 
