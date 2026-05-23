@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { fmtCurrency } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency } from '../../utils/reportUtils';
+import { DateRangePicker } from './shared/DateRangePicker';
 import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
 
@@ -17,14 +18,18 @@ interface PurchaseRow {
 
 export const PurchaseHistoryReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<PurchaseRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
 
-      const query = supabase
+      let query = supabase
         .from('purchases')
         .select(`
           reference,
@@ -37,6 +42,9 @@ export const PurchaseHistoryReport: React.FC = () => {
           purchase_costs ( amount )
         `)
         .order('created_at', { ascending: false });
+
+      if (from) query = query.gte('created_at', from);
+      if (to)   query = query.lte('created_at', to);
 
       const { data: rows } = await query;
 
@@ -61,7 +69,7 @@ export const PurchaseHistoryReport: React.FC = () => {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [period, customFrom, customTo]);
 
   const STATUSES = ['all', 'draft', 'confirmed', 'in_transit', 'received', 'closed'];
 
@@ -86,6 +94,7 @@ export const PurchaseHistoryReport: React.FC = () => {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold text-white">Purchase History</h2>
         <div className="flex items-center gap-3 flex-wrap">
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <div className="flex gap-1">
             {STATUSES.map(s => (
               <button

@@ -32,6 +32,8 @@ import { PurchaseHistoryReport }      from './reports/PurchaseHistoryReport';
 import { CustomerLedgerAggregateReport } from './reports/CustomerLedgerAggregateReport';
 import { FastMovingReport }           from './reports/FastMovingReport';
 import { SlowMovingReport }           from './reports/SlowMovingReport';
+import { DailyFinanceReport }         from './reports/DailyFinanceReport';
+import { SalesByPersonReport }        from './reports/SalesByPersonReport';
 
 const CATEGORIES = [
   {
@@ -42,8 +44,9 @@ const CATEGORIES = [
       { id: 'pl',           label: 'Profit & Loss',   component: ProfitLossReport },
       { id: 'sales-profit', label: 'Sales Profit',    component: SalesProfitReport },
       { id: 'batch-profit', label: 'Batch Profit',    component: BatchProfitReport },
-      { id: 'expense',      label: 'Expenses',        component: ExpenseReport },
-      { id: 'cash-flow',    label: 'Cash Flow',       component: CashFlowReport },
+      { id: 'expense',        label: 'Expenses',        component: ExpenseReport },
+      { id: 'cash-flow',      label: 'Cash Flow',       component: CashFlowReport },
+      { id: 'daily-finance',  label: 'Daily Finance',   component: DailyFinanceReport },
     ],
   },
   {
@@ -67,6 +70,7 @@ const CATEGORIES = [
       { id: 'daily-sales',        label: 'Daily Sales',         component: DailySalesReport },
       { id: 'sales-by-product',   label: 'By Product',          component: SalesByProductReport },
       { id: 'sales-by-customer',  label: 'By Customer',         component: SalesByCustomerReport },
+      { id: 'sales-by-person',    label: 'By Salesperson',      component: SalesByPersonReport },
       { id: 'sales-by-mode',      label: 'Wholesale vs Retail', comingSoon: true },
       { id: 'invoice-report',     label: 'Invoice Report',      comingSoon: true },
     ],

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X, ArrowLeftRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment, getMovementRates } from '../services/inventoryService';
+import { getInventory, insertStockAdjustment, getStockLedger, type StockLedgerEntry } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -20,10 +21,18 @@ function readThreshold(): number {
 }
 
 export const InventoryPage: React.FC = () => {
+  const navigate = useNavigate();
   const [inventory, setInventory] = useState<ProductStock[]>([]);
-  const [movementRates, setMovementRates] = useState<Record<string, { units30d: number; perDay: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ledger, setLedger] = useState<StockLedgerEntry[]>([]);
+  const [ledgerLoading, setLedgerLoading] = useState(true);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [ledgerLoaded, setLedgerLoaded] = useState(false);
+  const [historyProduct, setHistoryProduct] = useState<ProductStock | null>(null);
+  const [historyRows, setHistoryRows] = useState<StockLedgerEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // ── Low-stock threshold ──
   const [threshold, setThreshold] = useState<number>(readThreshold);
@@ -39,9 +48,10 @@ export const InventoryPage: React.FC = () => {
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
-  const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces' | 'margin'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces'>('name');
 
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
@@ -52,6 +62,11 @@ export const InventoryPage: React.FC = () => {
   useEffect(() => {
     fetchInventory();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounced(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Persist threshold to localStorage whenever it changes
   useEffect(() => {
@@ -69,14 +84,30 @@ export const InventoryPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [data, rates] = await Promise.all([getInventory(), getMovementRates()]);
+      setLedgerLoading(false);
+      setLedgerError(null);
+      const data = await getInventory();
       setInventory(data);
-      setMovementRates(rates);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadLedger() {
+    try {
+      setLedgerLoading(true);
+      setLedgerError(null);
+      const ledgerRows = await getStockLedger(undefined, 250);
+      setLedger(ledgerRows);
+      setLedgerLoaded(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load ledger';
+      setLedgerError(message);
+    } finally {
+      setLedgerLoading(false);
     }
   }
 
@@ -93,6 +124,28 @@ export const InventoryPage: React.FC = () => {
   function closeAdjustModal() {
     setAdjustRow(null);
     setAdjError(null);
+  }
+
+  async function openHistory(row: ProductStock) {
+    setHistoryProduct(row);
+    setHistoryRows([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+
+    try {
+      const rows = await getStockLedger(row.product_id, 100);
+      setHistoryRows(rows);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'Failed to load stock history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function closeHistory() {
+    setHistoryProduct(null);
+    setHistoryRows([]);
+    setHistoryError(null);
   }
 
   // ── Submit stock adjustment ──
@@ -140,19 +193,23 @@ export const InventoryPage: React.FC = () => {
     }
   }
 
-  const visibleInventory = inventory
+  function getEffectiveReorderLevel(row: ProductStock): number {
+    const perProduct = Math.max(0, Number(row.reorder_level ?? 0));
+    return perProduct > 0 ? perProduct : threshold;
+  }
+
+  const visibleInventory = useMemo(() => inventory
     .filter(row => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q) || (row.model || '').toLowerCase().includes(q);
-      const matchesFilter = !filterLowStock || computeStock(row).totalPieces < threshold;
+      const q = searchDebounced.toLowerCase();
+      const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q);
+      const matchesFilter = !filterLowStock || computeStock(row).totalPieces < getEffectiveReorderLevel(row);
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
       if (sortBy === 'cartons') return computeStock(b).availCartons - computeStock(a).availCartons;
       if (sortBy === 'pieces')  return computeStock(b).totalPieces  - computeStock(a).totalPieces;
-      if (sortBy === 'margin')  return (b.retail_price - b.wholesale_price) - (a.retail_price - a.wholesale_price);
       return a.name.localeCompare(b.name);
-    });
+    }), [inventory, searchDebounced, filterLowStock, sortBy, threshold]);
 
   const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '';
   const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); };
@@ -165,7 +222,7 @@ export const InventoryPage: React.FC = () => {
             <Search size={18} />
             <input
               type="text"
-              placeholder="Search stock..."
+              placeholder="Search products and stock..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -226,8 +283,7 @@ export const InventoryPage: React.FC = () => {
                     {([
                       { key: 'name',    label: 'Name' },
                       { key: 'cartons', label: 'Cartons' },
-                      { key: 'pieces',  label: 'Pieces' },
-                      { key: 'margin',  label: 'Margin' },
+                      { key: 'pieces',  label: 'Qty' },
                     ] as const).map(s => (
                       <button
                         key={s.key}
@@ -300,7 +356,7 @@ export const InventoryPage: React.FC = () => {
               <div className="w-16 h-16 rounded-full bg-[#1d222a] flex items-center justify-center border border-[#2b313a]">
                 <Package size={28} className="text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No inventory data yet. Add products and stock batches first.</p>
+              <p className="text-sm font-semibold text-gray-500">No inventory data yet. Add products with quantity first.</p>
             </div>
           </div>
         )}
@@ -310,7 +366,7 @@ export const InventoryPage: React.FC = () => {
           <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block">
             <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full min-w-[1000px] text-left border-collapse" id="inventory-table">
+                <table className="w-full min-w-[920px] text-left border-collapse" id="inventory-table">
                   <thead>
                     <tr className="bg-[#1d222a] border-b border-[#2b313a]">
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Item Code</th>
@@ -319,13 +375,10 @@ export const InventoryPage: React.FC = () => {
                         Product Name <ArrowUpDown size={14} />
                       </div>
                     </th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">Model</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Qty</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Pieces</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Retail</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Margin</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">30d Sales</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale Price</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling Price</th>
                     <th className="px-8 py-6"></th>
                   </tr>
                 </thead>
@@ -333,7 +386,8 @@ export const InventoryPage: React.FC = () => {
                   <AnimatePresence>
                     {visibleInventory.map((row) => {
                       const stock = computeStock(row);
-                      const isLowStock = stock.totalPieces < threshold;
+                      const reorderLevel = getEffectiveReorderLevel(row);
+                      const isLowStock = stock.totalPieces < reorderLevel;
 
                       return (
                         <motion.tr 
@@ -343,6 +397,7 @@ export const InventoryPage: React.FC = () => {
                           exit={{ opacity: 0, scale: 0.95 }}
                           transition={{ duration: 0.2 }}
                           key={row.product_id} 
+                          onClick={() => openHistory(row)}
                           className={cn(
                             "hover:bg-[#1d222a] transition-colors group cursor-pointer border-b border-[#2b313a] last:border-0",
                             isLowStock && "bg-indigo-900/10 hover:bg-indigo-900/20"
@@ -355,28 +410,33 @@ export const InventoryPage: React.FC = () => {
                           <div className="flex items-center gap-4">
                             <div>
                               <p className="text-sm font-bold text-white leading-tight">{row.name}</p>
-                              <p className="text-[11px] text-gray-500 font-semibold uppercase mt-1 tracking-wider">{row.category}</p>
+                              <p className="text-[11px] text-gray-500 font-semibold uppercase mt-1 tracking-wider">
+                                Qty per carton: {row.pieces_per_carton || 1}
+                                {isLowStock ? ` · Low stock below ${reorderLevel}` : ''}
+                              </p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-8 py-6 text-left">
-                          <span className="text-xs font-bold text-gray-400">{row.model}</span>
-                        </td>
                         <td className="px-8 py-6 text-right">
                           <span className={cn(
                             "text-sm font-bold",
                             isLowStock ? "text-indigo-400" : "text-white"
                           )}>
-                            {stock.availCartons}
+                            {stock.totalPieces}
                           </span>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <span className={cn(
-                            "text-sm font-bold",
-                            isLowStock ? "text-indigo-400" : "text-white"
-                          )}>
-                            {stock.availLoose}
-                          </span>
+                          <div className="flex flex-col items-end">
+                            <span className={cn(
+                              "text-sm font-bold",
+                              isLowStock ? "text-indigo-400" : "text-white"
+                            )}>
+                              {(stock.totalPieces / (row.pieces_per_carton || 1)).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-semibold text-gray-500">
+                              {stock.availCartons} full + {stock.availLoose} pcs
+                            </span>
+                          </div>
                         </td>
                         <td className="px-8 py-6 text-right">
                           <span className="text-sm font-bold text-gray-300">LKR {row.wholesale_price.toFixed(2)}</span>
@@ -385,25 +445,13 @@ export const InventoryPage: React.FC = () => {
                           <span className="text-sm font-bold text-primary">LKR {row.retail_price.toFixed(2)}</span>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <div className="flex flex-col items-end">
-                            <span className="text-sm font-bold text-primary">LKR {(row.retail_price - row.wholesale_price).toFixed(2)}</span>
-                            <span className="text-[10px] font-semibold text-gray-500">
-                              {row.wholesale_price > 0 ? Math.round(((row.retail_price - row.wholesale_price) / row.wholesale_price) * 100) : 0}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-6 text-right">
-                          {movementRates[row.product_id] ? (
-                            <div className="flex flex-col items-end">
-                              <span className="text-sm font-bold text-emerald-400">{movementRates[row.product_id].units30d}</span>
-                              <span className="text-[10px] font-semibold text-gray-500">{movementRates[row.product_id].perDay}/day</span>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="px-8 py-6 text-right">
                           <div className="flex items-center gap-2 justify-end">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openHistory(row); }}
+                              className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              History
+                            </button>
                             {can('manage_inventory') && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
@@ -427,6 +475,71 @@ export const InventoryPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="px-3 pb-8">
+          <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
+            <div className="px-6 py-4 border-b border-[#2b313a]">
+              <h3 className="text-sm font-bold text-white">Stock Ledger</h3>
+              <p className="text-[11px] text-gray-500 mt-1">Track stock in/out events with reason, actor, location and time.</p>
+            </div>
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full min-w-[900px] text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#1d222a] border-b border-[#2b313a]">
+                    {['When', 'Item', 'What happened', 'Location', 'Qty', 'By whom', 'Reason / Reference'].map((h) => (
+                      <th key={h} className="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2b313a]">
+                  {ledgerLoading ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">Loading ledger…</td>
+                    </tr>
+                  ) : ledgerError ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-red-400 text-center">{ledgerError}</td>
+                    </tr>
+                  ) : ledger.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-xs text-gray-500 text-center">
+                        {!ledgerLoaded ? (
+                          <button
+                            onClick={loadLedger}
+                            className="px-3 py-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-lg text-xs font-bold hover:text-white hover:bg-[#252a33] transition-colors"
+                          >
+                            Load Ledger
+                          </button>
+                        ) : (
+                          'No ledger activity yet.'
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    ledger.map((row) => (
+                      <tr key={row.id} className="hover:bg-[#1d222a] transition-colors">
+                        <td className="px-6 py-3 text-[11px] text-gray-400">{new Date(row.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-3">
+                          <p className="text-xs font-bold text-white">{row.product_name}</p>
+                          <p className="text-[10px] font-mono text-gray-500">{row.item_code}</p>
+                        </td>
+                        <td className="px-6 py-3 text-xs font-semibold text-gray-300">{row.action}</td>
+                        <td className="px-6 py-3 text-xs font-semibold uppercase text-gray-400">{row.location}</td>
+                        <td className={cn('px-6 py-3 text-xs font-mono font-bold', row.quantity >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                          {row.quantity >= 0 ? '+' : ''}{row.quantity}
+                        </td>
+                        <td className="px-6 py-3 text-xs text-gray-400">{row.actor}</td>
+                        <td className="px-6 py-3 text-xs text-gray-500">{row.reference || '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </section>
 
       <aside className="pos-bill">
@@ -442,12 +555,12 @@ export const InventoryPage: React.FC = () => {
 
         <div className="pos-bill-inner">
         <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
-          <h2 className="text-xl font-bold tracking-tight">Stock Control</h2>
+          <h2 className="text-xl font-bold tracking-tight">Inventory Control</h2>
           <p className="text-xs font-semibold text-gray-500">Configure global rules</p>
         </div>
 
         <div className="mt-6">
-          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-3">Global Low Stock Threshold</label>
+          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-3">Global Low-Stock Alert (Qty)</label>
           <div className="flex items-center gap-3">
             <input
               type="number"
@@ -473,15 +586,28 @@ export const InventoryPage: React.FC = () => {
           <div className="bg-indigo-900/10 border border-indigo-900/30 rounded-xl p-4">
             <h4 className="text-sm font-bold text-white mb-1"><AlertTriangle size={14} className="inline text-indigo-400 mr-2 -translate-y-0.5" />Action Required</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              You have {inventory.filter(i => computeStock(i).totalPieces < threshold).length} items currently sitting below your safe threshold of {threshold}.
+              You have {inventory.filter(i => computeStock(i).totalPieces < getEffectiveReorderLevel(i)).length} items currently below reorder threshold.
             </p>
             <button
               onClick={() => { setFilterLowStock(true); document.getElementById('inventory-table')?.scrollIntoView({ behavior: 'smooth' }); }}
               className="mt-3 text-[11px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors"
             >
-              Review flagged stock <ArrowRight size={14} className="inline ml-1" />
+              Review flagged products <ArrowRight size={14} className="inline ml-1" />
             </button>
           </div>
+        </div>
+
+        <div className="mt-8 border-t border-[#1f242c] pt-6">
+          <h4 className="text-sm font-bold text-white mb-1">Stock Transfers</h4>
+          <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">Move stock between warehouse and shop locations with approval tracking.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/stock-transfers')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1d222a] border border-[#2b313a] text-gray-300 text-[11px] font-bold hover:text-white hover:bg-[#2b313a] transition-all"
+          >
+            <ArrowLeftRight size={13} />
+            Go to Stock Transfers
+          </button>
         </div>
 
         <div className="mt-auto pt-6">
@@ -496,7 +622,7 @@ export const InventoryPage: React.FC = () => {
       <Modal
         isOpen={adjustRow !== null}
         onClose={closeAdjustModal}
-        title={adjustRow ? `Adjust Stock — ${adjustRow.name}` : 'Adjust Stock'}
+        title={adjustRow ? `Adjust Inventory — ${adjustRow.name}` : 'Adjust Inventory'}
       >
         {adjustRow && (
           <div className="flex flex-col gap-6">
@@ -508,12 +634,12 @@ export const InventoryPage: React.FC = () => {
               </div>
               <div className="w-px h-10 bg-border/50" />
               <div className="flex-1 text-center">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Loose Pieces</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Loose Qty</p>
                 <p className="text-lg font-bold text-dark mt-1">{computeStock(adjustRow).availLoose}</p>
               </div>
               <div className="w-px h-10 bg-border/50" />
               <div className="flex-1 text-center">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Pieces</p>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Qty</p>
                 <p className="text-lg font-bold text-primary mt-1">{computeStock(adjustRow).totalPieces}</p>
               </div>
             </div>
@@ -568,7 +694,7 @@ export const InventoryPage: React.FC = () => {
               </div>
               <div>
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
-                  Piece Delta
+                  Unit Delta
                 </label>
                 <input
                   type="number"
@@ -589,7 +715,7 @@ export const InventoryPage: React.FC = () => {
               <textarea
                 value={adjReason}
                 onChange={(e) => setAdjReason(e.target.value)}
-                placeholder="e.g. Damaged goods, stock recount, returned items..."
+                placeholder="e.g. Key import correction, activation reversal, manual recount..."
                 rows={3}
                 className="w-full px-4 py-3 bg-accent border border-border/50 rounded-2xl text-sm font-medium text-dark outline-none focus:border-primary/30 transition-all resize-none"
               />
@@ -634,6 +760,77 @@ export const InventoryPage: React.FC = () => {
         )}
       </Modal>
 
+      {/* ── Product Stock History ─────────────────────────────────── */}
+      <Modal
+        isOpen={historyProduct !== null}
+        onClose={closeHistory}
+        title={historyProduct ? `Stock History — ${historyProduct.name}` : 'Stock History'}
+      >
+        {historyProduct && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-3 gap-3">
+              {(() => {
+                const stock = computeStock(historyProduct);
+                return [
+                  { label: 'Qty', value: stock.totalPieces },
+                  { label: 'Cartons', value: (stock.totalPieces / (historyProduct.pieces_per_carton || 1)).toFixed(2) },
+                  { label: 'Qty / Carton', value: historyProduct.pieces_per_carton || 1 },
+                ].map((item) => (
+                  <div key={item.label} className="bg-accent rounded-2xl border border-border/50 p-4 text-center">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.label}</p>
+                    <p className="text-lg font-bold text-dark mt-1">{item.value}</p>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="rounded-2xl border border-[#2b313a] overflow-hidden">
+              <div className="overflow-x-auto custom-scrollbar max-h-[420px]">
+                <table className="w-full min-w-[760px] text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#1d222a] border-b border-[#2b313a]">
+                      {['When', 'What happened', 'Location', 'Qty', 'By whom', 'Reason / Reference'].map((h) => (
+                        <th key={h} className="px-4 py-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2b313a] bg-[#171c23]">
+                    {historyLoading ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-xs text-gray-500 text-center">Loading stock history…</td>
+                      </tr>
+                    ) : historyError ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-xs text-red-400 text-center">{historyError}</td>
+                      </tr>
+                    ) : historyRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-xs text-gray-500 text-center">No stock history yet.</td>
+                      </tr>
+                    ) : (
+                      historyRows.map((row) => (
+                        <tr key={row.id} className="hover:bg-[#1d222a] transition-colors">
+                          <td className="px-4 py-3 text-[11px] text-gray-400 whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-xs font-semibold text-gray-300">{row.action}</td>
+                          <td className="px-4 py-3 text-xs font-semibold uppercase text-gray-400">{row.location}</td>
+                          <td className={cn('px-4 py-3 text-xs font-mono font-bold', row.quantity >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                            {row.quantity >= 0 ? '+' : ''}{row.quantity}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-400">{row.actor}</td>
+                          <td className="px-4 py-3 text-xs text-gray-500">{row.reference || '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {/* ── Success Toast ── */}
       {toast && (
         <div className="fixed bottom-8 right-8 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
@@ -648,6 +845,3 @@ export const InventoryPage: React.FC = () => {
     </div>
   );
 };
-
-
-

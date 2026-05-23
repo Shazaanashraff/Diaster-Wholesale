@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton } from '../types';
+import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton, PurchaseDiscountApproval } from '../types';
 
 // ── List & fetch ──────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ export async function getPurchaseById(id: string): Promise<{
       supabase.from('purchases').select('*, suppliers(*)').eq('id', id).single(),
       supabase
         .from('purchase_items')
-        .select('*, products(id, name, model, item_code, sku, pieces_per_carton, cost_price, msp, margin_pct)')
+        .select('*, products(id, name, model, item_code, sku, pieces_per_carton, cost_price)')
         .eq('purchase_id', id),
       supabase.from('purchase_costs').select('*').eq('purchase_id', id),
       supabase
@@ -55,11 +55,15 @@ export interface NewPurchaseItemInput {
   quantity_units: number;
   quantity_cartons: number;
   unit_price_rmb: number;
+  discount_percent?: number;
 }
 
 export async function createPurchase(data: {
   supplier_id: string;
+  location_id?: string;
+  rep_name?: string;
   exchange_rate: number;
+  discount_amount?: number;
   notes: string;
   items: NewPurchaseItemInput[];
 }): Promise<Purchase> {
@@ -78,7 +82,10 @@ export async function createPurchase(data: {
     .insert({
       reference: refData as string,
       supplier_id: data.supplier_id,
+      location_id: data.location_id,
+      rep_name: data.rep_name,
       exchange_rate: data.exchange_rate,
+      discount_amount: data.discount_amount || 0,
       total_rmb: totalRmb,
       total_lkr: totalLkr,
       notes: data.notes,
@@ -122,21 +129,20 @@ export async function updatePurchaseItems(
 
 // ── Status transitions ────────────────────────────────────────────────────────
 
-export async function confirmPurchase(id: string): Promise<void> {
+export async function orderPurchase(id: string): Promise<void> {
   const { error } = await supabase
     .from('purchases')
-    .update({ status: 'confirmed' })
+    .update({ status: 'ordered' })
     .eq('id', id)
     .eq('status', 'draft');
   if (error) throw new Error(error.message);
 }
 
-export async function markInTransit(id: string): Promise<void> {
+export async function cancelPurchase(id: string): Promise<void> {
   const { error } = await supabase
     .from('purchases')
-    .update({ status: 'in_transit' })
-    .eq('id', id)
-    .eq('status', 'confirmed');
+    .update({ status: 'cancelled' })
+    .eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -155,14 +161,19 @@ export async function receivePurchase(
   purchaseId: string,
   items: ReceiveItemInput[]
 ): Promise<void> {
-  // Fetch purchase reference and product details
-  const { data: purchaseData, error: purchaseError } = await supabase
-    .from('purchases')
-    .select('reference')
-    .eq('id', purchaseId)
-    .single();
-  if (purchaseError) throw new Error(purchaseError.message);
-  const purchaseRef = purchaseData.reference;
+  // Enforce: received_units must not exceed ordered_units
+  for (const item of items) {
+    if (item.received_units > item.ordered_units) {
+      throw new Error(
+        `Cannot receive more than ordered. Product ordered: ${item.ordered_units}, attempting to receive: ${item.received_units}.`
+      );
+    }
+    if (item.damaged_units > item.received_units) {
+      throw new Error(
+        `Damaged units (${item.damaged_units}) cannot exceed received units (${item.received_units}).`
+      );
+    }
+  }
 
   // Insert receive records
   const { error: re } = await supabase.from('purchase_receive').insert(
@@ -177,45 +188,7 @@ export async function receivePurchase(
   );
   if (re) throw new Error(re.message);
 
-  // Add sellable stock to stock_batches (received - damaged) and generate cartons
-  for (const item of items) {
-    const sellableUnits = Math.max(0, item.received_units - item.damaged_units);
-    if (sellableUnits > 0) {
-      const cartonsCount = Math.floor(sellableUnits / item.pieces_per_carton);
-      const loosePieces = sellableUnits % item.pieces_per_carton;
-      
-      await supabase.from('stock_batches').insert({
-        product_id: item.product_id,
-        cartons: cartonsCount,
-        loose_pieces: loosePieces,
-        notes: `Received from purchase (${purchaseId})`,
-        received_at: new Date().toISOString(),
-      });
-
-      // Generate cartons if any
-      if (cartonsCount > 0) {
-        // Fetch product model for carton indexing
-        const { data: prodData } = await supabase
-          .from('products')
-          .select('model')
-          .eq('id', item.product_id)
-          .single();
-        const model = prodData?.model || 'ITEM';
-
-        const cartonRows = [];
-        for (let i = 1; i <= cartonsCount; i++) {
-          cartonRows.push({
-            purchase_id: purchaseId,
-            product_id: item.product_id,
-            carton_index: i,
-            carton_code: `${purchaseRef}-${model}-${i}`,
-            status: 'in_stock'
-          });
-        }
-        await supabase.from('cartons').insert(cartonRows);
-      }
-    }
-  }
+  // Stock updates are handled automatically by DB trigger 'trg_purchase_receive_trigger'
 
   // Update status to received
   const { error: pe } = await supabase
@@ -267,7 +240,7 @@ export async function finalizeCostingAndClose(
 
   if (totalSellable === 0) throw new Error('No sellable units received.');
 
-  // Compute per-item cost price and MSP, update products
+  // Compute per-item cost price and update products
   for (const item of items) {
     const receiveRow = received.find((r) => r.product_id === item.product_id);
     const sellable = receiveRow
@@ -284,27 +257,81 @@ export async function finalizeCostingAndClose(
 
     const costPrice = (itemLkr + allocatedCosts) / sellable;
 
-    const product = item.products as any;
-    const marginPct = Number(product?.margin_pct ?? 20);
-    const msp = costPrice * (1 + marginPct / 100);
-
     await supabase
       .from('products')
-      .update({ cost_price: costPrice, msp })
+      .update({ cost_price: costPrice })
       .eq('id', item.product_id);
   }
 
   // Close the purchase
   const { error } = await supabase
     .from('purchases')
-    .update({ status: 'closed', cost_finalized: true })
+    .update({ status: 'completed', cost_finalized: true })
     .eq('id', purchaseId);
   if (error) throw new Error(error.message);
 }
 
 // ── Delete draft ──────────────────────────────────────────────────────────────
 
+async function deletePurchaseDependents(id: string): Promise<void> {
+  await Promise.all([
+    supabase.from('purchase_receive').delete().eq('purchase_id', id),
+    supabase.from('purchase_items').delete().eq('purchase_id', id),
+    supabase.from('purchase_costs').delete().eq('purchase_id', id),
+    supabase.from('cartons').delete().eq('purchase_id', id),
+    supabase.from('purchase_discount_approvals').delete().eq('purchase_id', id),
+  ]);
+}
+
 export async function deletePurchase(id: string): Promise<void> {
+  await deletePurchaseDependents(id);
   const { error } = await supabase.from('purchases').delete().eq('id', id).eq('status', 'draft');
+  if (error) throw new Error(error.message);
+}
+
+export async function forceDeletePurchase(id: string): Promise<void> {
+  await deletePurchaseDependents(id);
+  const { error } = await supabase.from('purchases').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Discount Approvals ────────────────────────────────────────────────────────
+
+export async function requestDiscountApproval(data: {
+  purchase_id: string;
+  discount_type: 'item' | 'bill';
+  discount_percent?: number;
+  discount_amount?: number;
+  requested_by: string;
+  notes?: string;
+}) {
+  const { error } = await supabase.from('purchase_discount_approvals').insert({
+    ...data,
+    status: 'pending'
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function resolveDiscountApproval(id: string, status: 'approved' | 'rejected', approvedBy: string) {
+  const { error } = await supabase.from('purchase_discount_approvals').update({
+    status,
+    approved_by: approvedBy,
+    resolved_at: new Date().toISOString()
+  }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function getPendingApprovals(purchaseId: string): Promise<PurchaseDiscountApproval[]> {
+  const { data, error } = await supabase
+    .from('purchase_discount_approvals')
+    .select('*')
+    .eq('purchase_id', purchaseId)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  return data as PurchaseDiscountApproval[];
+}
+
+export async function updatePurchaseDiscount(purchaseId: string, discount_amount: number) {
+  const { error } = await supabase.from('purchases').update({ discount_amount }).eq('id', purchaseId);
   if (error) throw new Error(error.message);
 }

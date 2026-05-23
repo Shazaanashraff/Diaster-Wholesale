@@ -10,19 +10,21 @@ import { ReportSkeleton } from './shared/ReportSkeleton';
 
 export const ProfitLossReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
-      const { from, to } = getReportDateRange(period);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
       const res = await getProfitAndLoss(from || undefined, to || undefined);
       setData(res);
       setLoading(false);
     }
     load();
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   if (loading) return <ReportSkeleton kpis={4} rows={5} />;
 
@@ -39,7 +41,7 @@ export const ProfitLossReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Profit & Loss Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Profit_Loss_Report" headers={['Item', 'Amount']} rows={rows} />
         </div>
       </div>

@@ -9,11 +9,13 @@ import { ReportKPICard } from './shared/ReportKPICard';
 
 export const ExpenseReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      const { from, to } = getReportDateRange(period);
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
       
       let query = supabase.from('expenses').select('*').order('created_at', { ascending: false });
       if (from) query = query.gte('created_at', from);
@@ -23,7 +25,7 @@ export const ExpenseReport: React.FC = () => {
       setData(res || []);
     }
     load();
-  }, [period]);
+  }, [period, customFrom, customTo]);
 
   const total = data.reduce((sum, e) => sum + Number(e.amount), 0);
   const headers = ['Date', 'Category', 'Description', 'Amount', 'Ref'];
@@ -34,7 +36,7 @@ export const ExpenseReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Expense Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} />
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Expense_Report" headers={headers} rows={rows} />
         </div>
       </div>

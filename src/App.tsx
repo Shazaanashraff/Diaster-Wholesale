@@ -14,7 +14,11 @@ import { PinAuthPage } from './pages/PinAuthPage';
 import { SuppliersPage } from './pages/SuppliersPage';
 import { PurchasesPage } from './pages/PurchasesPage';
 import { PurchaseDetailPage } from './pages/PurchaseDetailPage';
+import { SupplierReturnsPage } from './pages/SupplierReturnsPage';
+import { DayTransactionsPage } from './pages/DayTransactionsPage';
+import { StockTransfersPage } from './pages/StockTransfersPage';
 import { UpdatesPage } from './pages/UpdatesPage';
+import { CashierPage } from './pages/CashierPage';
 import { usePermissions, type Permission } from './utils/permissions';
 
 
@@ -54,6 +58,11 @@ const App: React.FC = () => {
           <Route path="/suppliers" element={<ProtectedRoute req={['manage_suppliers', 'manage_payments']}><SuppliersPage /></ProtectedRoute>} />
           <Route path="/purchases" element={<ProtectedRoute req="manage_procurement"><PurchasesPage /></ProtectedRoute>} />
           <Route path="/purchases/:id" element={<ProtectedRoute req="manage_procurement"><PurchaseDetailPage /></ProtectedRoute>} />
+          <Route path="/supplier-returns" element={<ProtectedRoute req="manage_procurement"><SupplierReturnsPage /></ProtectedRoute>} />
+          <Route path="/stock-transfers" element={<ProtectedRoute req="manage_procurement"><StockTransfersPage /></ProtectedRoute>} />
+          <Route path="/day-transactions" element={<ProtectedRoute req={['manage_costs', 'manage_payments']}><DayTransactionsPage /></ProtectedRoute>} />
+          <Route path="/expenses" element={<Navigate to="/day-transactions" replace />} />
+          <Route path="/cashier" element={<ProtectedRoute req="pos"><CashierPage /></ProtectedRoute>} />
           <Route path="/updates" element={<UpdatesPage />} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />
           <Route path="*" element={<Navigate to="/" replace />} />

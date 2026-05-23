@@ -1,24 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { DateRangePicker } from './shared/DateRangePicker';
 import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
 import { Ship } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const BatchProfitReport: React.FC = () => {
+  const [period, setPeriod] = useState<ReportPeriod>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
     async function load() {
-      
+      const { from, to } = getReportDateRange(period, customFrom, customTo);
+
       // Get shipments joined with batches and invoice items
-      const { data: shipments } = await supabase
+      let shipmentsQ = supabase
         .from('shipments')
         .select(`
           id, reference, supplier, arrived_at,
           stock_batches(product_id, cartons, loose_pieces, cost_per_piece, products(pieces_per_carton))
         `);
+      if (from) shipmentsQ = shipmentsQ.gte('arrived_at', from);
+      if (to)   shipmentsQ = shipmentsQ.lte('arrived_at', to);
+      const { data: shipments } = await shipmentsQ;
 
       const { data: items } = await supabase
         .from('invoice_items')
@@ -58,7 +66,7 @@ export const BatchProfitReport: React.FC = () => {
       setData(result.sort((a, b) => new Date(b.arrived_at).getTime() - new Date(a.arrived_at).getTime()));
     }
     load();
-  }, []);
+  }, [period, customFrom, customTo]);
 
   const headers = ['Ref', 'Supplier', 'Date', 'Total Cost', 'Approx. Sales', 'Profit'];
   const rows = data.map(r => [
@@ -70,7 +78,10 @@ export const BatchProfitReport: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Batch / Shipment Profit Report</h2>
-        <ExportBar filename="Batch_Profit_Report" headers={headers} rows={rows} />
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
+          <ExportBar filename="Batch_Profit_Report" headers={headers} rows={rows} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

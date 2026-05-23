@@ -2,7 +2,7 @@
 // Diastar ERP — Report Utilities
 // ============================================================
 
-export type ReportPeriod = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+export type ReportPeriod = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all' | 'custom';
 
 export const PERIOD_LABELS: Record<ReportPeriod, string> = {
   today: 'Today',
@@ -11,9 +11,14 @@ export const PERIOD_LABELS: Record<ReportPeriod, string> = {
   quarter: 'This Quarter',
   year: 'This Year',
   all: 'All Time',
+  custom: 'Custom Range',
 };
 
-export function getReportDateRange(period: ReportPeriod): { from: string | null; to: string | null } {
+export function getReportDateRange(
+  period: ReportPeriod,
+  customFrom?: string,
+  customTo?: string
+): { from: string | null; to: string | null } {
   const now = new Date();
   switch (period) {
     case 'today': {
@@ -41,6 +46,11 @@ export function getReportDateRange(period: ReportPeriod): { from: string | null;
         from: new Date(now.getFullYear(), 0, 1).toISOString(),
         to: now.toISOString(),
       };
+    case 'custom': {
+      const from = customFrom ? new Date(customFrom + 'T00:00:00').toISOString() : null;
+      const to = customTo ? new Date(customTo + 'T23:59:59').toISOString() : null;
+      return { from, to };
+    }
     case 'all':
     default:
       return { from: null, to: null };

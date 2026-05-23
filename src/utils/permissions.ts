@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'accountant' | 'officer' | 'pos_operator';
+export type Role = 'admin' | 'accountant' | 'officer' | 'pos_operator' | 'warehouse';
 
 export type Permission =
   | 'manage_products'
@@ -34,7 +34,10 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import', 'manage_returns',
   ],
   pos_operator: [
-    'pos', 'view_customers', 'manage_returns',
+    'pos', 'manage_returns',
+  ],
+  warehouse: [
+    'view_inventory', 'manage_inventory', 'manage_procurement',
   ],
 };
 
@@ -43,6 +46,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   accountant:   'Accountant',
   officer:      'Officer',
   pos_operator: 'POS Operator',
+  warehouse:    'Warehouse',
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -50,6 +54,7 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   accountant:   'Costing, payments & reports',
   officer:      'Procurement & product management',
   pos_operator: 'Sales & customer service',
+  warehouse:    'Inventory & stock management',
 };
 
 // Default PINs stored per role in localStorage
@@ -58,6 +63,7 @@ export const ROLE_PIN_KEYS: Record<Role, string> = {
   accountant:   'pin_accountant',
   officer:      'pin_officer',
   pos_operator: 'pin_pos_operator',
+  warehouse:    'pin_warehouse',
 };
 
 export const DEFAULT_PINS: Record<Role, string> = {
@@ -65,6 +71,7 @@ export const DEFAULT_PINS: Record<Role, string> = {
   accountant:   '2222',
   officer:      '3333',
   pos_operator: '4444',
+  warehouse:    '5555',
 };
 
 export function getRolePin(role: Role): string {

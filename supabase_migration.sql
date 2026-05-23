@@ -151,6 +151,7 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS sku        TEXT UNIQUE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS margin_pct NUMERIC(5,2) DEFAULT 20;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS cost_price NUMERIC(12,2) DEFAULT 0;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS msp        NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS reorder_level INT DEFAULT 0;
 
 -- Backfill item_code as sku for existing products (use item_code if present)
 UPDATE products SET sku = item_code WHERE sku IS NULL AND item_code IS NOT NULL AND item_code <> '';

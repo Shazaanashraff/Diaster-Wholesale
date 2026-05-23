@@ -113,7 +113,7 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 export const getSalesProfitReport = async (from?: string, to?: string) => {
   let query = supabase
     .from('invoice_items')
-    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status)');
+    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status, salesperson_name)');
 
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
@@ -135,6 +135,7 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
     return {
       invoice_no: (item.invoices as any)?.invoice_no,
       product: (item.products as any)?.name,
+      salesperson_name: (item.invoices as any)?.salesperson_name ?? null,
       quantity: totalPieces,
       selling_price: item.unit_price,
       cost_price: unitCost,

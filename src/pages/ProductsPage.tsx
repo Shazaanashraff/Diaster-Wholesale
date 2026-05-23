@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, deleteProduct, getProductLinkCounts, clearProductStockAdjustments } from '../services/productService';
+import { insertStockAdjustment } from '../services/inventoryService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { usePermissions } from '../utils/permissions';
 
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -17,6 +19,9 @@ export const ProductsPage: React.FC = () => {
 
   // ── Confirm delete ──
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
+  const [hardDeleteError, setHardDeleteError] = useState<string | null>(null);
+  const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
 
   // ── Form submission state ──
   const [saving, setSaving] = useState(false);
@@ -25,46 +30,42 @@ export const ProductsPage: React.FC = () => {
 
   // ── Form refs ──
   const nameRef = useRef<HTMLInputElement>(null);
-  const itemCodeRef = useRef<HTMLInputElement>(null);
-  const modelRef = useRef<HTMLInputElement>(null);
   const wholesaleRef = useRef<HTMLInputElement>(null);
   const retailRef = useRef<HTMLInputElement>(null);
+  const costPriceRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const piecesPerCartonRef = useRef<HTMLInputElement>(null);
-  const marginPctRef = useRef<HTMLInputElement>(null);
-
-  // Auto-generate a unique 6-digit SKU
-  async function generateSKU(): Promise<string> {
-    const existing = new Set(products.map((p) => p.item_code));
-    let sku = '';
-    for (let attempts = 0; attempts < 20; attempts++) {
-      sku = String(Math.floor(100000 + Math.random() * 900000));
-      if (!existing.has(sku)) break;
-    }
-    return sku;
-  }
+  const quantityRef = useRef<HTMLInputElement>(null);
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState('all');
-  const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail' | 'margin'>('name');
+  const [sortBy, setSortBy] = useState<'name' | 'wholesale' | 'retail'>('name');
+
+  const { role } = usePermissions();
+  const isAdmin = role === 'admin';
 
   const categories = ['all', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
 
-  const visibleProducts = products
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounced(searchQuery), 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const visibleProducts = useMemo(() => products
     .filter(p => {
-      const q = searchQuery.toLowerCase();
-      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q) || (p.model || '').toLowerCase().includes(q);
+      const q = searchDebounced.toLowerCase();
+      const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.item_code.toLowerCase().includes(q);
       const matchesCategory = filterCategory === 'all' || p.category === filterCategory;
       return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
       if (sortBy === 'wholesale') return a.wholesale_price - b.wholesale_price;
       if (sortBy === 'retail')    return a.retail_price   - b.retail_price;
-      if (sortBy === 'margin')    return (b.retail_price - b.wholesale_price) - (a.retail_price - a.wholesale_price);
       return a.name.localeCompare(b.name);
-    });
+    }), [products, searchDebounced, filterCategory, sortBy]);
 
   const hasActiveFilters = filterCategory !== 'all' || sortBy !== 'name' || searchQuery !== '';
   const clearFilters = () => { setFilterCategory('all'); setSortBy('name'); setSearchQuery(''); };
@@ -101,14 +102,16 @@ export const ProductsPage: React.FC = () => {
 
   const handleSubmit = async () => {
     const name = nameRef.current?.value.trim() || '';
-    const model = modelRef.current?.value.trim() || '';
     const wholesale_price = parseFloat(wholesaleRef.current?.value || '0');
     const retail_price = parseFloat(retailRef.current?.value || '0');
+    const cost_price = parseFloat(costPriceRef.current?.value || '0') || 0;
     const description = descriptionRef.current?.value.trim() || '';
     const pieces_per_carton = parseInt(piecesPerCartonRef.current?.value || '1') || 1;
-    const margin_pct = parseFloat(marginPctRef.current?.value || '20') || 20;
+    const quantity = Math.max(0, parseInt(quantityRef.current?.value || '0', 10) || 0);
 
     if (!name) return;
+
+    let createdProduct: Product | null = null;
 
     try {
       setSaving(true);
@@ -116,33 +119,66 @@ export const ProductsPage: React.FC = () => {
       if (editingProduct) {
         // ── UPDATE ──
         const updated = await updateProduct(editingProduct.id, {
-          name, model, wholesale_price, retail_price,
-          description, pieces_per_carton, margin_pct,
+          name,
+          model: '',
+          wholesale_price,
+          retail_price,
+          cost_price,
+          description,
+          pieces_per_carton,
         });
         setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       } else {
         // ── Duplicate check ──
-        const duplicates = await checkDuplicate(model, name);
+        const duplicates = await checkDuplicate(name);
         if (duplicates.length > 0) {
           setDuplicateWarning(
-            `"${name}" (${model}) already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
+            `"${name}" already exists as ${duplicates[0].item_code}. Click Save again to confirm.`
           );
           if (!duplicateWarning) { setSaving(false); return; }
         }
 
-        // ── Auto-generate 6-digit SKU ──
-        const item_code = itemCodeRef.current?.value.trim() || (await generateSKU());
-
-        const created = await createProduct({
-          name, item_code, model, wholesale_price, retail_price,
-          description, category: 'general', pieces_per_carton, margin_pct,
+        const newProduct = await createProduct({
+          name,
+          model: '',
+          wholesale_price,
+          retail_price,
+          cost_price,
+          description,
+          category: 'general',
+          pieces_per_carton,
         });
-        setProducts((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+        createdProduct = newProduct;
+
+        if (quantity > 0) {
+          await insertStockAdjustment({
+            product_id: newProduct.id,
+            adjustment_pieces: quantity,
+            reason: '[CREATE] Initial quantity at product creation',
+            adjusted_by: 'admin',
+          });
+        }
+
+        setProducts((prev) => [...prev, newProduct].sort((a, b) => a.name.localeCompare(b.name)));
       }
 
       closeModal();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Operation failed';
+      if (!createdProduct) {
+        setError(message);
+        return;
+      }
+
+      const created = createdProduct;
+      setProducts((prev) =>
+        prev.some((p) => p.id === created.id)
+          ? prev
+          : [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      closeModal();
+      setError(`Product saved, but quantity was not saved: ${message}`);
+      return;
       setError(message);
     } finally {
       setSaving(false);
@@ -166,6 +202,42 @@ export const ProductsPage: React.FC = () => {
       setDeleteError(err instanceof Error ? err.message : 'Failed to archive product');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleHardDeleteRequest = (product: Product) => {
+    setHardDeleteTarget(product);
+    setHardDeleteError(null);
+  };
+
+  const handleHardDelete = async () => {
+    if (!hardDeleteTarget) return;
+    try {
+      setHardDeleteLoading(true);
+      setHardDeleteError(null);
+
+      const counts = await getProductLinkCounts(hardDeleteTarget.id);
+      const blocked = Object.entries(counts).filter(([, count]) => count > 0);
+
+      const nonAdjustmentBlocked = blocked.filter(([name]) => name !== 'stock_adjustments');
+      if (nonAdjustmentBlocked.length > 0) {
+        const summary = nonAdjustmentBlocked.map(([name, count]) => `${name}: ${count}`).join(', ');
+        setHardDeleteError(`Linked records exist (${summary}). Remove them first.`);
+        return;
+      }
+
+      if ((counts.stock_adjustments ?? 0) > 0) {
+        await clearProductStockAdjustments(hardDeleteTarget.id);
+      }
+
+      await deleteProduct(hardDeleteTarget.id);
+      setProducts(prev => prev.filter(p => p.id !== hardDeleteTarget.id));
+      setHardDeleteTarget(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Hard delete failed';
+      setHardDeleteError(message);
+    } finally {
+      setHardDeleteLoading(false);
     }
   };
 
@@ -251,8 +323,7 @@ export const ProductsPage: React.FC = () => {
                     {([
                       { key: 'name',      label: 'Name' },
                       { key: 'wholesale', label: 'Wholesale ↑' },
-                      { key: 'retail',    label: 'Retail ↑' },
-                      { key: 'margin',    label: 'Margin ↓' },
+                      { key: 'retail',    label: 'Selling ↑' },
                     ] as const).map(s => (
                       <button
                         key={s.key}
@@ -359,11 +430,13 @@ export const ProductsPage: React.FC = () => {
                           </div>
                           <div className="w-px h-6 bg-[#2b313a]"></div>
                           <div className="flex flex-col">
-                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Model</span>
-                            <p className="text-xs font-bold text-gray-300">{product.model}</p>
+                            <span className="text-[9px] uppercase font-bold tracking-widest text-gray-600">Qty / Carton</span>
+                            <p className="text-xs font-bold text-gray-300">{product.pieces_per_carton || 1}</p>
                           </div>
                           <div className="w-px h-6 bg-[#2b313a]"></div>
-                          <p className="text-xs font-semibold text-gray-500 max-w-sm line-clamp-1 italic">{product.description}</p>
+                          <p className="text-xs font-semibold text-gray-500 max-w-sm line-clamp-1 italic">
+                            {product.description || 'No description'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -371,9 +444,8 @@ export const ProductsPage: React.FC = () => {
                     <div className="flex items-center gap-10">
                       {(product.cost_price ?? 0) > 0 && (
                         <div className="text-right">
-                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost / MSP</p>
+                          <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest mb-1.5 leading-none">Cost Price</p>
                           <p className="text-sm font-bold text-amber-400 font-mono">LKR {product.cost_price!.toFixed(2)}</p>
-                          <p className="text-[10px] text-amber-600 font-mono mt-0.5">MSP {product.msp!.toFixed(2)}</p>
                         </div>
                       )}
                       <div className="text-right">
@@ -381,7 +453,7 @@ export const ProductsPage: React.FC = () => {
                         <p className="text-xl font-bold text-gray-300 tracking-tighter">LKR {product.wholesale_price.toFixed(2)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Retail</p>
+                        <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1.5 leading-none">Selling</p>
                         <p className="text-2xl font-bold text-primary tracking-tighter">LKR {product.retail_price.toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -396,6 +468,15 @@ export const ProductsPage: React.FC = () => {
                           className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
                           <Trash2 size={20} />
                         </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleHardDeleteRequest(product)}
+                            className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
+                            title="Hard delete product"
+                          >
+                            <AlertTriangle size={20} />
+                          </button>
+                        )}
                         <div className="w-px h-8 bg-[#2b313a]"></div>
                         <button onClick={() => handleEdit(product)} className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center" title="More options">
                           <MoreVertical size={20} />
@@ -443,33 +524,15 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Hash size={12} className="text-primary" /> SKU / Item Code
+                <Hash size={12} className="text-primary" /> Item Code
               </label>
-              <input
-                ref={itemCodeRef}
-                type="text"
-                defaultValue={editingProduct?.item_code || ''}
-                placeholder={editingProduct ? editingProduct.item_code : 'Auto-generated'}
-                disabled={!!editingProduct}
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-              />
+              <div className="w-full bg-accent border-2 border-transparent rounded-2xl py-4 px-6 text-sm font-semibold font-mono text-gray-500">
+                {editingProduct?.item_code || 'Auto-generated on save'}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-              <Package size={12} className="text-primary" /> Model / Version
-            </label>
-            <input
-              ref={modelRef}
-              type="text"
-              defaultValue={editingProduct?.model || ''}
-              placeholder="e.g. A616"
-              className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                 <Tag size={12} className="text-primary" /> Wholesale Price (LKR)
@@ -484,7 +547,7 @@ export const ProductsPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Retail Price (LKR)
+                <Tag size={12} className="text-primary" /> Selling Price (LKR)
               </label>
               <input
                 ref={retailRef}
@@ -494,12 +557,24 @@ export const ProductsPage: React.FC = () => {
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                <Tag size={12} className="text-primary" /> Cost Price (LKR)
+              </label>
+              <input
+                ref={costPriceRef}
+                type="number"
+                defaultValue={editingProduct?.cost_price || ''}
+                placeholder="0.00"
+                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Package size={12} className="text-primary" /> Units per Carton
+                <Package size={12} className="text-primary" /> Qty per Carton
               </label>
               <input
                 ref={piecesPerCartonRef}
@@ -510,20 +585,21 @@ export const ProductsPage: React.FC = () => {
                 className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                <Tag size={12} className="text-primary" /> Default Margin %
-              </label>
-              <input
-                ref={marginPctRef}
-                type="number"
-                min="0"
-                step="0.5"
-                defaultValue={editingProduct?.margin_pct ?? 20}
-                placeholder="20"
-                className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
-              />
-            </div>
+            {!editingProduct && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <Hash size={12} className="text-primary" /> Qty (pieces)
+                </label>
+                <input
+                  ref={quantityRef}
+                  type="number"
+                  min="0"
+                  defaultValue={0}
+                  placeholder="0"
+                  className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all font-mono"
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -533,7 +609,7 @@ export const ProductsPage: React.FC = () => {
             <textarea 
               ref={descriptionRef}
               defaultValue={editingProduct?.description || ''}
-              placeholder="Brief overview of the digital product..." 
+              placeholder="Optional notes..." 
               rows={3}
               className="w-full bg-accent border-2 border-transparent focus:border-primary/20 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all resize-none"
             />
@@ -579,9 +655,18 @@ export const ProductsPage: React.FC = () => {
         isLoading={saving}
         error={deleteError}
       />
+
+      <ConfirmModal
+        isOpen={!!hardDeleteTarget}
+        onClose={() => { setHardDeleteTarget(null); setHardDeleteError(null); }}
+        onConfirm={handleHardDelete}
+        title="Hard Delete Product"
+        message={`Permanently delete "${hardDeleteTarget?.name}". This cannot be undone. If only stock adjustments are linked, they will be cleared automatically.`}
+        confirmText="Hard Delete"
+        variant="danger"
+        isLoading={hardDeleteLoading}
+        error={hardDeleteError}
+      />
     </div>
   );
 };
-
-
-

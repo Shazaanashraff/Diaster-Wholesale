@@ -16,6 +16,10 @@ import {
   Building2,
   ShoppingCart,
   Download,
+  CornerUpLeft,
+  Wallet,
+  ArrowLeftRight,
+  ClipboardList,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCurrentRole, can, type Permission } from '../utils/permissions';
@@ -35,16 +39,20 @@ interface SidebarProps {
 
 const ALL_NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard,   label: 'Dashboard',   path: '/' },
-  { icon: MonitorSmartphone, label: 'POS System',  path: '/pos',       requires: 'pos' },
+  { icon: MonitorSmartphone, label: 'Digital POS', path: '/pos',       requires: 'pos' },
+  { icon: ClipboardList,     label: 'Cashier',     path: '/cashier',   requires: 'pos' },
   { icon: Boxes,             label: 'Inventory',   path: '/inventory', requires: 'view_inventory' },
   { icon: Package2,          label: 'Products',    path: '/products',  requires: 'manage_products' },
   { icon: Users,             label: 'Customers',   path: '/customers', requires: 'view_customers' },
   { icon: RotateCcw,         label: 'Returns',     path: '/returns',   requires: 'manage_returns' },
   { icon: BarChart3,         label: 'Reports',     path: '/reports',   requires: 'view_reports' },
-  { icon: ShoppingCart,      label: 'Procurement', path: '/purchases', requires: 'manage_procurement', section: 'Procurement' },
-  { icon: Building2,         label: 'Suppliers',   path: '/suppliers', requires: ['manage_suppliers', 'manage_payments'],   section: 'Procurement' },
-  { icon: Upload,            label: 'Bulk Import', path: '/import',    requires: 'bulk_import',        section: 'Admin' },
-  { icon: Download,          label: 'Updates',     path: '/updates',                                   section: 'Admin' },
+  { icon: ShoppingCart,    label: 'Procurement',      path: '/purchases',         requires: 'manage_procurement',   section: 'Procurement' },
+  { icon: Building2,       label: 'Suppliers',         path: '/suppliers',         requires: ['manage_suppliers', 'manage_payments'] as Permission[], section: 'Procurement' },
+  { icon: CornerUpLeft,    label: 'Supplier Returns',  path: '/supplier-returns',  requires: 'manage_procurement',   section: 'Procurement' },
+  { icon: ArrowLeftRight,  label: 'Stock Transfers',   path: '/stock-transfers',   requires: 'manage_procurement',   section: 'Procurement' },
+  { icon: Wallet,          label: 'Day Transactions',  path: '/day-transactions',  requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
+  { icon: Upload,          label: 'Bulk Import',       path: '/import',            requires: 'bulk_import',          section: 'Admin' },
+  { icon: Download,        label: 'Updates',           path: '/updates',                                             section: 'Admin' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
@@ -108,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         })}
       </nav>
 
-      <div className="pos-users mt-auto">
+      <div className="pos-users">
         {!collapsed && (
           <div className="px-3 py-2 mb-1">
             <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600">Signed in as</p>

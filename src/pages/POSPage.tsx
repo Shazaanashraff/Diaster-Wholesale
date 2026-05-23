@@ -1,9 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getProducts } from '../services/productService';
-import { getCustomers } from '../services/customerService';
+import { getCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
-import { getInventory, getAverageCostPerPiece } from '../services/inventoryService';
-import { checkout } from '../services/posService';
+import { getShopInventory, getAverageCostPerPiece } from '../services/inventoryService';
+import {
+  checkout, checkoutOffline, syncOfflineSales, getOfflinePendingCount,
+  getCustomerLoyalty, computeRedemptionValue, checkCreditLimit,
+} from '../services/posService';
+import { getSalespeople, type Salesperson } from '../services/salespersonService';
 import type { Product, Customer } from '../types';
 import { Modal } from '../components/Modal';
 import { computeStock } from '../utils/stockUtils';
@@ -12,19 +17,22 @@ import {
   Minus,
   Plus,
   Search,
-  Coffee,
-  Soup,
-  Wine,
-  CupSoda,
-  UtensilsCrossed,
-  CakeSlice,
-  Fish,
-  Wallet,
-  CreditCard,
-  QrCode,
+  Code2,
+  MonitorCheck,
+  Gamepad2,
+  Gift,
+  Server,
+  Globe,
   Trash2,
   LoaderCircle,
+  X,
+  PlusCircle,
+  WifiOff,
+  RefreshCw,
+  Star,
+  UserCheck,
 } from 'lucide-react';
+import type { PaymentSplit } from '../services/posService';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -33,9 +41,8 @@ export interface CartItem {
   quantityCartons: number;
   quantityPieces: number;
   batchId?: string;
+  unitPrice?: number;
 }
-
-type PayMethod = 'cash' | 'creditCard' | 'ewallet' | 'credit';
 
 const TILE_COLORS = [
   'bg-[#d7e5e8]',
@@ -48,11 +55,13 @@ const TILE_COLORS = [
   'bg-[#cbe8df]',
 ];
 
-const TILE_ICONS = [Coffee, Soup, Fish, UtensilsCrossed, CakeSlice, CupSoda, Wine, Coffee];
+const TILE_ICONS = [Code2, MonitorCheck, Gamepad2, Gift, Server, Globe, Code2, MonitorCheck];
 
 export const POSPage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [productPage, setProductPage] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,26 +71,61 @@ export const POSPage: React.FC = () => {
   const [isInventoryEnforced, setIsInventoryEnforced] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartonQuantities, setCartonQuantities] = useState<Record<string, number>>({});
   const [pieceQuantities, setPieceQuantities] = useState<Record<string, number>>({});
 
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  // Transaction state — payment
+  type PayMethod = PaymentSplit['method'] | 'credit';
+  interface UISplit {
+    id: string;
+    method: PayMethod;
+    amount: string;   // empty = auto-fill full total on submit
+    bank_name: string;
+    cheque_number: string;
+    due_date: string;
+  }
+  const mkSplit = (method: PayMethod): UISplit => ({
+    id: Math.random().toString(36).slice(2),
+    method, amount: '', bank_name: '', cheque_number: '', due_date: '',
+  });
+  const [paymentSplits, setPaymentSplits] = useState<UISplit[]>([mkSplit('cash')]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PayMethod>('cash');
-  const [selectedOrderType, setSelectedOrderType] = useState<string>('Dine-in');
-  const [isOrderTypeModalOpen, setIsOrderTypeModalOpen] = useState(false);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isWholesale, setIsWholesale] = useState(true);
-  const [btnPhase, setBtnPhase] = useState<'idle' | 'loading' | 'done'>('idle');
 
   // Discount & approval
   const [discountAmt, setDiscountAmt] = useState(0);
-  const [discountApproved, setDiscountApproved] = useState(false);
+  const [pricingApproved, setPricingApproved] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [approvalPin, setApprovalPin] = useState('');
   const [approvalError, setApprovalError] = useState('');
 
   const [availableBatches, setAvailableBatches] = useState<Record<string, any[]>>({});
+
+  // Network + offline
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Loyalty
+  const [customerLoyalty, setCustomerLoyalty] = useState<{ points: number } | null>(null);
+  const [redeemPoints, setRedeemPoints] = useState(0);
+
+  // Credit limit info
+  const [creditLimitInfo, setCreditLimitInfo] = useState<{ available: number; limit: number } | null>(null);
+
+  // Salesperson
+  const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
+  const [selectedSalesperson, setSelectedSalesperson] = useState<string>('');
+
+  // Inline new-customer form
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustType, setNewCustType] = useState<'wholesale' | 'retail'>('wholesale');
+  const [newCustSaving, setNewCustSaving] = useState(false);
 
   useEffect(() => {
     const cartProductIds = [...new Set(cart.map(i => i.product.id))];
@@ -102,6 +146,46 @@ export const POSPage: React.FC = () => {
     });
   }, [cart.length]);
 
+  // Network status
+  useEffect(() => {
+    const onOnline = () => {
+      setIsOnline(true);
+      handleSync();
+    };
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    getOfflinePendingCount().then(setOfflinePendingCount);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  async function handleSync() {
+    setIsSyncing(true);
+    try {
+      await syncOfflineSales(() => {});
+      const count = await getOfflinePendingCount();
+      setOfflinePendingCount(count);
+    } catch { /* silent */ }
+    setIsSyncing(false);
+  }
+
+  // Load customer loyalty when customer is selected
+  useEffect(() => {
+    if (!selectedCustomerId) {
+      setCustomerLoyalty(null);
+      setRedeemPoints(0);
+      setCreditLimitInfo(null);
+      return;
+    }
+    getCustomerLoyalty(selectedCustomerId).then(l => setCustomerLoyalty({ points: l.points }));
+    checkCreditLimit(selectedCustomerId, 0, 0).then(r =>
+      setCreditLimitInfo({ available: r.available, limit: r.limit })
+    );
+  }, [selectedCustomerId]);
+
   useEffect(() => {
     let active = true;
 
@@ -109,16 +193,18 @@ export const POSPage: React.FC = () => {
       const startedAt = Date.now();
 
       try {
-        const [fetchedProducts, fetchedCustomers, fetchedInventory] = await Promise.all([
-          getProducts(),
-          getCustomers(),
-          getInventory(),
+        const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
+          getProducts().catch((e) => { console.error('getProducts failed:', e); return [] as Product[]; }),
+          getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
+          getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
+          getSalespeople().catch(() => [] as Salesperson[]),
         ]);
 
         if (!active) return;
 
         setProducts(fetchedProducts);
         setCustomers(fetchedCustomers);
+        setSalespeople(fetchedSalespeople);
 
         if (fetchedInventory.length > 0) {
           const stockMap: Record<string, number> = {};
@@ -129,9 +215,13 @@ export const POSPage: React.FC = () => {
           setStockPiecesByProduct(stockMap);
           setIsInventoryEnforced(true);
 
-          const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
-          if (!active) return;
-          setAvgCostByProduct(costMap);
+          try {
+            const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
+            if (!active) return;
+            setAvgCostByProduct(costMap);
+          } catch {
+            // non-fatal — POS works without cost floor data
+          }
         } else {
           setStockPiecesByProduct({});
           setAvgCostByProduct({});
@@ -139,11 +229,6 @@ export const POSPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error loading POS data', err);
-        if (!active) return;
-        setProducts([]);
-        setStockPiecesByProduct({});
-        setAvgCostByProduct({});
-        setIsInventoryEnforced(false);
       } finally {
         if (!active) return;
         const elapsed = Date.now() - startedAt;
@@ -161,6 +246,16 @@ export const POSPage: React.FC = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    setCart((prev) =>
+      prev.map((item) => ({
+        ...item,
+        unitPrice: isWholesale ? item.product.wholesale_price : item.product.retail_price,
+      }))
+    );
+    setPricingApproved(false);
+  }, [isWholesale]);
 
   const categoryTiles = useMemo(() => {
     const byCategory = new Map<string, { count: number; products: Product[] }>();
@@ -185,18 +280,25 @@ export const POSPage: React.FC = () => {
     return [{ id: 'all', title: 'All menu', items: products.length }, ...items].slice(0, 8);
   }, [products]);
 
+  const PAGE_SIZE = 6;
+
   const categoryProducts = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return products.filter((p) => {
       const categoryMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
-      const searchMatch = !q || 
-        (p.name?.toLowerCase().includes(q)) || 
-        (p.item_code?.toLowerCase().includes(q)) || 
-        (p.model?.toLowerCase().includes(q)) ||
+      const searchMatch = !q ||
+        (p.name?.toLowerCase().includes(q)) ||
+        (p.item_code?.toLowerCase().includes(q)) ||
         (p.sku?.toLowerCase().includes(q));
       return categoryMatch && searchMatch;
     });
   }, [selectedCategory, searchQuery, products]);
+
+  // Reset to page 0 whenever the filtered list changes
+  useEffect(() => { setProductPage(0); }, [selectedCategory, searchQuery]);
+
+  const totalPages = Math.ceil(categoryProducts.length / PAGE_SIZE);
+  const pagedProducts = categoryProducts.slice(productPage * PAGE_SIZE, (productPage + 1) * PAGE_SIZE);
 
   const getCartPiecesForProduct = (productId: string): number => {
     return cart
@@ -218,33 +320,26 @@ export const POSPage: React.FC = () => {
     return inCartPieces + pendingTotalPieces > availablePieces;
   };
 
-  const updateQuantity = (productId: string, type: 'cartons' | 'pieces', delta: number) => {
-    if (type === 'cartons') {
-      setCartonQuantities((prev) => ({
-        ...prev,
-        [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
-      }));
-    } else {
-      setPieceQuantities((prev) => ({
-        ...prev,
-        [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
-      }));
-    }
+  const updateQuantity = (productId: string, delta: number) => {
+    setPieceQuantities((prev) => ({
+      ...prev,
+      [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
+    }));
+    setPricingApproved(false);
   };
 
   const addToCart = (product: Product) => {
-    const qtyCartons = cartonQuantities[product.id] || 0;
-    const qtyPieces = pieceQuantities[product.id] || 0;
+    const qtyUnits = pieceQuantities[product.id] || 0;
 
-    if (qtyCartons === 0 && qtyPieces === 0) return;
+    if (qtyUnits === 0) return;
 
-    if (exceedsAvailableStock(product, qtyCartons, qtyPieces)) {
+    if (exceedsAvailableStock(product, 0, qtyUnits)) {
       const piecesPerCarton = product.pieces_per_carton || 1;
       const availablePieces = stockPiecesByProduct[product.id] ?? 0;
       const availCartons = Math.floor(availablePieces / piecesPerCarton);
       const availLoose = availablePieces % piecesPerCarton;
 
-      setValidationMessage(`Cannot add ${product.name}. Available: ${availCartons} CTN, ${availLoose} PCS.`);
+      setValidationMessage(`Cannot add ${product.name}. Available: ${availCartons} packs, ${availLoose} units.`);
       return;
     }
 
@@ -255,31 +350,41 @@ export const POSPage: React.FC = () => {
           item.product.id === product.id
             ? {
                 ...item,
-                quantityCartons: item.quantityCartons + qtyCartons,
-                quantityPieces: item.quantityPieces + qtyPieces,
+                quantityCartons: 0,
+                quantityPieces: item.quantityPieces + qtyUnits,
               }
             : item
         );
       }
-      return [...prev, { product, quantityCartons: qtyCartons, quantityPieces: qtyPieces }];
+      return [
+        ...prev,
+        {
+          product,
+          quantityCartons: 0,
+          quantityPieces: qtyUnits,
+          unitPrice: isWholesale ? product.wholesale_price : product.retail_price,
+        },
+      ];
     });
 
-    setCartonQuantities((prev) => ({ ...prev, [product.id]: 0 }));
     setPieceQuantities((prev) => ({ ...prev, [product.id]: 0 }));
+    setPricingApproved(false);
     setValidationMessage(null);
   };
 
   const removeFromCart = (index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
+    setPricingApproved(false);
   };
 
   const clearCart = () => {
     setCart([]);
     setValidationMessage(null);
+    setPricingApproved(false);
   };
 
   const subtotal = cart.reduce((acc, item) => {
-    const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+    const pricePerPiece = Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price));
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
     return acc + pricePerPiece * totalPieces;
@@ -288,40 +393,61 @@ export const POSPage: React.FC = () => {
   const estimatedCostFloor = cart.reduce((acc, item) => {
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-    const avgCost = avgCostByProduct[item.product.id] ?? 0;
-    return acc + avgCost * totalPieces;
+    const floorCost = Math.max(avgCostByProduct[item.product.id] ?? 0, item.product.cost_price ?? 0);
+    return acc + floorCost * totalPieces;
   }, 0);
 
-  const mspFloor = cart.reduce((acc, item) => {
+  const wholesaleFloor = cart.reduce((acc, item) => {
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-    const msp = item.product.msp ?? 0;
-    return acc + msp * totalPieces;
+    return acc + Number(item.product.wholesale_price ?? 0) * totalPieces;
   }, 0);
 
-  const discount = discountApproved ? discountAmt : 0;
-  const total = subtotal - discount;
+  const discount = pricingApproved ? discountAmt : 0;
+  const maxRedeemable = customerLoyalty ? Math.min(customerLoyalty.points, Math.floor(subtotal - discount)) : 0;
+  const safeRedeem = Math.min(redeemPoints, maxRedeemable);
+  const redemptionValue = computeRedemptionValue(safeRedeem);
+  const total = Math.max(0, subtotal - discount - redemptionValue);
   const isBelowCost = total < estimatedCostFloor;
-  const isBelowMSP = mspFloor > 0 && total < mspFloor;
-  const needsApproval = discountAmt > 0 && !discountApproved;
+  const hasBelowWholesaleItemPrice = cart.some(
+    (item) => Number(item.unitPrice ?? item.product.wholesale_price) < Number(item.product.wholesale_price)
+  );
+  const isBelowWholesale = total < wholesaleFloor || hasBelowWholesaleItemPrice;
+  const needsApproval = (discountAmt > 0 || isBelowWholesale) && !pricingApproved;
+  const isFullCredit = paymentSplits.length === 1 && paymentSplits[0].method === 'credit';
+  const nonCreditSplits = paymentSplits.filter(s => s.method !== 'credit');
+  const hasCreditSplit = paymentSplits.some(s => s.method === 'credit');
+  const enteredPaymentAmount = nonCreditSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+  const autoFillSinglePayment =
+    !hasCreditSplit
+    && nonCreditSplits.length === 1
+    && !nonCreditSplits[0].amount;
+  const effectivePaymentAmount = autoFillSinglePayment ? total : enteredPaymentAmount;
+  const creditAmount = Math.max(0, total - effectivePaymentAmount);
+  const chequeValid = paymentSplits
+    .filter(s => s.method === 'cheque')
+    .every(s => !!s.cheque_number && !!s.bank_name && !!s.due_date);
+  const splitPaymentValid = isFullCredit || !hasCreditSplit || enteredPaymentAmount > 0;
   const canProcessTransaction =
     cart.length > 0
     && !!selectedCustomerId
     && btnPhase === 'idle'
     && !isBelowCost
-    && !isBelowMSP
-    && !needsApproval;
+    && !needsApproval
+    && chequeValid
+    && splitPaymentValid
+    && (isFullCredit || paymentSplits.some(s => s.method !== 'credit'));
 
   function handleDiscountChange(val: string) {
     const num = parseFloat(val) || 0;
     setDiscountAmt(num);
-    setDiscountApproved(false);
+    setPricingApproved(false);
   }
 
   function handleApproveDiscount() {
     const adminPin = getRolePin('admin');
     if (approvalPin === adminPin) {
-      setDiscountApproved(true);
+      setPricingApproved(true);
       setApprovalModalOpen(false);
       setApprovalPin('');
       setApprovalError('');
@@ -331,25 +457,126 @@ export const POSPage: React.FC = () => {
     }
   }
 
+  // ── Payment split helpers ──────────────────────────────────────────────────
+  function updateSplit(id: string, field: string, val: string) {
+    setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+  }
+  function updateSplitMethod(id: string, method: PayMethod) {
+    setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, method, bank_name: '', cheque_number: '', due_date: '' } : s));
+  }
+  function removeSplit(id: string) {
+    setPaymentSplits(prev => prev.length > 1 ? prev.filter(s => s.id !== id) : prev);
+  }
+  function addSplit() {
+    setPaymentSplits(prev => [...prev, mkSplit('cash')]);
+  }
+
+  function updateCartUnitPrice(index: number, value: string) {
+    const parsed = Math.max(0, parseFloat(value) || 0);
+    setCart((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, unitPrice: parsed } : item))
+    );
+    setPricingApproved(false);
+  }
+
+  function updateCartQuantity(index: number, value: string) {
+    const raw = parseInt(value, 10);
+    const qty = isNaN(raw) || raw < 0 ? 0 : raw;
+    setCart((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (isInventoryEnforced) {
+          const available = stockPiecesByProduct[item.product.id] ?? 0;
+          return { ...item, quantityPieces: Math.min(qty, available) };
+        }
+        return { ...item, quantityPieces: qty };
+      })
+    );
+    setPricingApproved(false);
+  }
+
+  async function handleCreateCustomer() {
+    if (!newCustName.trim()) return;
+    setNewCustSaving(true);
+    try {
+      const created = await createCustomer({
+        name: newCustName.trim(),
+        phone: newCustPhone.trim(),
+        email: '',
+        address: '',
+        type: newCustType,
+        credit_limit: 0,
+        is_active: true,
+      } as any);
+      setCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedCustomerId(created.id);
+      setShowNewCustomer(false);
+      setNewCustName('');
+      setNewCustPhone('');
+      setNewCustType('wholesale');
+    } catch (e) {
+      console.error('Failed to create customer:', e);
+    }
+    setNewCustSaving(false);
+  }
+
   const processTransaction = async () => {
     if (!canProcessTransaction) return;
 
     setBtnPhase('loading');
 
     try {
-      await checkout(
+      // Build concrete payment splits; if only one non-credit method is selected, blank amount means full total.
+      const rawSplits = paymentSplits.filter(s => s.method !== 'credit');
+      let finalSplits: PaymentSplit[];
+      if (!hasCreditSplit && rawSplits.length === 1 && !rawSplits[0].amount) {
+        finalSplits = [{ method: rawSplits[0].method as PaymentSplit['method'], amount: total, bank_name: rawSplits[0].bank_name || undefined, cheque_number: rawSplits[0].cheque_number || undefined, due_date: rawSplits[0].due_date || undefined }];
+      } else {
+        finalSplits = rawSplits
+          .map(s => ({ method: s.method as PaymentSplit['method'], amount: parseFloat(s.amount) || 0, bank_name: s.bank_name || undefined, cheque_number: s.cheque_number || undefined, due_date: s.due_date || undefined }))
+          .filter(s => s.amount > 0);
+      }
+
+      if (!isOnline) {
+        // Offline path: single-method only, no loyalty
+        const offlineMethod = paymentSplits[0].method === 'credit' ? 'credit' : paymentSplits[0].method;
+        const customerName = customers.find(c => c.id === selectedCustomerId)?.name ?? 'Walk-in';
+        await checkoutOffline(cart, selectedCustomerId, customerName,
+          isWholesale, subtotal, discount, total, offlineMethod, total);
+        const count = await getOfflinePendingCount();
+        setOfflinePendingCount(count);
+        // Show success using same flow
+        setValidationMessage(null);
+        setBtnPhase('done');
+        setTimeout(() => {
+          setCart([]);
+          setSelectedCustomerId('');
+          setDiscountAmt(0);
+          setRedeemPoints(0);
+          setPricingApproved(false);
+          setPaymentSplits([mkSplit('cash')]);
+          setSelectedSalesperson('');
+          setBtnPhase('idle');
+        }, 1600);
+        return;
+      }
+
+      const { earnedPoints } = await checkout(
         cart,
         selectedCustomerId,
         isWholesale,
         subtotal,
         discount,
         total,
-        paymentMethod === 'credit'
-          ? 'credit'
-          : paymentMethod === 'cash'
-            ? 'cash'
-            : 'bank_transfer'
+        finalSplits,
+        safeRedeem > 0 ? { redeemPoints: safeRedeem } : undefined,
+        selectedSalesperson || undefined
       );
+
+      // Refresh loyalty display
+      if (earnedPoints > 0 || safeRedeem > 0) {
+        getCustomerLoyalty(selectedCustomerId).then(l => setCustomerLoyalty({ points: l.points }));
+      }
 
       if (isInventoryEnforced) {
         setStockPiecesByProduct((prev) => {
@@ -367,6 +594,11 @@ export const POSPage: React.FC = () => {
       setTimeout(() => {
         setCart([]);
         setSelectedCustomerId('');
+        setDiscountAmt(0);
+        setRedeemPoints(0);
+        setPricingApproved(false);
+        setPaymentSplits([mkSplit('cash')]);
+        setSelectedSalesperson('');
         setBtnPhase('idle');
       }, 1600);
     } catch (error) {
@@ -381,7 +613,10 @@ export const POSPage: React.FC = () => {
     setIsSuccessModalOpen(false);
     setCart([]);
     setSelectedCustomerId('');
+    setDiscountAmt(0);
+    setPricingApproved(false);
     setValidationMessage(null);
+    setPaymentSplits([mkSplit('cash')]);
   };
 
   if (loading) {
@@ -411,18 +646,18 @@ export const POSPage: React.FC = () => {
           <div className="pos-main-head">
             <label className="pos-search">
               <Search size={18} />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search"
-              />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products or item codes..."
+                />
             </label>
             <div className="pos-mode-toggle">
               <button type="button" className={cn(isWholesale && 'active')} onClick={() => setIsWholesale(true)}>
-                Wholesale
+                Dealer
               </button>
               <button type="button" className={cn(!isWholesale && 'active')} onClick={() => setIsWholesale(false)}>
-                Retail
+                Public
               </button>
             </div>
           </div>
@@ -451,8 +686,8 @@ export const POSPage: React.FC = () => {
           </div>
 
           <AnimatePresence mode="wait">
-            <motion.div 
-              key={selectedCategory}
+            <motion.div
+              key={`${selectedCategory}-${productPage}`}
               className="pos-product-grid mt-3"
               initial="hidden"
               animate="show"
@@ -463,20 +698,19 @@ export const POSPage: React.FC = () => {
                 exit: { transition: { staggerChildren: 0.03, staggerDirection: -1 } }
               }}
             >
-              {categoryProducts.slice(0, 12).map((product) => {
-                const qtyCartons = cartonQuantities[product.id] || 0;
-                const qtyPieces = pieceQuantities[product.id] || 0;
+              {pagedProducts.map((product) => {
+                const qtyUnits = pieceQuantities[product.id] || 0;
                 const piecesPerCarton = product.pieces_per_carton || 1;
 
-                const selectedPieces = qtyCartons * piecesPerCarton + qtyPieces;
+                const selectedPieces = qtyUnits;
                 const inCartPieces = getCartPiecesForProduct(product.id);
                 const availablePieces = isInventoryEnforced ? (stockPiecesByProduct[product.id] ?? 0) : Number.MAX_SAFE_INTEGER;
                 const remainingPieces = isInventoryEnforced ? Math.max(0, availablePieces - inCartPieces) : Number.MAX_SAFE_INTEGER;
+                const availableCartons = isInventoryEnforced ? Math.floor(remainingPieces / piecesPerCarton) : 0;
 
-                const canIncreaseCartons = !isInventoryEnforced || (selectedPieces + piecesPerCarton) <= remainingPieces;
                 const canIncreasePieces = !isInventoryEnforced || (selectedPieces + 1) <= remainingPieces;
                 const exceedsStock = isInventoryEnforced && selectedPieces > remainingPieces;
-                const hasAmount = qtyCartons > 0 || qtyPieces > 0;
+                const hasAmount = qtyUnits > 0;
                 
                 // Search match is now handled in categoryProducts useMemo
                 const isSearchMatch = true;
@@ -495,30 +729,24 @@ export const POSPage: React.FC = () => {
                     )}
                   >
                   <div className="pos-product-top">
-                    <p>Orders to Kitchen</p>
+                    <p>
+                      {isInventoryEnforced
+                        ? `Available ${remainingPieces} units • ${availableCartons} cartons`
+                        : 'Inventory not enforced'}
+                    </p>
                     <h4>{product.name}</h4>
                     <strong>LKR {(isWholesale ? product.wholesale_price : product.retail_price).toFixed(2)}</strong>
+                    <p className="text-[10px] text-gray-500">Qty per carton: {piecesPerCarton}</p>
                   </div>
 
                   <div className="pos-qty-group">
                     <div className="pos-qty-row">
-                      <span>CTN {qtyCartons}</span>
+                      <span>QTY {qtyUnits}</span>
                       <div>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'cartons', -1)} disabled={qtyCartons === 0}>
+                        <button type="button" onClick={() => updateQuantity(product.id, -1)} disabled={qtyUnits === 0}>
                           <Minus size={14} />
                         </button>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'cartons', 1)} disabled={!canIncreaseCartons}>
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="pos-qty-row">
-                      <span>PCS {qtyPieces}</span>
-                      <div>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'pieces', -1)} disabled={qtyPieces === 0}>
-                          <Minus size={14} />
-                        </button>
-                        <button type="button" onClick={() => updateQuantity(product.id, 'pieces', 1)} disabled={!canIncreasePieces}>
+                        <button type="button" onClick={() => updateQuantity(product.id, 1)} disabled={!canIncreasePieces}>
                           <Plus size={14} />
                         </button>
                       </div>
@@ -538,13 +766,84 @@ export const POSPage: React.FC = () => {
               })}
             </motion.div>
           </AnimatePresence>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-1 pt-3 pb-1">
+            <button
+              type="button"
+              onClick={() => setProductPage(p => Math.max(0, p - 1))}
+              disabled={productPage === 0}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
+                productPage === 0
+                  ? 'border-[#2b313a] text-gray-600 cursor-not-allowed opacity-40'
+                  : 'border-[#2b313a] text-gray-300 hover:border-primary/40 hover:text-white'
+              )}
+            >
+              <Minus size={12} /> Prev
+            </button>
+            <span className="text-[11px] text-gray-500 font-mono">
+              {productPage + 1} / {Math.max(1, totalPages)}
+              <span className="text-gray-600 ml-1.5">({categoryProducts.length})</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setProductPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={productPage >= totalPages - 1}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
+                productPage >= totalPages - 1
+                  ? 'border-[#2b313a] text-gray-600 cursor-not-allowed opacity-40'
+                  : 'border-[#2b313a] text-gray-300 hover:border-primary/40 hover:text-white'
+              )}
+            >
+              Next <Plus size={12} />
+            </button>
+          </div>
         </section>
 
         <aside className="pos-bill">
+          {/* Offline banner */}
+          {!isOnline && (
+            <div style={{
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#f87171',
+            }}>
+              <WifiOff size={13} />
+              <span style={{ flex: 1, fontWeight: 700 }}>Offline — sale will sync when connected</span>
+              {offlinePendingCount > 0 && <span style={{ fontWeight: 700 }}>{offlinePendingCount} pending</span>}
+            </div>
+          )}
+          {isOnline && offlinePendingCount > 0 && (
+            <div style={{
+              background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)',
+              borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#fbbf24',
+            }}>
+              <span style={{ flex: 1, fontWeight: 700 }}>{offlinePendingCount} offline sale{offlinePendingCount > 1 ? 's' : ''} pending sync</span>
+              <button type="button" onClick={handleSync} disabled={isSyncing}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fbbf24', padding: 0 }}>
+                <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          )}
           <div className="pos-bill-head">
             <div>
-              <h2>POS System</h2>
-              <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Walk-in'}</p>
+              <h2>Digital Goods POS</h2>
+              <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Direct Customer'}</p>
+              {selectedSalesperson && (
+                <p style={{ fontSize: 10, color: '#6ee7b7', fontWeight: 700, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <UserCheck size={10} /> Sold by {selectedSalesperson}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => navigate('/returns')}
+                className="mt-2 text-[10px] font-bold uppercase tracking-wider text-primary hover:text-white transition-colors"
+              >
+                Open Returns
+              </button>
             </div>
             {cart.length > 0 && (
               <button type="button" onClick={clearCart} className="pos-clear-btn">
@@ -553,18 +852,148 @@ export const POSPage: React.FC = () => {
             )}
           </div>
 
-          <div className="pos-customer-select">
-            <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
-              <option value="" disabled>
-                Select customer
-              </option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <div className="pos-customer-select" style={{ flex: 1 }}>
+              <select value={selectedCustomerId} onChange={(e) => setSelectedCustomerId(e.target.value)}>
+                <option value="" disabled>Select customer</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>{customer.name}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNewCustomer(v => !v)}
+              title="New customer"
+              style={{
+                flexShrink: 0, width: 36, borderRadius: 10,
+                background: showNewCustomer ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                border: showNewCustomer ? '1px solid rgba(99,102,241,0.4)' : '1px solid #2b313a',
+                color: showNewCustomer ? '#818cf8' : '#6b7280',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', fontSize: 18, fontWeight: 300,
+              }}
+            >
+              {showNewCustomer ? <X size={14} /> : <PlusCircle size={14} />}
+            </button>
           </div>
+
+          {/* Inline new-customer form */}
+          {showNewCustomer && (
+            <div style={{
+              background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)',
+              borderRadius: 12, padding: '12px 12px 10px',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#818cf8', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                New Customer
+              </p>
+              <input
+                type="text"
+                placeholder="Name *"
+                value={newCustName}
+                onChange={e => setNewCustName(e.target.value)}
+                autoFocus
+                style={{
+                  background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8,
+                  padding: '7px 10px', color: '#f1f5f9', fontSize: 12, outline: 'none', width: '100%',
+                }}
+              />
+              <input
+                type="tel"
+                placeholder="Phone (optional)"
+                value={newCustPhone}
+                onChange={e => setNewCustPhone(e.target.value)}
+                style={{
+                  background: '#1d222a', border: '1px solid #2b313a', borderRadius: 8,
+                  padding: '7px 10px', color: '#f1f5f9', fontSize: 12, outline: 'none', width: '100%',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['wholesale', 'retail'] as const).map(t => (
+                  <button key={t} type="button" onClick={() => setNewCustType(t)}
+                    style={{
+                      flex: 1, padding: '5px', borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      cursor: 'pointer', textTransform: 'capitalize',
+                      background: newCustType === t ? 'rgba(99,102,241,0.2)' : '#1d222a',
+                      border: newCustType === t ? '1px solid rgba(99,102,241,0.4)' : '1px solid #2b313a',
+                      color: newCustType === t ? '#818cf8' : '#6b7280',
+                    }}
+                  >{t}</button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateCustomer}
+                disabled={!newCustName.trim() || newCustSaving}
+                style={{
+                  background: newCustName.trim() ? '#6366f1' : '#2b313a',
+                  border: 'none', borderRadius: 8, padding: '8px',
+                  color: newCustName.trim() ? '#fff' : '#4b5563',
+                  fontSize: 12, fontWeight: 700, cursor: newCustName.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {newCustSaving ? 'Saving…' : 'Add & Select'}
+              </button>
+            </div>
+          )}
+
+          {/* Salesperson selector */}
+          {salespeople.length > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: selectedSalesperson ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${selectedSalesperson ? 'rgba(16,185,129,0.25)' : '#2b313a'}`,
+              borderRadius: 10, padding: '6px 10px',
+            }}>
+              <UserCheck size={13} style={{ color: selectedSalesperson ? '#6ee7b7' : '#6b7280', flexShrink: 0 }} />
+              <select
+                value={selectedSalesperson}
+                onChange={(e) => setSelectedSalesperson(e.target.value)}
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  color: selectedSalesperson ? '#e5e7eb' : '#6b7280',
+                  fontSize: 12, fontWeight: selectedSalesperson ? 600 : 400, cursor: 'pointer',
+                }}
+              >
+                <option value="">Select salesperson</option>
+                {salespeople.map((sp) => (
+                  <option key={sp.id} value={sp.name}>{sp.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Loyalty points */}
+          {customerLoyalty && customerLoyalty.points > 0 && !isOnline === false && (
+            <div style={{
+              background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)',
+              borderRadius: 10, padding: '8px 12px', margin: '4px 0',
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
+            }}>
+              <Star size={12} style={{ color: '#a78bfa', flexShrink: 0 }} />
+              <span style={{ color: '#c4b5fd', flex: 1 }}>
+                <strong>{customerLoyalty.points}</strong> loyalty pts available
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#7c3aed', fontSize: 10 }}>Redeem</span>
+                <input
+                  type="number"
+                  min="0"
+                  max={maxRedeemable}
+                  value={redeemPoints || ''}
+                  onChange={e => setRedeemPoints(Math.min(maxRedeemable, Math.max(0, parseInt(e.target.value) || 0)))}
+                  placeholder="0"
+                  style={{
+                    width: 60, background: '#1d222a', border: '1px solid rgba(139,92,246,0.3)',
+                    borderRadius: 6, padding: '3px 6px', color: '#c4b5fd',
+                    fontSize: 11, fontFamily: 'monospace', outline: 'none', textAlign: 'right',
+                  }}
+                />
+                <span style={{ color: '#6b7280', fontSize: 10 }}>= LKR {safeRedeem.toFixed(0)}</span>
+              </div>
+            </div>
+          )}
 
           <div className="pos-cart-list custom-scrollbar">
             {cart.length === 0 && <p className="pos-cart-empty">No items yet</p>}
@@ -572,7 +1001,9 @@ export const POSPage: React.FC = () => {
               {cart.map((item, index) => {
                 const ppc = item.product.pieces_per_carton || 1;
                 const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-                const pricePerPiece = isWholesale ? (item.product.wholesale_price || 0) : (item.product.retail_price || 0);
+                const pricePerPiece = Number(
+                  item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)
+                );
 
                 return (
                   <motion.div 
@@ -596,9 +1027,29 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
-                        <p className="text-[10px] text-gray-500">
-                          {item.quantityCartons} CTN x {item.quantityPieces} PCS
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[9px] text-gray-500 uppercase">Qty</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantityPieces || ''}
+                            onChange={(e) => updateCartQuantity(index, e.target.value)}
+                            onFocus={(e) => e.target.select()}
+                            className="w-16 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          />
+                          <span className="text-[9px] text-gray-600">units</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[9px] text-gray-500 uppercase">Sale price</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={pricePerPiece}
+                            onChange={(e) => updateCartUnitPrice(index, e.target.value)}
+                            className="w-20 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          />
+                        </div>
                         <div className="mt-1">
                           <select
                             value={item.batchId || ''}
@@ -609,10 +1060,10 @@ export const POSPage: React.FC = () => {
                             }}
                             className="bg-[#1d222a] border border-[#2b313a] text-[9px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
                           >
-                            <option value="">FIFO (Oldest First)</option>
+                            <option value="">Auto Allocate (Oldest Lot First)</option>
                             {(availableBatches[item.product.id] || []).map(b => (
                               <option key={b.id} value={b.id}>
-                                Batch: {b.shipments?.reference || 'Direct'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
+                                Lot: {b.shipments?.reference || 'Direct Entry'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
                               </option>
                             ))}
                           </select>
@@ -649,7 +1100,7 @@ export const POSPage: React.FC = () => {
                     outline: 'none',
                   }}
                 />
-                {discountAmt > 0 && !discountApproved && (
+                {(discountAmt > 0 || isBelowWholesale) && !pricingApproved && (
                   <button
                     type="button"
                     onClick={() => { setApprovalModalOpen(true); setApprovalError(''); setApprovalPin(''); }}
@@ -660,15 +1111,21 @@ export const POSPage: React.FC = () => {
                       border: '1px solid rgba(251,191,36,0.3)',
                       color: '#fbbf24',
                     }}
-                  >
-                    Approve
+                    >
+                    Authorize
                   </button>
                 )}
-                {discountApproved && discountAmt > 0 && (
+                {pricingApproved && (discountAmt > 0 || isBelowWholesale) && (
                   <span style={{ fontSize: 10, color: '#34d399', fontWeight: 700 }}>✓ Approved</span>
                 )}
               </div>
             </div>
+            {safeRedeem > 0 && (
+              <div>
+                <span style={{ color: '#a78bfa' }}>Loyalty ({safeRedeem} pts)</span>
+                <strong style={{ color: '#a78bfa' }}>− LKR <AnimatedNumber value={redemptionValue} /></strong>
+              </div>
+            )}
             <div className="total">
               <span>Total</span>
               <strong>LKR <AnimatedNumber value={total} /></strong>
@@ -690,7 +1147,9 @@ export const POSPage: React.FC = () => {
                 <div>
                   <p style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>Admin Approval Required</p>
                   <p style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>
-                    Discount of LKR {discountAmt.toFixed(2)} requires admin authorisation.
+                    {isBelowWholesale
+                      ? `Total is below wholesale floor (LKR ${wholesaleFloor.toFixed(2)}). Admin authorisation required.`
+                      : `Discount of LKR ${discountAmt.toFixed(2)} requires admin authorisation.`}
                   </p>
                 </div>
                 <div>
@@ -745,50 +1204,191 @@ export const POSPage: React.FC = () => {
             </div>
           )}
 
+          {/* Credit limit info */}
+          {(isFullCredit || hasCreditSplit || creditAmount > 0.01) && creditLimitInfo && (
+            <div style={{
+              background: creditLimitInfo.available >= creditAmount ? 'rgba(16,185,129,0.07)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${creditLimitInfo.available >= creditAmount ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.3)'}`,
+              borderRadius: 10, padding: '7px 12px', fontSize: 11,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span style={{ color: '#9ca3af' }}>Credit limit: <strong style={{ color: '#e5e7eb' }}>
+                LKR {creditLimitInfo.limit.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+              </strong></span>
+              <span style={{ color: creditLimitInfo.available >= creditAmount ? '#6ee7b7' : '#f87171', fontWeight: 700 }}>
+                Available: LKR {creditLimitInfo.available.toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+
           {needsApproval && (
             <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
-              Discount requires admin approval before checkout
+              Discount or below-wholesale pricing requires admin approval before checkout
             </div>
           )}
 
-          {isBelowMSP && (
+          {isBelowWholesale && (
             <div className="pos-warning" style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.3)', color: '#f87171' }}>
-              ❌ Below MSP — minimum total: LKR {mspFloor.toFixed(2)}
+              ⚠ Below wholesale floor: LKR {wholesaleFloor.toFixed(2)}
             </div>
           )}
 
-          {!isBelowMSP && isBelowCost && (
+          {isBelowCost && (
             <div className="pos-warning">Below cost floor: LKR {estimatedCostFloor.toFixed(2)}</div>
           )}
 
           {validationMessage && <div className="pos-error">{validationMessage}</div>}
+          {!splitPaymentValid && (
+            <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+              Enter the cash, card, online, or cheque amount before putting the balance on credit.
+            </div>
+          )}
 
-          <button className="pos-order-type" type="button" onClick={() => setIsOrderTypeModalOpen(true)}>
-            {selectedOrderType}
-          </button>
+          {/* ── Payment ──────────────────────────────────────────── */}
+          {(() => {
+            const outstanding = Math.max(0, total - effectivePaymentAmount);
+            const SL_BANKS = [
+              'BOC – Bank of Ceylon', 'NSB – National Savings Bank', "People's Bank",
+              'HNB – Hatton National Bank', 'Sampath Bank', 'Commercial Bank',
+              'Seylan Bank', 'NDB – National Development Bank', 'DFCC Bank',
+              'Pan Asia Bank', 'Union Bank', 'Amana Bank', 'MCB Bank', 'Other',
+            ];
+            const fieldStyle: React.CSSProperties = { background: '#0d1016', border: '1px solid #2b313a', borderRadius: 7, padding: '5px 8px', color: '#f1f5f9', fontSize: 11, outline: 'none', fontFamily: 'monospace', width: '100%' };
 
-          <div className="pos-pay-grid">
-            <button type="button" className={cn(paymentMethod === 'cash' && 'active')} onClick={() => setPaymentMethod('cash')}>
-              <Wallet size={16} />
-              Cash
-            </button>
-            <button
-              type="button"
-              className={cn(paymentMethod === 'creditCard' && 'active')}
-              onClick={() => setPaymentMethod('creditCard')}
-            >
-              <CreditCard size={16} />
-              Card
-            </button>
-            <button type="button" className={cn(paymentMethod === 'ewallet' && 'active')} onClick={() => setPaymentMethod('ewallet')}>
-              <QrCode size={16} />
-              E-wallet
-            </button>
-            <button type="button" className={cn(paymentMethod === 'credit' && 'active')} onClick={() => setPaymentMethod('credit')}>
-              <CreditCard size={16} />
-              Credit
-            </button>
-          </div>
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+                {/* Section header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Payment Lines</span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#9ca3af' }}>Due <strong style={{ color: '#f1f5f9' }}>LKR {total.toFixed(2)}</strong></span>
+                </div>
+
+                {/* Lines table */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {paymentSplits.map((split, idx) => {
+                    const isCreditLine = split.method === 'credit';
+                    const isSingleLine = paymentSplits.length === 1;
+                    return (
+                      <div key={split.id} style={{
+                        background: '#12161d', border: '1px solid #2b313a',
+                        borderRadius: 10, padding: '8px 10px',
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 10, color: '#4b5563', fontFamily: 'monospace', minWidth: 12 }}>{idx + 1}</span>
+
+                          <select
+                            value={split.method}
+                            onChange={e => updateSplitMethod(split.id, e.target.value as PayMethod)}
+                            style={{
+                              flex: '0 0 86px', background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 6px', color: '#d1d5db',
+                              fontSize: 11, fontWeight: 600, outline: 'none', cursor: 'pointer',
+                            }}
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="card">Card</option>
+                            <option value="online">Online</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="credit">Credit</option>
+                          </select>
+
+                          {isCreditLine ? (
+                            <div style={{
+                              flex: 1, background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 8px', color: '#9ca3af',
+                              fontSize: 12, fontFamily: 'monospace', textAlign: 'right',
+                            }}>
+                              {outstanding > 0 ? outstanding.toFixed(2) : '0.00'}
+                            </div>
+                          ) : isSingleLine ? (
+                            <div style={{
+                              flex: 1, background: '#1d222a', border: '1px solid #2b313a',
+                              borderRadius: 7, padding: '5px 8px', color: '#e5e7eb',
+                              fontSize: 12, fontFamily: 'monospace', textAlign: 'right',
+                            }}>
+                              {total.toFixed(2)}
+                            </div>
+                          ) : (
+                            <input
+                              type="number" min="0" step="0.01"
+                              placeholder="0.00"
+                              value={split.amount}
+                              onChange={e => updateSplit(split.id, 'amount', e.target.value)}
+                              onFocus={e => e.target.select()}
+                              style={{ flex: 1, ...fieldStyle, textAlign: 'right' }}
+                            />
+                          )}
+
+                          {!isSingleLine && (
+                            <button type="button" onClick={() => removeSplit(split.id)}
+                              style={{ color: '#4b5563', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 0, padding: 2, flexShrink: 0 }}>
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        {split.method === 'cheque' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 18 }}>
+                            <input type="text" placeholder="Cheque number" value={split.cheque_number}
+                              onChange={e => updateSplit(split.id, 'cheque_number', e.target.value)} style={fieldStyle} />
+                            <select value={split.bank_name} onChange={e => updateSplit(split.id, 'bank_name', e.target.value)}
+                              style={{ ...fieldStyle, color: split.bank_name ? '#e5e7eb' : '#6b7280', cursor: 'pointer' }}>
+                              <option value="">Select bank…</option>
+                              {SL_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                            <input type="date" value={split.due_date}
+                              onChange={e => updateSplit(split.id, 'due_date', e.target.value)}
+                              style={{ ...fieldStyle, color: split.due_date ? '#e5e7eb' : '#6b7280' }} />
+                          </div>
+                        )}
+
+                        {split.method === 'online' && (
+                          <div style={{ paddingLeft: 18 }}>
+                            <select value={split.bank_name} onChange={e => updateSplit(split.id, 'bank_name', e.target.value)}
+                              style={{ ...fieldStyle, color: split.bank_name ? '#e5e7eb' : '#6b7280', cursor: 'pointer' }}>
+                              <option value="">Select bank…</option>
+                              {SL_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add line */}
+                <button type="button" onClick={addSplit}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    background: 'none', border: '1px dashed #2b313a', borderRadius: 8,
+                    padding: '6px', color: '#4b5563', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  <PlusCircle size={11} /> Add Payment Line
+                </button>
+
+                {/* Summary strip — only shown when there's something to communicate */}
+                {(paymentSplits.length > 1 || outstanding > 0.01) && (
+                  <div style={{ borderTop: '1px solid #1f242c', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {paymentSplits.length > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: '#6b7280' }}>Paid</span>
+                        <span style={{ fontFamily: 'monospace', color: '#d1d5db' }}>LKR {effectivePaymentAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {outstanding > 0.01 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                        <span style={{ color: '#9ca3af' }}>Balance on credit</span>
+                        <span style={{ fontFamily: 'monospace', color: '#d1d5db' }}>LKR {outstanding.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <button
             type="button"
@@ -801,7 +1401,7 @@ export const POSPage: React.FC = () => {
             }}
           >
             {/* invisible spacer — keeps the button's natural height */}
-            <span className="invisible select-none" aria-hidden>Place Order</span>
+            <span className="invisible select-none" aria-hidden>Complete Sale</span>
             <AnimatePresence mode="wait">
               {btnPhase === 'idle' && (
                 <motion.span
@@ -812,7 +1412,7 @@ export const POSPage: React.FC = () => {
                   transition={{ duration: 0.15 }}
                   className="absolute inset-0 flex items-center justify-center"
                 >
-                  Place Order
+                  Complete Sale
                 </motion.span>
               )}
               {btnPhase === 'loading' && (
@@ -857,29 +1457,6 @@ export const POSPage: React.FC = () => {
             @keyframes pos-check-draw { to { stroke-dashoffset: 0; } }
           `}</style>
         </aside>
-
-      <Modal isOpen={isOrderTypeModalOpen} onClose={() => setIsOrderTypeModalOpen(false)} title="Order Type">
-        <div className="grid grid-cols-2 gap-3">
-          {['Dine-in', 'Pickup', 'Delivery', 'Courier'].map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => {
-                setSelectedOrderType(type);
-                setIsOrderTypeModalOpen(false);
-              }}
-              className={cn(
-                'py-4 rounded-xl border text-sm font-semibold transition-colors',
-                selectedOrderType === type
-                  ? 'bg-[#f8fafc] border-[#f8fafc] text-black'
-                  : 'bg-[#1d222a] border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33]'
-              )}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-      </Modal>
 
       <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Success">
         <div className="text-center py-6 space-y-4">
