@@ -154,7 +154,13 @@ export const getCurrentStockReport = async () => {
     .order('name', { ascending: true });
 
   if (error) throw error;
-  return data;
+  
+  // Fetch active products to filter out deleted ones
+  const { data: products } = await supabase.from('products').select('id');
+  const activeProductIds = new Set((products || []).map(p => p.id));
+  
+  // Filter out deleted products
+  return (data || []).filter(item => activeProductIds.has(item.product_id));
 };
 
 /** 2.1a Current Stock Report by Location */
@@ -167,10 +173,17 @@ export const getCurrentStockReportByLocation = async () => {
 
   if (error) throw error;
   
-  // Group by location_id
+  // Fetch active products to filter out deleted ones
+  const { data: products } = await supabase.from('products').select('id');
+  const activeProductIds = new Set((products || []).map(p => p.id));
+  
+  // Group by location_id, filtering out deleted products
   const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: typeof data }> = {};
   
   (data || []).forEach(row => {
+    // Skip deleted products
+    if (!activeProductIds.has(row.product_id)) return;
+    
     const locKey = row.location_id || 'unassigned';
     if (!grouped[locKey]) {
       grouped[locKey] = {

@@ -37,7 +37,11 @@ export const StockValuationReport: React.FC = () => {
       const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
 
       const productCostMap: Record<string, number> = {};
-      (products || []).forEach(p => { if (p.cost_price) productCostMap[p.id] = Number(p.cost_price); });
+      const activeProductIds = new Set<string>();
+      (products || []).forEach(p => {
+        if (p.cost_price) productCostMap[p.id] = Number(p.cost_price);
+        activeProductIds.add(p.id);
+      });
 
       const costMap: Record<string, number> = {};
       (batches || []).forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
@@ -46,6 +50,9 @@ export const StockValuationReport: React.FC = () => {
       const grouped: Record<string, LocationValuationData> = {};
 
       (locationStocks || []).forEach(stock => {
+        // Skip deleted products (not in active products list)
+        if (!activeProductIds.has(stock.product_id)) return;
+
         const locKey = stock.location_id || 'unassigned';
 
         if (!grouped[locKey]) {
@@ -108,8 +115,6 @@ export const StockValuationReport: React.FC = () => {
     if (locationFilter === 'all') return true;
     return loc.location_type === locationFilter;
   });
-
-  const totalValuation = locationData.reduce((sum, loc) => sum + loc.totalValuation, 0);
 
   if (loading) {
     return <div className="text-white">Loading...</div>;

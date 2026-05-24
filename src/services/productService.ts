@@ -48,9 +48,11 @@ export async function getProducts(): Promise<Product[]> {
  * Returns a list shaped like `Product` but with `id` populated from `product_id`.
  */
 export async function getShopProducts(): Promise<Product[]> {
+  // Only return products that have stock in shop (cartons_in > 0 OR pieces_in > 0)
   const { data, error } = await supabase
     .from('shop_stock')
     .select('*')
+    .or('cartons_in.gt.0,pieces_in.gt.0')
     .order('name', { ascending: true });
 
   if (error) {
@@ -70,6 +72,8 @@ export async function getShopProducts(): Promise<Product[]> {
     pieces_per_carton: r.pieces_per_carton ?? 1,
     reorder_level: r.reorder_level ?? 0,
     is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   } as Product));
 
   return products;
@@ -178,12 +182,11 @@ export async function checkDuplicate(name: string): Promise<Product[]> {
  * object with counts per table and a `deleted` flag.
  */
 export async function deleteProduct(id: string): Promise<void> {
-  const { data, error } = await supabase.rpc('delete_product_cascade', { product_id: id, dry_run: false });
+  const { error } = await supabase.rpc('delete_product_cascade', { product_id: id, dry_run: false });
   if (error) {
     console.error('deleteProduct rpc error:', error.message);
     throw new Error(error.message);
   }
-  // Optionally, inspect `data` for details about what was deleted
 }
 
 /**
