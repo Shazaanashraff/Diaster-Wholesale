@@ -216,20 +216,13 @@ export const ProductsPage: React.FC = () => {
       setHardDeleteLoading(true);
       setHardDeleteError(null);
 
+      // Clear stock adjustments before delete (they reference the product)
       const counts = await getProductLinkCounts(hardDeleteTarget.id);
-      const blocked = Object.entries(counts).filter(([, count]) => count > 0);
-
-      const nonAdjustmentBlocked = blocked.filter(([name]) => name !== 'stock_adjustments');
-      if (nonAdjustmentBlocked.length > 0) {
-        const summary = nonAdjustmentBlocked.map(([name, count]) => `${name}: ${count}`).join(', ');
-        setHardDeleteError(`Linked records exist (${summary}). Remove them first.`);
-        return;
-      }
-
       if ((counts.stock_adjustments ?? 0) > 0) {
         await clearProductStockAdjustments(hardDeleteTarget.id);
       }
 
+      // Delete the product; stock_batches and other linked records with ON DELETE CASCADE will be removed automatically
       await deleteProduct(hardDeleteTarget.id);
       setProducts(prev => prev.filter(p => p.id !== hardDeleteTarget.id));
       setHardDeleteTarget(null);

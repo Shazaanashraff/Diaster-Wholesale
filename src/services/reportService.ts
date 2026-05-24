@@ -113,7 +113,7 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 export const getSalesProfitReport = async (from?: string, to?: string) => {
   let query = supabase
     .from('invoice_items')
-    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status, salesperson_name)');
+    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status, salesperson_id, salesperson_name, salesperson:salespeople(name))');
 
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
@@ -135,7 +135,7 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
     return {
       invoice_no: (item.invoices as any)?.invoice_no,
       product: (item.products as any)?.name,
-      salesperson_name: (item.invoices as any)?.salesperson_name ?? null,
+      salesperson_name: (item.invoices as any)?.salesperson?.name ?? (item.invoices as any)?.salesperson_name ?? null,
       quantity: totalPieces,
       selling_price: item.unit_price,
       cost_price: unitCost,
@@ -155,6 +155,35 @@ export const getCurrentStockReport = async () => {
 
   if (error) throw error;
   return data;
+};
+
+/** 2.1a Current Stock Report by Location */
+export const getCurrentStockReportByLocation = async () => {
+  const { data, error } = await supabase
+    .from('product_stock_by_location')
+    .select('product_id, name, item_code, pieces_per_carton, location_id, location_name, location_type, total_units')
+    .order('location_name', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  
+  // Group by location_id
+  const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: typeof data }> = {};
+  
+  (data || []).forEach(row => {
+    const locKey = row.location_id || 'unassigned';
+    if (!grouped[locKey]) {
+      grouped[locKey] = {
+        location_id: row.location_id,
+        location_name: row.location_name || 'Unassigned',
+        location_type: row.location_type,
+        products: []
+      };
+    }
+    grouped[locKey].products.push(row);
+  });
+  
+  return Object.values(grouped);
 };
 
 /** 2.4 Low Stock Report */

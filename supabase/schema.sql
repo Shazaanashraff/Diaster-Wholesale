@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS customers (
 ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
 
 -- =========================
+-- 2.5. SALESPEOPLE
+-- =========================
+CREATE TABLE IF NOT EXISTS salespeople (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       TEXT NOT NULL,
+  active     BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE salespeople DISABLE ROW LEVEL SECURITY;
+
+-- =========================
 -- 3. SHIPMENTS
 -- =========================
 CREATE TABLE IF NOT EXISTS shipments (
@@ -88,6 +100,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   total         NUMERIC(12,2) NOT NULL DEFAULT 0,
   payment_status TEXT NOT NULL DEFAULT 'unpaid'
                   CHECK (payment_status IN ('unpaid','partial','paid')),
+  salesperson_id UUID REFERENCES salespeople(id) ON DELETE SET NULL,
   notes         TEXT NOT NULL DEFAULT '',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()

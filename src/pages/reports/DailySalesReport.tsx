@@ -10,7 +10,16 @@ import { getCurrentRole } from '../../utils/permissions';
 import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle } from 'lucide-react';
 
 interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string }
-interface InvoiceRow { id: string; invoice_no: string; total: number; payment_status: string; created_at: string; salesperson_name: string | null; customers: { name: string } | null }
+interface InvoiceRow {
+  id: string;
+  invoice_no: string;
+  total: number;
+  payment_status: string;
+  created_at: string;
+  salesperson_name: string | null;
+  salesperson: { id: string; name: string } | null;
+  customers: { name: string } | null;
+}
 interface TxRow { invoice_no: string; customer: string; salesperson: string; status: string; method: string; bank: string; amount: number; created_at: string }
 
 const canCancelSales = () => { const r = getCurrentRole(); return r === 'admin' || r === 'accountant'; };
@@ -54,8 +63,9 @@ export const DailySalesReport: React.FC = () => {
         return q;
       })(),
       (() => {
-        let q = supabase.from('invoices').select('id, invoice_no, total, payment_status, created_at, salesperson_name, customers(name)');
-        if (from) q = q.gte('created_at', from);
+        let q = supabase
+          .from('invoices')
+          .select('id, invoice_no, total, payment_status, created_at, salesperson_name, salesperson:salespeople(id, name), customers(name)');
         if (to)   q = q.lte('created_at', to);
         return q.order('created_at', { ascending: false });
       })(),
@@ -123,7 +133,7 @@ export const DailySalesReport: React.FC = () => {
     return {
       invoice_no: inv.invoice_no,
       customer: inv.customers?.name ?? '—',
-      salesperson: inv.salesperson_name ?? '—',
+      salesperson: inv.salesperson?.name ?? inv.salesperson_name ?? '—',
       status: inv.payment_status,
       method: '—', bank: '—',
       amount: Number(inv.total),
@@ -257,7 +267,7 @@ export const DailySalesReport: React.FC = () => {
                   <td className="px-5 py-3 text-xs text-gray-500">{fmtDate(inv.created_at)}</td>
                   <td className="px-5 py-3 text-sm font-bold text-white font-mono">{inv.invoice_no}</td>
                   <td className="px-5 py-3 text-sm text-gray-300">{inv.customers?.name ?? '—'}</td>
-                  <td className="px-5 py-3 text-sm text-gray-400">{inv.salesperson_name ?? '—'}</td>
+                  <td className="px-5 py-3 text-sm text-gray-400">{inv.salesperson?.name ?? inv.salesperson_name ?? '—'}</td>
                   <td className="px-5 py-3">
                     <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase',
                       inv.payment_status === 'paid'       ? 'bg-green-900/20 text-green-400' :

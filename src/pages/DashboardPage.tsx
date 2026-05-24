@@ -139,14 +139,14 @@ export const DashboardPage: React.FC = () => {
           ))}
         </div>
 
-        <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block space-y-6">
+        <div className="pos-product-grid px-1.5 overflow-y-auto pb-8 custom-scrollbar block space-y-4">
 
           {/* PROFIT & EXPENSES CHART */}
-          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '200ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-6">
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '200ms', padding: '0.8rem' }}>
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-gray-400 text-xs mb-1">Last 6 Months</p>
-                <h4 className="text-xl font-bold text-white tracking-tight">Profit & Expenses</h4>
+                <h4 className="text-lg font-bold text-white tracking-tight">Profit & Expenses</h4>
               </div>
               <div className="flex items-center gap-5">
                 <div className="flex items-center gap-1.5">
@@ -160,7 +160,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="h-[280px] w-full">
+            <div className="h-[200px] xl:h-[240px] 2xl:h-[280px] w-full">
               {profitTimeline.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-gray-600 text-sm">No data available</p>
@@ -204,8 +204,8 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* RECENT SALES */}
-          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '300ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-6">
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '300ms', padding: '0.8rem' }}>
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-gray-400 text-xs mb-1">Latest Transactions</p>
                 <h4 className="text-lg font-bold text-white tracking-tight">Recent Sales</h4>
@@ -263,8 +263,8 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           {/* CATEGORY DISTRIBUTION */}
-          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '400ms', padding: '1.25rem' }}>
-            <div className="flex items-center justify-between mb-6">
+          <div className="pos-product-card transition-all duration-300 w-full" style={{ animationDelay: '400ms', padding: '0.8rem' }}>
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-gray-400 text-xs mb-1">Products Breakdown</p>
                 <h4 className="text-lg font-bold text-white tracking-tight">Category Distribution</h4>
