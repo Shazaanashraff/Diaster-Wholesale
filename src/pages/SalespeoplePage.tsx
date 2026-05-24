@@ -27,6 +27,11 @@ const fmtCurrency = (value: number) =>
 
 const fmtDate = (value: string) => new Date(value).toLocaleDateString();
 
+const getCustomerName = (customers: SalespersonInvoice['customers']) => {
+  if (Array.isArray(customers)) return customers[0]?.name ?? '—';
+  return customers?.name ?? '—';
+};
+
 export const SalespeoplePage: React.FC = () => {
   const [people, setPeople] = useState<Salesperson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -420,7 +425,7 @@ export const SalespeoplePage: React.FC = () => {
                         <tr key={invoice.id} className="border-b border-[#2b313a]/50 hover:bg-[#1d222a] transition-colors">
                           <td className="px-6 py-3 text-xs text-gray-500">{fmtDate(invoice.created_at)}</td>
                           <td className="px-6 py-3 text-xs font-bold text-gray-300 font-mono">{invoice.invoice_no}</td>
-                          <td className="px-6 py-3 text-xs text-gray-400">{invoice.customers?.name ?? '—'}</td>
+                          <td className="px-6 py-3 text-xs text-gray-400">{getCustomerName(invoice.customers)}</td>
                           <td className="px-6 py-3">
                             <span
                               className={cn(

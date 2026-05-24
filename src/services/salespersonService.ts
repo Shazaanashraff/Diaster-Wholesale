@@ -13,7 +13,7 @@ export interface SalespersonInvoice {
   total: number;
   payment_status: string;
   created_at: string;
-  customers: { name: string } | null;
+  customers: { name: string } | { name: string }[] | null;
 }
 
 export const getSalespeople = async (): Promise<Salesperson[]> => {

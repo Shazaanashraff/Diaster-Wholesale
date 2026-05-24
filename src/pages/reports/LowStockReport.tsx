@@ -2,19 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { getLowStockReport } from '../../services/reportService';
 import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
 
 export const LowStockReport: React.FC = () => {
   const [data, setData] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async () => {
+    const res = await getLowStockReport(10); // Default threshold 10
+    setData(res);
+  };
 
   useEffect(() => {
-    async function load() {
-      const res = await getLowStockReport(10); // Default threshold 10
-      setData(res);
-    }
-    load();
+    loadData();
   }, []);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const headers = ['Product', 'Code', 'Category', 'Available Pieces', 'Threshold'];
   const rows = data.map(r => {
@@ -33,7 +41,17 @@ export const LowStockReport: React.FC = () => {
           </div>
           <h2 className="text-xl font-bold text-white">Low Stock Report</h2>
         </div>
-        <ExportBar filename="Low_Stock_Report" headers={headers} rows={rows} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 text-white rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh Data'}
+          </button>
+          <ExportBar filename="Low_Stock_Report" headers={headers} rows={rows} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

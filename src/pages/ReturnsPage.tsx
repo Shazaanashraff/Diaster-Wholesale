@@ -322,7 +322,9 @@ export const ReturnsPage: React.FC = () => {
     setSubmitError(null);
 
     const returnNumber = `RET-${Date.now().toString(36).toUpperCase()}`;
-    const refundAmount = returnedValue;
+    const isDamageReturn = returnType === 'Return' && reason === 'Damaged';
+    const isCashRefundReturn = returnType === 'Return' && !isDamageReturn;
+    const refundAmount = isCashRefundReturn ? returnedValue : 0;
     let exchangeInvoiceId: string | null = null;
     let exchangeInvoiceNo: string | null = null;
 
@@ -380,6 +382,25 @@ export const ReturnsPage: React.FC = () => {
             paid_at: new Date().toISOString(),
           });
         }
+      } else if (isCashRefundReturn) {
+        for (const r of returnItems) {
+          await restoreStock(
+            r.product_id,
+            r.return_cartons,
+            r.return_pieces,
+            r.pieces_per_carton,
+            `Cash return for ${selectedInvoice.invoice_no}`
+          );
+        }
+
+        await supabase.from('payments').insert({
+          invoice_id: selectedInvoice.id,
+          customer_id: selectedInvoice.customer_id,
+          amount: -Math.abs(returnedValue),
+          method: 'cash',
+          reference: `RETURN-${selectedInvoice.invoice_no}`,
+          paid_at: new Date().toISOString(),
+        });
       }
 
       const { data: retRow, error: retErr } = await supabase
@@ -391,8 +412,13 @@ export const ReturnsPage: React.FC = () => {
           exchange_invoice_no: exchangeInvoiceNo,
           return_type: returnType,
           reason,
-          status: returnType === 'Exchange' ? 'Completed' : 'Pending',
-          settlement_type: returnType === 'Exchange' ? settlementType : null,
+          status: returnType === 'Exchange' || isCashRefundReturn ? 'Completed' : 'Pending',
+          settlement_type:
+            returnType === 'Exchange'
+              ? settlementType
+              : isCashRefundReturn
+                ? 'CashRefund'
+                : null,
           exchange_difference: returnType === 'Exchange' ? exchangeDiff : null,
           refund_amount: refundAmount,
           returned_by: role.replace('_', ' '),
@@ -401,6 +427,7 @@ export const ReturnsPage: React.FC = () => {
             returned_items: returnItems,
             replacement_items: replacements,
             exchange_invoice_id: exchangeInvoiceId,
+            return_mode: isDamageReturn ? 'damage' : 'cash_refund',
           },
         })
         .select('id').single();
@@ -445,28 +472,28 @@ export const ReturnsPage: React.FC = () => {
     try {
       const { data: items } = await supabase
         .from('sales_return_items')
-        .select('product_id, return_cartons, return_pieces')
+        .select('product_id, return_cartons, return_pieces, unit_price')
         .eq('return_id', ret.id);
 
+      let replacementLoss = 0;
+
       for (const item of (items ?? []) as any[]) {
-        if (resolution === 'Repaired') {
-          await supabase.from('stock_adjustments').insert({
-            product_id: item.product_id,
-            adjustment_pieces: item.return_cartons + item.return_pieces,
-            reason: `Repaired return ${ret.return_number}`,
-            adjusted_by: role,
-          });
-        } else {
+        if (resolution === 'Replaced') {
           const { data: prod } = await supabase
             .from('products').select('pieces_per_carton').eq('id', item.product_id).single();
           const ppc = Number((prod as any)?.pieces_per_carton ?? 1) || 1;
           const units = item.return_cartons * ppc + item.return_pieces;
           if (units > 0) await deductStock(item.product_id, units);
+          replacementLoss += units * Number(item.unit_price ?? 0);
         }
       }
 
       await supabase.from('sales_returns').update({
-        status: 'Completed', resolution_type: resolution, updated_at: new Date().toISOString(),
+        status: 'Completed',
+        resolution_type: resolution,
+        settlement_type: resolution === 'Replaced' ? 'DamageReplacement' : 'DamageRepaired',
+        exchange_difference: resolution === 'Replaced' ? -Math.abs(replacementLoss) : null,
+        updated_at: new Date().toISOString(),
       }).eq('id', ret.id);
 
       showToast(`Return marked as ${resolution}`);
@@ -513,9 +540,13 @@ export const ReturnsPage: React.FC = () => {
         const { data: retItems } = await supabase
           .from('sales_return_items').select('*').eq('return_id', ret.id);
         for (const item of (retItems ?? []) as any[]) {
+          const { data: prod } = await supabase
+            .from('products').select('pieces_per_carton').eq('id', item.product_id).single();
+          const ppc = Number((prod as any)?.pieces_per_carton ?? 1) || 1;
+          const units = item.return_cartons * ppc + item.return_pieces;
           await supabase.from('stock_adjustments').insert({
             product_id: item.product_id,
-            adjustment_pieces: item.return_cartons + item.return_pieces,
+            adjustment_pieces: units,
             reason: `Undo replaced return ${ret.return_number}`,
             adjusted_by: role,
           });
@@ -526,16 +557,6 @@ export const ReturnsPage: React.FC = () => {
         }).eq('id', ret.id);
 
       } else if (ret.resolution_type === 'Repaired') {
-        const { data: retItems } = await supabase
-          .from('sales_return_items').select('*').eq('return_id', ret.id);
-        for (const item of (retItems ?? []) as any[]) {
-          await supabase.from('stock_adjustments').insert({
-            product_id: item.product_id,
-            adjustment_pieces: -(item.return_cartons + item.return_pieces),
-            reason: `Undo repaired return ${ret.return_number}`,
-            adjusted_by: role,
-          });
-        }
         await supabase.from('sales_returns').update({
           status: 'Cancelled', cancelled_at: new Date().toISOString(),
           cancelled_by: role, cancel_reason: 'Undone',
@@ -888,9 +909,14 @@ export const ReturnsPage: React.FC = () => {
                   Exchange invoice: <span className="font-mono font-bold text-blue-400">{submitResult.exchangeInvoiceNo}</span>
                 </p>
               )}
-              {returnType === 'Return' && (
+              {returnType === 'Return' && reason === 'Damaged' && (
                 <p className="text-xs text-gray-500 max-w-xs mx-auto">
                   Status: Pending — resolve via Return History once the item is inspected.
+                </p>
+              )}
+              {returnType === 'Return' && reason !== 'Damaged' && (
+                <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                  Status: Completed — stock restored and cash refund recorded.
                 </p>
               )}
               <button onClick={resetForm}
@@ -942,7 +968,16 @@ export const ReturnsPage: React.FC = () => {
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs font-bold font-mono text-amber-400">{fmt(ret.refund_amount)}</p>
+                    <p className={cn(
+                      'text-xs font-bold font-mono',
+                      ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                        ? 'text-red-400'
+                        : 'text-amber-400'
+                    )}>
+                      {ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                        ? `Loss ${fmt(Math.abs(ret.exchange_difference))}`
+                        : fmt(ret.refund_amount)}
+                    </p>
                     <p className="text-[11px] text-gray-600">{new Date(ret.created_at).toLocaleDateString()}</p>
                   </div>
                   {isExpanded ? <ChevronUp size={13} className="text-gray-500 shrink-0" /> : <ChevronDown size={13} className="text-gray-500 shrink-0" />}
@@ -959,6 +994,12 @@ export const ReturnsPage: React.FC = () => {
                           : null,
                         ret.resolution_type
                           ? { label: 'Resolution', value: ret.resolution_type, cls: 'text-green-400' }
+                          : null,
+                        ret.settlement_type
+                          ? { label: 'Settlement', value: ret.settlement_type, cls: 'text-blue-400' }
+                          : null,
+                        ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                          ? { label: 'Replacement Loss', value: fmt(Math.abs(ret.exchange_difference)), cls: 'text-red-400 font-mono' }
                           : null,
                       ].filter(Boolean).map((f: any) => (
                         <div key={f.label}>
