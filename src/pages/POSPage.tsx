@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProducts } from '../services/productService';
+import { getShopProducts } from '../services/productService';
 import { getCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
 import { getShopInventory, getAverageCostPerPiece } from '../services/inventoryService';
@@ -207,7 +207,7 @@ export const POSPage: React.FC = () => {
 
       try {
         const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
-          getProducts().catch((e) => { console.error('getProducts failed:', e); return [] as Product[]; }),
+          getShopProducts().catch((e) => { console.error('getShopProducts failed:', e); return [] as Product[]; }),
           getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
           getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
           getSalespeople().catch(() => [] as Salesperson[]),

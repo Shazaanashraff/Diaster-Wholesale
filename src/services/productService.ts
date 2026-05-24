@@ -44,6 +44,38 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 /**
+ * Fetch products visible to the shop (POS) by reading the `shop_stock` view.
+ * Returns a list shaped like `Product` but with `id` populated from `product_id`.
+ */
+export async function getShopProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('shop_stock')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('getShopProducts error:', error.message);
+    throw new Error(error.message);
+  }
+
+  // Map view columns to Product shape (pick commonly used fields)
+  const products = (data ?? []).map((r: any) => ({
+    id: r.product_id,
+    item_code: r.item_code,
+    name: r.name,
+    model: r.model ?? '',
+    category: r.category ?? 'general',
+    wholesale_price: Number(r.wholesale_price ?? 0),
+    retail_price: Number(r.retail_price ?? 0),
+    pieces_per_carton: r.pieces_per_carton ?? 1,
+    reorder_level: r.reorder_level ?? 0,
+    is_active: true,
+  } as Product));
+
+  return products;
+}
+
+/**
  * Fetch a single product by ID.
  */
 export async function getProductById(id: string): Promise<Product> {
