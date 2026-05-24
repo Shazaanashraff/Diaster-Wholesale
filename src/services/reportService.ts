@@ -157,6 +157,35 @@ export const getCurrentStockReport = async () => {
   return data;
 };
 
+/** 2.1a Current Stock Report by Location */
+export const getCurrentStockReportByLocation = async () => {
+  const { data, error } = await supabase
+    .from('product_stock_by_location')
+    .select('product_id, name, item_code, pieces_per_carton, location_id, location_name, location_type, total_units')
+    .order('location_name', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  
+  // Group by location_id
+  const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: typeof data }> = {};
+  
+  (data || []).forEach(row => {
+    const locKey = row.location_id || 'unassigned';
+    if (!grouped[locKey]) {
+      grouped[locKey] = {
+        location_id: row.location_id,
+        location_name: row.location_name || 'Unassigned',
+        location_type: row.location_type,
+        products: []
+      };
+    }
+    grouped[locKey].products.push(row);
+  });
+  
+  return Object.values(grouped);
+};
+
 /** 2.4 Low Stock Report */
 export const getLowStockReport = async (threshold = 10) => {
   const stocks = await getCurrentStockReport();
