@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { TopBar } from '../components/TopBar';
-import { ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown, ClipboardList, Receipt } from 'lucide-react';
+import { ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown, ClipboardList, Receipt, Edit, AlertCircle, Loader2, Mail, Phone, MapPin, Hash, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
-import { getCustomerById, getCustomerLedger, recordPayment } from '../services/customerService';
+import { getCustomerById, getCustomerLedger, recordPayment, updateCustomer } from '../services/customerService';
 import { getRemainingCredit } from '../utils/creditCheck';
 import type { Customer, Invoice, Payment } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,6 +26,20 @@ export const CustomerDetailPage: React.FC = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState('');
   const [paymentError, setPaymentError] = useState('');
+
+  // Edit Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    type: 'retail' as 'wholesale' | 'retail',
+    credit_limit: 0,
+  });
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
 
   const loadData = async () => {
     if (!id) return;
@@ -90,6 +104,47 @@ export const CustomerDetailPage: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
+  const openEditModal = () => {
+    if (customer) {
+      setEditFormData({
+        name: customer.name,
+        phone: customer.phone || '',
+        email: customer.email || '',
+        address: customer.address || '',
+        type: customer.type,
+        credit_limit: customer.credit_limit || 0,
+      });
+      setEditError('');
+      setEditSuccess('');
+      setIsEditModalOpen(true);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!id || !customer) return;
+    if (!editFormData.name.trim()) {
+      setEditError('Name is required');
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+      setEditError('');
+      await updateCustomer(id, editFormData);
+      setEditSuccess('Customer updated successfully!');
+      await loadData();
+
+      setTimeout(() => {
+        setEditSuccess('');
+        setIsEditModalOpen(false);
+      }, 2000);
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update customer');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="pos-standard-page flex flex-col min-h-screen bg-transparent">
@@ -152,12 +207,20 @@ export const CustomerDetailPage: React.FC = () => {
               <p className="text-gray-500 text-sm font-semibold mt-1">Customer Ledger & History</p>
             </div>
           </div>
-          <button 
-            onClick={openPaymentModal}
-            className="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-primary text-black rounded-2xl md:rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
-          >
-            <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={openEditModal}
+              className="flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] rounded-2xl md:rounded-3xl font-bold text-sm border border-[#2b313a] transition-all active:scale-[0.98]"
+            >
+              <Edit size={18} strokeWidth={2.5} /> EDIT
+            </button>
+            <button 
+              onClick={openPaymentModal}
+              className="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-primary text-black rounded-2xl md:rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
+            >
+              <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
+            </button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -403,6 +466,142 @@ export const CustomerDetailPage: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      {/* EDIT CUSTOMER MODAL */}
+      <Modal 
+        isOpen={isEditModalOpen}
+        onClose={() => !editSuccess && setIsEditModalOpen(false)}
+        title="Edit Customer Details"
+      >
+        <div className="space-y-6">
+          {editSuccess ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center">
+              <div className="w-20 h-20 bg-green-900/20 text-green-400 rounded-full flex items-center justify-center mb-6 border border-green-900/30">
+                <CheckCircle2 size={40} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Changes Saved!</h3>
+              <p className="text-sm font-semibold text-gray-400">Customer details have been updated successfully.</p>
+            </div>
+          ) : (
+            <>
+              {editError && (
+                <div className="p-3 bg-red-900/20 text-red-400 text-sm font-bold rounded-xl border border-red-900/30 flex items-center gap-2">
+                  <AlertCircle size={16} /> {editError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <User size={12} className="text-primary" /> Full Name <span className="text-red-400">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                  placeholder="e.g. John Doe" 
+                  className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <Phone size={12} className="text-primary" /> Contact (Phone)
+                  </label>
+                  <input 
+                    type="tel" 
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                    placeholder="e.g. +94 77 XXX XXXX" 
+                    className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <Mail size={12} className="text-primary" /> Email
+                  </label>
+                  <input 
+                    type="email" 
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                    placeholder="e.g. john@example.com" 
+                    className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <Hash size={12} className="text-primary" /> Type
+                  </label>
+                  <select 
+                    value={editFormData.type}
+                    onChange={(e) => setEditFormData({...editFormData, type: e.target.value as any})}
+                    className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none text-white"
+                  >
+                    <option value="retail">Retail</option>
+                    <option value="wholesale">Wholesale</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <CreditCard size={12} className="text-primary" /> Credit Limit
+                  </label>
+                  <input 
+                    type="number" 
+                    min="0"
+                    value={editFormData.credit_limit}
+                    onChange={(e) => setEditFormData({...editFormData, credit_limit: Number(e.target.value)})}
+                    className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <MapPin size={12} className="text-primary" /> Billing Address
+                </label>
+                <textarea 
+                  value={editFormData.address}
+                  onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                  placeholder="Full address for invoicing..." 
+                  rows={2}
+                  className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all resize-none text-white"
+                />
+              </div>
+
+              <div className="pt-4 grid grid-cols-2 gap-4">
+                <button 
+                  disabled={editLoading}
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="w-full py-4 rounded-2xl border border-[#2b313a] bg-[#1d222a] text-sm font-bold text-gray-400 hover:text-white hover:bg-[#252a33] transition-all disabled:opacity-50"
+                >
+                  CANCEL
+                </button>
+                <button 
+                  disabled={editLoading}
+                  onClick={handleSaveChanges}
+                  className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center relative overflow-hidden"
+                >
+                  <AnimatePresence mode="wait">
+                    {editLoading ? (
+                      <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        <Loader2 size={20} className="animate-spin" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        SAVE CHANGES
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
+
