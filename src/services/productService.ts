@@ -136,18 +136,35 @@ export async function checkDuplicate(name: string): Promise<Product[]> {
 }
 
 /**
- * Delete a product by ID.
+ * Delete a product by ID and all linked records.
+ * Clears all foreign key references before deleting the product.
+ */
+/**
+ * Delete a product by ID at the database level using the stored function
+ * `delete_product_cascade(product_id uuid, dry_run boolean)`.
+ * The function performs a transactional cascade delete and returns a JSON
+ * object with counts per table and a `deleted` flag.
  */
 export async function deleteProduct(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('products')
-    .delete()
-    .eq('id', id);
-
+  const { data, error } = await supabase.rpc('delete_product_cascade', { product_id: id, dry_run: false });
   if (error) {
-    console.error('deleteProduct error:', error.message);
+    console.error('deleteProduct rpc error:', error.message);
     throw new Error(error.message);
   }
+  // Optionally, inspect `data` for details about what was deleted
+}
+
+/**
+ * Preview the rows that would be deleted for a product.
+ * Calls the same DB function with `dry_run=true` and returns the counts.
+ */
+export async function previewDeleteProduct(id: string): Promise<any> {
+  const { data, error } = await supabase.rpc('delete_product_cascade', { product_id: id, dry_run: true });
+  if (error) {
+    console.error('previewDeleteProduct rpc error:', error.message);
+    throw new Error(error.message);
+  }
+  return data;
 }
 
 export async function archiveProduct(id: string): Promise<void> {

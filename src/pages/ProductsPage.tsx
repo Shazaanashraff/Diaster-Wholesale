@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, deleteProduct, getProductLinkCounts, clearProductStockAdjustments } from '../services/productService';
+import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, deleteProduct, previewDeleteProduct } from '../services/productService';
 import { insertStockAdjustment } from '../services/inventoryService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
@@ -22,6 +22,7 @@ export const ProductsPage: React.FC = () => {
   const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
   const [hardDeleteError, setHardDeleteError] = useState<string | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
+  const [hardDeletePreview, setHardDeletePreview] = useState<Record<string, number> | null>(null);
 
   // ── Form submission state ──
   const [saving, setSaving] = useState(false);
@@ -205,9 +206,18 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
-  const handleHardDeleteRequest = (product: Product) => {
+  const handleHardDeleteRequest = async (product: Product) => {
     setHardDeleteTarget(product);
     setHardDeleteError(null);
+    setHardDeletePreview(null);
+    try {
+      // Preview counts from DB function
+      const preview = await previewDeleteProduct(product.id);
+      setHardDeletePreview(preview as Record<string, number>);
+    } catch (err) {
+      // Non-blocking: still allow deletion if preview fails, but show error
+      setHardDeleteError(err instanceof Error ? err.message : 'Failed to fetch deletion preview');
+    }
   };
 
   const handleHardDelete = async () => {
@@ -216,13 +226,9 @@ export const ProductsPage: React.FC = () => {
       setHardDeleteLoading(true);
       setHardDeleteError(null);
 
-      // Clear stock adjustments before delete (they reference the product)
-      const counts = await getProductLinkCounts(hardDeleteTarget.id);
-      if ((counts.stock_adjustments ?? 0) > 0) {
-        await clearProductStockAdjustments(hardDeleteTarget.id);
-      }
-
-      // Delete the product; stock_batches and other linked records with ON DELETE CASCADE will be removed automatically
+      // Delete the product; deleteProduct handles clearing all linked records including:
+      // - purchase_items, invoice_items, stock_adjustments, stock_batches, etc.
+      // All foreign key references are cleaned up automatically
       await deleteProduct(hardDeleteTarget.id);
       setProducts(prev => prev.filter(p => p.id !== hardDeleteTarget.id));
       setHardDeleteTarget(null);
@@ -649,17 +655,37 @@ export const ProductsPage: React.FC = () => {
         error={deleteError}
       />
 
-      <ConfirmModal
-        isOpen={!!hardDeleteTarget}
-        onClose={() => { setHardDeleteTarget(null); setHardDeleteError(null); }}
-        onConfirm={handleHardDelete}
-        title="Hard Delete Product"
-        message={`Permanently delete "${hardDeleteTarget?.name}". This cannot be undone. If only stock adjustments are linked, they will be cleared automatically.`}
-        confirmText="Hard Delete"
-        variant="danger"
-        isLoading={hardDeleteLoading}
-        error={hardDeleteError}
-      />
+      {
+        (() => {
+          let message = `Permanently delete "${hardDeleteTarget?.name}". This cannot be undone.`;
+          if (hardDeletePreview) {
+            const entries = Object.entries(hardDeletePreview as Record<string, number>);
+            const nonZero = entries.filter(([k, v]) => k !== 'deleted' && Number(v) > 0);
+            if (nonZero.length > 0) {
+              message += '\n\nThis will remove the following rows:';
+              nonZero.forEach(([tbl, cnt]) => { message += `\n- ${tbl}: ${cnt}`; });
+            } else {
+              message += '\n\nNo linked rows found; only the product row will be removed.';
+            }
+          } else {
+            message += ' If only stock adjustments are linked, they will be cleared automatically.';
+          }
+
+          return (
+            <ConfirmModal
+              isOpen={!!hardDeleteTarget}
+              onClose={() => { setHardDeleteTarget(null); setHardDeleteError(null); setHardDeletePreview(null); }}
+              onConfirm={handleHardDelete}
+              title="Hard Delete Product"
+              message={message}
+              confirmText="Hard Delete"
+              variant="danger"
+              isLoading={hardDeleteLoading}
+              error={hardDeleteError}
+            />
+          );
+        })()
+      }
     </div>
   );
 };
