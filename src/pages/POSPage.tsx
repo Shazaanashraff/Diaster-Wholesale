@@ -762,6 +762,7 @@ export const POSPage: React.FC = () => {
                         : 'Inventory not enforced'}
                     </p>
                     <h4>{product.name}</h4>
+                    <p className="text-[11px] text-gray-400">{product.item_code}</p>
                     <strong>LKR {(isWholesale ? product.wholesale_price : product.retail_price).toFixed(2)}</strong>
                     <p className="text-[10px] text-gray-500">Qty per carton: {piecesPerCarton}</p>
                   </div>
@@ -1078,6 +1079,7 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
+                        <p className="text-[10px] text-gray-400">{item.product.item_code}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-[9px] text-gray-500 uppercase">Qty</span>
                           <input
