@@ -11,6 +11,7 @@ import {
 import { getSalespeople, type Salesperson } from '../services/salespersonService';
 import type { Product, Customer } from '../types';
 import { Modal } from '../components/Modal';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { computeStock } from '../utils/stockUtils';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import {
@@ -119,6 +120,18 @@ export const POSPage: React.FC = () => {
   // Salesperson
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [selectedSalesperson, setSelectedSalesperson] = useState<string>('');
+  const salespersonOptions = useMemo(
+    () => salespeople.map((sp) => ({
+      value: sp.id,
+      label: sp.name,
+      searchLabel: sp.name,
+    })),
+    [salespeople]
+  );
+  const selectedSalespersonName = useMemo(
+    () => salespeople.find((sp) => sp.id === selectedSalesperson)?.name ?? '',
+    [salespeople, selectedSalesperson]
+  );
 
   // Inline new-customer form
   const [showNewCustomer, setShowNewCustomer] = useState(false);
@@ -324,6 +337,20 @@ export const POSPage: React.FC = () => {
     setPieceQuantities((prev) => ({
       ...prev,
       [productId]: Math.max(0, (prev[productId] ?? 0) + delta),
+    }));
+    setPricingApproved(false);
+  };
+
+  const updateQuantityInput = (productId: string, value: string, maxAllowed?: number) => {
+    const parsed = parseInt(value, 10);
+    let nextQty = Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+    if (typeof maxAllowed === 'number') {
+      nextQty = Math.min(nextQty, Math.max(0, maxAllowed));
+    }
+
+    setPieceQuantities((prev) => ({
+      ...prev,
+      [productId]: nextQty,
     }));
     setPricingApproved(false);
   };
@@ -743,6 +770,20 @@ export const POSPage: React.FC = () => {
                     <div className="pos-qty-row">
                       <span>QTY {qtyUnits}</span>
                       <div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={qtyUnits}
+                          onChange={(e) => updateQuantityInput(
+                            product.id,
+                            e.target.value,
+                            isInventoryEnforced ? remainingPieces : undefined
+                          )}
+                          onFocus={(e) => e.target.select()}
+                          className="w-16 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          aria-label={`Enter quantity for ${product.name}`}
+                        />
                         <button type="button" onClick={() => updateQuantity(product.id, -1)} disabled={qtyUnits === 0}>
                           <Minus size={14} />
                         </button>
@@ -834,7 +875,7 @@ export const POSPage: React.FC = () => {
               <p>{customers.find((c) => c.id === selectedCustomerId)?.name ?? 'Direct Customer'}</p>
               {selectedSalesperson && (
                 <p style={{ fontSize: 10, color: '#6ee7b7', fontWeight: 700, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <UserCheck size={10} /> Sold by {selectedSalesperson}
+                  <UserCheck size={10} /> Sold by {selectedSalespersonName}
                 </p>
               )}
               <button
@@ -939,30 +980,40 @@ export const POSPage: React.FC = () => {
           )}
 
           {/* Salesperson selector */}
-          {salespeople.length > 0 && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: selectedSalesperson ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
-              border: `1px solid ${selectedSalesperson ? 'rgba(16,185,129,0.25)' : '#2b313a'}`,
-              borderRadius: 10, padding: '6px 10px',
-            }}>
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 6,
+            background: selectedSalesperson ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${selectedSalesperson ? 'rgba(16,185,129,0.25)' : '#2b313a'}`,
+            borderRadius: 10, padding: '8px 10px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <UserCheck size={13} style={{ color: selectedSalesperson ? '#6ee7b7' : '#6b7280', flexShrink: 0 }} />
-              <select
-                value={selectedSalesperson}
-                onChange={(e) => setSelectedSalesperson(e.target.value)}
-                style={{
-                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  color: selectedSalesperson ? '#e5e7eb' : '#6b7280',
-                  fontSize: 12, fontWeight: selectedSalesperson ? 600 : 400, cursor: 'pointer',
-                }}
-              >
-                <option value="">Select salesperson</option>
-                {salespeople.map((sp) => (
-                  <option key={sp.id} value={sp.name}>{sp.name}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ color: '#9ca3af', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Salesperson</span>
+                <span style={{ color: selectedSalesperson ? '#e5e7eb' : '#6b7280', fontSize: 11 }}>
+                  {selectedSalespersonName || 'Assign a salesperson to this sale'}
+                </span>
+              </div>
             </div>
-          )}
+
+            {salespersonOptions.length > 0 ? (
+              <SearchableSelect
+                value={selectedSalesperson}
+                onChange={setSelectedSalesperson}
+                options={salespersonOptions}
+                placeholder="Select salesperson"
+                className="w-full"
+              />
+            ) : (
+              <div style={{
+                border: '1px dashed #2b313a', borderRadius: 10,
+                padding: '10px 12px', color: '#6b7280', fontSize: 12,
+                background: 'rgba(255,255,255,0.02)',
+              }}>
+                No active salespeople found. Add or activate one before taking this sale.
+              </div>
+            )}
+          </div>
 
           {/* Loyalty points */}
           {customerLoyalty && customerLoyalty.points > 0 && !isOnline === false && (

@@ -13,11 +13,14 @@ interface InvoiceRow {
   total: number;
   payment_status: string;
   created_at: string;
+  salesperson_id: string | null;
   salesperson_name: string | null;
+  salesperson: { id: string; name: string } | null;
   customers: { name: string } | null;
 }
 
 interface PersonSummary {
+  id: string;
   name: string;
   invoiceCount: number;
   revenue: number;
@@ -40,7 +43,7 @@ export const SalesByPersonReport: React.FC = () => {
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     let q = supabase
       .from('invoices')
-      .select('id, invoice_no, total, payment_status, created_at, salesperson_name, customers(name)');
+      .select('id, invoice_no, total, payment_status, created_at, salesperson_id, salesperson_name, salesperson:salespeople(id, name), customers(name)');
     if (from) q = q.gte('created_at', from);
     if (to)   q = q.lte('created_at', to);
     q = q.order('created_at', { ascending: false });
@@ -52,12 +55,13 @@ export const SalesByPersonReport: React.FC = () => {
 
   useEffect(() => { load(); }, [period, customFrom, customTo]);
 
-  // Group by salesperson_name (null → "Unassigned")
+  // Group by salesperson relation (legacy name fallback for older invoices)
   const personMap = new Map<string, PersonSummary>();
   for (const inv of invoices) {
-    const key = inv.salesperson_name ?? 'Unassigned';
+    const key = inv.salesperson?.id ?? inv.salesperson_id ?? inv.salesperson_name ?? 'Unassigned';
+    const name = inv.salesperson?.name ?? inv.salesperson_name ?? 'Unassigned';
     if (!personMap.has(key)) {
-      personMap.set(key, { name: key, invoiceCount: 0, revenue: 0, paid: 0, partial: 0, unpaid: 0, invoices: [] });
+      personMap.set(key, { id: key, name, invoiceCount: 0, revenue: 0, paid: 0, partial: 0, unpaid: 0, invoices: [] });
     }
     const g = personMap.get(key)!;
     g.invoiceCount++;
@@ -71,7 +75,7 @@ export const SalesByPersonReport: React.FC = () => {
   const groups = Array.from(personMap.values()).sort((a, b) => b.revenue - a.revenue);
 
   const totalRevenue = groups.reduce((s, g) => s + g.revenue, 0);
-  const assignedRevenue = groups.filter(g => g.name !== 'Unassigned').reduce((s, g) => s + g.revenue, 0);
+  const assignedRevenue = groups.filter(g => g.id !== 'Unassigned').reduce((s, g) => s + g.revenue, 0);
 
   const exportHeaders = ['Salesperson', 'Invoices', 'Revenue', 'Paid', 'Partial', 'Unpaid'];
   const exportRows = groups.map(g => [
@@ -97,7 +101,7 @@ export const SalesByPersonReport: React.FC = () => {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <ReportKPICard label="Total Revenue" value={totalRevenue} prefix="LKR " icon={TrendingUp} color="bg-green-600" />
         <ReportKPICard label="Assigned Revenue" value={assignedRevenue} prefix="LKR " icon={UserCheck} color="bg-blue-600" />
-        <ReportKPICard label="Salespeople" value={groups.filter(g => g.name !== 'Unassigned').length} prefix="" icon={UserCheck} color="bg-purple-600" />
+        <ReportKPICard label="Salespeople" value={groups.filter(g => g.id !== 'Unassigned').length} prefix="" icon={UserCheck} color="bg-purple-600" />
       </div>
 
       {/* Summary table */}
@@ -122,12 +126,12 @@ export const SalesByPersonReport: React.FC = () => {
               <React.Fragment key={g.name}>
                 <tr
                   className="border-b border-[#2b313a]/60 hover:bg-[#1d222a] transition-colors cursor-pointer"
-                  onClick={() => setExpanded(expanded === g.name ? null : g.name)}
+                  onClick={() => setExpanded(expanded === g.id ? null : g.id)}
                 >
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <UserCheck size={14} className={g.name === 'Unassigned' ? 'text-gray-600' : 'text-emerald-400'} />
-                      <span className={cn('text-sm font-semibold', g.name === 'Unassigned' ? 'text-gray-500 italic' : 'text-white')}>{g.name}</span>
+                      <UserCheck size={14} className={g.id === 'Unassigned' ? 'text-gray-600' : 'text-emerald-400'} />
+                      <span className={cn('text-sm font-semibold', g.id === 'Unassigned' ? 'text-gray-500 italic' : 'text-white')}>{g.name}</span>
                     </div>
                   </td>
                   <td className="px-5 py-3 text-sm text-gray-400 font-mono">{g.invoiceCount}</td>
@@ -136,7 +140,7 @@ export const SalesByPersonReport: React.FC = () => {
                   <td className="px-5 py-3 text-sm text-red-400 font-mono">{g.unpaid}</td>
                   <td className="px-5 py-3 text-sm font-bold font-mono text-right text-white">{fmtCurrency(g.revenue)}</td>
                 </tr>
-                {expanded === g.name && (
+                {expanded === g.id && (
                   <tr className="bg-[#0d1016]">
                     <td colSpan={6} className="px-6 py-4">
                       <table className="w-full">

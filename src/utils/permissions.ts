@@ -7,6 +7,7 @@ export type Permission =
   | 'manage_costs'
   | 'manage_payments'
   | 'view_reports'
+  | 'manage_salespeople'
   | 'pos'
   | 'bulk_import'
   | 'override_pricing'
@@ -20,7 +21,7 @@ export type Permission =
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
     'manage_products', 'manage_procurement', 'manage_suppliers',
-    'manage_costs', 'manage_payments', 'view_reports', 'pos',
+    'manage_costs', 'manage_payments', 'view_reports', 'manage_salespeople', 'pos',
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
     'manage_inventory', 'manage_returns',

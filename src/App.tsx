@@ -19,6 +19,7 @@ import { DayTransactionsPage } from './pages/DayTransactionsPage';
 import { StockTransfersPage } from './pages/StockTransfersPage';
 import { UpdatesPage } from './pages/UpdatesPage';
 import { CashierPage } from './pages/CashierPage';
+import { SalespeoplePage } from './pages/SalespeoplePage';
 import { usePermissions, type Permission } from './utils/permissions';
 
 
@@ -53,6 +54,7 @@ const App: React.FC = () => {
           <Route path="/customers" element={<ProtectedRoute req="view_customers"><CustomersPage /></ProtectedRoute>} />
           <Route path="/customers/:id" element={<ProtectedRoute req="view_customers"><CustomerDetailPage /></ProtectedRoute>} />
           <Route path="/import" element={<ProtectedRoute req="bulk_import"><BulkImportPage /></ProtectedRoute>} />
+          <Route path="/salespeople" element={<ProtectedRoute req="manage_salespeople"><SalespeoplePage /></ProtectedRoute>} />
           <Route path="/returns" element={<ProtectedRoute req="manage_returns"><ReturnsPage /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute req="view_reports"><ReportsPage /></ProtectedRoute>} />
           <Route path="/suppliers" element={<ProtectedRoute req={['manage_suppliers', 'manage_payments']}><SuppliersPage /></ProtectedRoute>} />

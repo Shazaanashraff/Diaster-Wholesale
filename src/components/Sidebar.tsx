@@ -20,6 +20,7 @@ import {
   Wallet,
   ArrowLeftRight,
   ClipboardList,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCurrentRole, can, type Permission } from '../utils/permissions';
@@ -52,6 +53,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: ArrowLeftRight,  label: 'Stock Transfers',   path: '/stock-transfers',   requires: 'manage_procurement',   section: 'Procurement' },
   { icon: Wallet,          label: 'Day Transactions',  path: '/day-transactions',  requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: Upload,          label: 'Bulk Import',       path: '/import',            requires: 'bulk_import',          section: 'Admin' },
+  { icon: UserCog,         label: 'Salespeople',       path: '/salespeople',       requires: 'manage_salespeople',    section: 'Admin' },
   { icon: Download,        label: 'Updates',           path: '/updates',                                             section: 'Admin' },
 ];
 

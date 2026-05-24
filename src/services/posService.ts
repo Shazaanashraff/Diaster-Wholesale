@@ -136,7 +136,7 @@ export const checkout = async (
   total: number,
   paymentSplits: PaymentSplit[],   // empty = full credit / unpaid
   loyalty?: LoyaltyOptions,
-  salespersonName?: string
+  salespersonId?: string
 ): Promise<{ invoiceId: string; earnedPoints: number }> => {
   // Stock validation
   await validateStock(cart);
@@ -176,7 +176,7 @@ export const checkout = async (
       discount,
       total: netTotal,
       payment_status: paymentStatus,
-      salesperson_name: salespersonName || null,
+      salesperson_id: salespersonId || null,
     })
     .select('id')
     .single();
