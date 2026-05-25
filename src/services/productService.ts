@@ -44,6 +44,24 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 /**
+ * Fetch archived products ordered by name (A-Z).
+ */
+export async function getArchivedProducts(): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', false)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('getArchivedProducts error:', error.message);
+    throw new Error(error.message);
+  }
+
+  return data as Product[];
+}
+
+/**
  * Fetch products visible to the shop (POS) by reading the `shop_stock` view.
  * Returns a list shaped like `Product` but with `id` populated from `product_id`.
  */
@@ -210,6 +228,18 @@ export async function archiveProduct(id: string): Promise<void> {
 
   if (error) {
     console.error('archiveProduct error:', error.message);
+    throw new Error(error.message);
+  }
+}
+
+export async function unarchiveProduct(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('products')
+    .update({ is_active: true })
+    .eq('id', id);
+
+  if (error) {
+    console.error('unarchiveProduct error:', error.message);
     throw new Error(error.message);
   }
 }

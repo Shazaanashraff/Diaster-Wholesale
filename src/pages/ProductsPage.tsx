@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../components/Modal';
 import type { Product } from '../types';
-import { getProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, deleteProduct, previewDeleteProduct } from '../services/productService';
+import { getProducts, getArchivedProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, unarchiveProduct, deleteProduct, previewDeleteProduct } from '../services/productService';
 import { insertStockAdjustment } from '../services/inventoryService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
@@ -11,6 +11,7 @@ import { usePermissions } from '../utils/permissions';
 export const ProductsPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
 
   // ── Live data state ──
   const [products, setProducts] = useState<Product[]>([]);
@@ -20,6 +21,7 @@ export const ProductsPage: React.FC = () => {
   // ── Confirm delete ──
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [hardDeleteTarget, setHardDeleteTarget] = useState<Product | null>(null);
+  const [activeHardDeleteTarget, setActiveHardDeleteTarget] = useState<Product | null>(null);
   const [hardDeleteError, setHardDeleteError] = useState<string | null>(null);
   const [hardDeleteLoading, setHardDeleteLoading] = useState(false);
   const [hardDeletePreview, setHardDeletePreview] = useState<Record<string, number> | null>(null);
@@ -76,11 +78,16 @@ export const ProductsPage: React.FC = () => {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    // Fetch when view mode changes
+    fetchProducts();
+  }, [viewMode]);
+
   async function fetchProducts() {
     try {
       setLoading(true);
       setError(null);
-      const data = await getProducts();
+      const data = viewMode === 'archived' ? await getArchivedProducts() : await getProducts();
       setProducts(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load products';
@@ -220,6 +227,13 @@ export const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleActiveHardDeleteConfirm = async () => {
+    if (!activeHardDeleteTarget) return;
+    const target = activeHardDeleteTarget;
+    setActiveHardDeleteTarget(null);
+    await handleHardDeleteRequest(target);
+  };
+
   const handleHardDelete = async () => {
     if (!hardDeleteTarget) return;
     try {
@@ -254,6 +268,21 @@ export const ProductsPage: React.FC = () => {
             />
           </label>
           <div className="pos-mode-toggle">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setViewMode('active')}
+                className={`px-3 py-1.5 rounded-lg transition-colors border border-transparent ${viewMode === 'active' ? 'bg-white text-black' : 'text-gray-400 hover:bg-[#1d222a]'}`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setViewMode('archived')}
+                className={`px-3 py-1.5 rounded-lg transition-colors border border-transparent ${viewMode === 'archived' ? 'bg-white text-black' : 'text-gray-400 hover:bg-[#1d222a]'}`}
+              >
+                Archived
+              </button>
+            </div>
+
             <button
               onClick={() => fetchProducts()}
               className="flex items-center gap-2 px-3 py-1.5 hover:bg-[#1d222a] rounded-lg transition-colors border border-transparent hover:border-[#2b313a] text-gray-400 hover:text-white"
@@ -456,25 +485,66 @@ export const ProductsPage: React.FC = () => {
                         <p className="text-2xl font-bold text-primary tracking-tighter">LKR {product.retail_price.toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => handleEdit(product)}
-                          className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all flex items-center justify-center border border-[#2b313a]"
-                        >
-                          <Edit2 size={20} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteRequest(product)}
-                          className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
-                          <Trash2 size={20} />
-                        </button>
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleHardDeleteRequest(product)}
-                            className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
-                            title="Hard delete product"
-                          >
-                            <AlertTriangle size={20} />
-                          </button>
+                        {viewMode === 'active' ? (
+                          <>
+                            <button 
+                              onClick={() => handleEdit(product)}
+                              className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all flex items-center justify-center border border-[#2b313a]"
+                            >
+                              <Edit2 size={20} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteRequest(product)}
+                              className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-red-400 hover:bg-red-900/30 transition-all flex items-center justify-center border border-[#2b313a]">
+                              <Trash2 size={20} />
+                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => {
+                                  if (product.is_active) {
+                                    setActiveHardDeleteTarget(product);
+                                    return;
+                                  }
+                                  handleHardDeleteRequest(product);
+                                }}
+                                className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
+                                title="Hard delete product"
+                              >
+                                <AlertTriangle size={20} />
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          // Archived mode: show Unarchive + Delete Permanently
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setSaving(true);
+                                  await unarchiveProduct(product.id);
+                                  // remove from current archived list
+                                  setProducts(prev => prev.filter(p => p.id !== product.id));
+                                } catch (err) {
+                                  setError(err instanceof Error ? err.message : 'Failed to unarchive');
+                                } finally {
+                                  setSaving(false);
+                                }
+                              }}
+                              className="w-12 h-12 rounded-2xl bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] transition-all flex items-center justify-center border border-[#2b313a]"
+                              title="Unarchive product"
+                            >
+                              <RefreshCw size={20} />
+                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleHardDeleteRequest(product)}
+                                className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
+                                title="Delete permanently"
+                              >
+                                <AlertTriangle size={20} />
+                              </button>
+                            )}
+                          </>
                         )}
                         <div className="w-px h-8 bg-[#2b313a]"></div>
                         <button onClick={() => handleEdit(product)} className="w-12 h-12 rounded-2xl bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white transition-all flex items-center justify-center" title="More options">
@@ -655,21 +725,44 @@ export const ProductsPage: React.FC = () => {
         error={deleteError}
       />
 
+      <ConfirmModal
+        isOpen={!!activeHardDeleteTarget}
+        onClose={() => setActiveHardDeleteTarget(null)}
+        onConfirm={handleActiveHardDeleteConfirm}
+        title="Delete Active Product?"
+        message={`"${activeHardDeleteTarget?.name}" is still active. Are you sure you want to permanently delete it? This action cannot be undone.`}
+        confirmText="Yes, Continue"
+        variant="warning"
+      />
+
       {
         (() => {
-          let message = `Permanently delete "${hardDeleteTarget?.name}". This cannot be undone.`;
-          if (hardDeletePreview) {
-            const entries = Object.entries(hardDeletePreview as Record<string, number>);
-            const nonZero = entries.filter(([k, v]) => k !== 'deleted' && Number(v) > 0);
-            if (nonZero.length > 0) {
-              message += '\n\nThis will remove the following rows:';
-              nonZero.forEach(([tbl, cnt]) => { message += `\n- ${tbl}: ${cnt}`; });
-            } else {
-              message += '\n\nNo linked rows found; only the product row will be removed.';
-            }
-          } else {
-            message += ' If only stock adjustments are linked, they will be cleared automatically.';
-          }
+          const messageNode = (
+            <div>
+              <p>Permanently delete "{hardDeleteTarget?.name}". This cannot be undone.</p>
+              {hardDeletePreview ? (
+                (() => {
+                  const entries = Object.entries(hardDeletePreview as Record<string, number>);
+                  const nonZero = entries.filter(([k, v]) => k !== 'deleted' && Number(v) > 0);
+                  if (nonZero.length > 0) {
+                    return (
+                      <div className="mt-3 text-left">
+                        <p className="mb-2">This will remove the following rows:</p>
+                        <ul className="list-disc list-inside ml-4 text-sm">
+                          {nonZero.map(([tbl, cnt]) => (
+                            <li key={tbl}>{tbl}: {cnt}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  }
+                  return <p className="mt-2">No linked rows found; only the product row will be removed.</p>;
+                })()
+              ) : (
+                <p className="mt-2">If only stock adjustments are linked, they will be cleared automatically.</p>
+              )}
+            </div>
+          );
 
           return (
             <ConfirmModal
@@ -677,11 +770,12 @@ export const ProductsPage: React.FC = () => {
               onClose={() => { setHardDeleteTarget(null); setHardDeleteError(null); setHardDeletePreview(null); }}
               onConfirm={handleHardDelete}
               title="Hard Delete Product"
-              message={message}
+              message={messageNode}
               confirmText="Hard Delete"
               variant="danger"
               isLoading={hardDeleteLoading}
               error={hardDeleteError}
+              confirmDisabled={!!hardDeleteError}
             />
           );
         })()

@@ -8,12 +8,13 @@ interface ConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'info';
   isLoading?: boolean;
   error?: string | null;
+  confirmDisabled?: boolean;
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -27,6 +28,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   variant = 'danger',
   isLoading = false,
   error = null
+  ,
+  confirmDisabled = false
 }) => {
   return (
     <AnimatePresence>
@@ -57,9 +60,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               </div>
               
               <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-              <p className="text-sm text-gray-400 leading-relaxed">
+              <div className="text-sm text-gray-400 leading-relaxed">
                 {message}
-              </p>
+              </div>
 
               {error && (
                 <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-xs text-red-400 text-left">
@@ -78,7 +81,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               </button>
               <button
                 onClick={onConfirm}
-                disabled={isLoading}
+                disabled={isLoading || confirmDisabled}
                 className={cn(
                   "flex-1 py-3 rounded-2xl text-xs font-bold transition-all active:scale-95 shadow-lg",
                   variant === 'danger' ? "bg-red-600 hover:bg-red-700 text-white shadow-red-900/20" :

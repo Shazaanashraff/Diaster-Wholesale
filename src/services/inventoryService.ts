@@ -3,6 +3,17 @@ import type { ProductStock, StockAdjustment } from '../types';
 
 export type StockLocation = 'store' | 'shop';
 
+export interface InventoryByLocationRow {
+  product_id: string;
+  item_code: string;
+  name: string;
+  pieces_per_carton: number;
+  location_id: string | null;
+  location_name: string | null;
+  location_type: 'warehouse' | 'shop' | null;
+  total_units: number;
+}
+
 export interface StockLedgerEntry {
   id: string;
   product_id: string;
@@ -37,6 +48,25 @@ export async function getInventory(): Promise<ProductStock[]> {
   }
 
   return data as ProductStock[];
+}
+
+/**
+ * Fetch stock split by location from product_stock_by_location.
+ * Used by Inventory page for location-wise filtering.
+ */
+export async function getInventoryByLocation(): Promise<InventoryByLocationRow[]> {
+  const { data, error } = await supabase
+    .from('product_stock_by_location')
+    .select('product_id, item_code, name, pieces_per_carton, location_id, location_name, location_type, total_units')
+    .order('location_name', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('getInventoryByLocation error:', error.message);
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as InventoryByLocationRow[];
 }
 
 /**

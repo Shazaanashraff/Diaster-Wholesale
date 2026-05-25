@@ -35,8 +35,13 @@ DECLARE
 BEGIN
   -- Compute counts for each linked table
   FOREACH tbl IN ARRAY tables LOOP
-    EXECUTE format('SELECT count(*) FROM %I WHERE product_id = $1', tbl) INTO v_count USING product_id;
-    result := result || jsonb_build_object(tbl, v_count);
+    -- Skip tables that do not exist in this database to make the function safe across variants
+    IF to_regclass(tbl) IS NOT NULL THEN
+      EXECUTE format('SELECT count(*) FROM %I WHERE product_id = $1', tbl) INTO v_count USING product_id;
+      result := result || jsonb_build_object(tbl, v_count);
+    ELSE
+      result := result || jsonb_build_object(tbl, NULL);
+    END IF;
   END LOOP;
 
   -- If dry_run just return counts
@@ -51,7 +56,9 @@ BEGIN
 
   -- Delete dependent rows in a safe order
   FOREACH tbl IN ARRAY tables LOOP
-    EXECUTE format('DELETE FROM %I WHERE product_id = $1', tbl) USING product_id;
+    IF to_regclass(tbl) IS NOT NULL THEN
+      EXECUTE format('DELETE FROM %I WHERE product_id = $1', tbl) USING product_id;
+    END IF;
   END LOOP;
 
   -- Delete the product record

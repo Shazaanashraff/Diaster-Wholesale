@@ -6,7 +6,7 @@ import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
-import { getInventory, insertStockAdjustment, getStockLedger, type StockLedgerEntry } from '../services/inventoryService';
+import { getInventory, getInventoryByLocation, insertStockAdjustment, getStockLedger, type StockLedgerEntry, type InventoryByLocationRow } from '../services/inventoryService';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -23,6 +23,7 @@ function readThreshold(): number {
 export const InventoryPage: React.FC = () => {
   const navigate = useNavigate();
   const [inventory, setInventory] = useState<ProductStock[]>([]);
+  const [inventoryByLocation, setInventoryByLocation] = useState<InventoryByLocationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ledger, setLedger] = useState<StockLedgerEntry[]>([]);
@@ -52,6 +53,7 @@ export const InventoryPage: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces'>('name');
+  const [locationFilter, setLocationFilter] = useState<'all' | 'warehouse' | 'shop'>('all');
 
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
@@ -86,8 +88,9 @@ export const InventoryPage: React.FC = () => {
       setError(null);
       setLedgerLoading(false);
       setLedgerError(null);
-      const data = await getInventory();
+      const [data, locationData] = await Promise.all([getInventory(), getInventoryByLocation()]);
       setInventory(data);
+      setInventoryByLocation(locationData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load inventory';
       setError(message);
@@ -198,7 +201,39 @@ export const InventoryPage: React.FC = () => {
     return perProduct > 0 ? perProduct : threshold;
   }
 
-  const visibleInventory = useMemo(() => inventory
+  const displayInventory = useMemo(() => {
+    if (locationFilter === 'all') return inventory;
+
+    const baseByProductId = new Map(inventory.map((row) => [row.product_id, row]));
+
+    return inventoryByLocation
+      .filter((row) => row.location_type === locationFilter)
+      .map((row) => {
+        const base = baseByProductId.get(row.product_id);
+        const ppc = Number(row.pieces_per_carton ?? base?.pieces_per_carton ?? 1) || 1;
+        const units = Math.max(0, Number(row.total_units ?? 0));
+
+        return {
+          product_id: row.product_id,
+          item_code: row.item_code ?? base?.item_code ?? '-',
+          name: row.name ?? base?.name ?? 'Unknown Product',
+          model: base?.model ?? '',
+          category: base?.category ?? 'general',
+          wholesale_price: Number(base?.wholesale_price ?? 0),
+          retail_price: Number(base?.retail_price ?? 0),
+          pieces_per_carton: ppc,
+          reorder_level: Number(base?.reorder_level ?? 0),
+          cartons_in: 0,
+          pieces_in: units,
+          cartons_sold: 0,
+          pieces_sold: 0,
+          carton_adj: 0,
+          piece_adj: 0,
+        } as ProductStock;
+      });
+  }, [inventory, inventoryByLocation, locationFilter]);
+
+  const visibleInventory = useMemo(() => displayInventory
     .filter(row => {
       const q = searchDebounced.toLowerCase();
       const matchesSearch = !q || row.name.toLowerCase().includes(q) || row.item_code.toLowerCase().includes(q);
@@ -209,10 +244,10 @@ export const InventoryPage: React.FC = () => {
       if (sortBy === 'cartons') return computeStock(b).availCartons - computeStock(a).availCartons;
       if (sortBy === 'pieces')  return computeStock(b).totalPieces  - computeStock(a).totalPieces;
       return a.name.localeCompare(b.name);
-    }), [inventory, searchDebounced, filterLowStock, sortBy, threshold]);
+    }), [displayInventory, searchDebounced, filterLowStock, sortBy, threshold]);
 
-  const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '';
-  const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); };
+  const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '' || locationFilter !== 'all';
+  const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); setLocationFilter('all'); };
 
   return (
     <div className={cn("pos-page-grid", rightCollapsed && "right-collapsed")}>
@@ -228,6 +263,15 @@ export const InventoryPage: React.FC = () => {
             />
           </label>
           <div className="pos-mode-toggle">
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value as 'all' | 'warehouse' | 'shop')}
+              className="px-3 py-2 rounded-lg bg-[#1d222a] border border-[#2b313a] text-xs font-bold text-gray-300 focus:outline-none"
+            >
+              <option value="all">All Locations</option>
+              <option value="warehouse">Warehouse</option>
+              <option value="shop">Shop</option>
+            </select>
             <button
               className={cn('flex items-center gap-2', (filterOpen || hasActiveFilters) && 'active')}
               onClick={() => setFilterOpen(p => !p)}
@@ -236,7 +280,7 @@ export const InventoryPage: React.FC = () => {
               Filter
               {hasActiveFilters && (
                 <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] font-black flex items-center justify-center">
-                  {[filterLowStock, sortBy !== 'name', searchQuery !== ''].filter(Boolean).length}
+                  {[filterLowStock, sortBy !== 'name', searchQuery !== '', locationFilter !== 'all'].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -304,7 +348,7 @@ export const InventoryPage: React.FC = () => {
 
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-bold text-gray-500">
-                  {visibleInventory.length} of {inventory.length}
+                  {visibleInventory.length} of {displayInventory.length}
                 </span>
                 {hasActiveFilters && (
                   <button
@@ -350,19 +394,23 @@ export const InventoryPage: React.FC = () => {
         )}
 
         {/* ── Empty State ── */}
-        {!loading && !error && inventory.length === 0 && (
+        {!loading && !error && displayInventory.length === 0 && (
           <div className="pos-product-grid px-3">
             <div className="flex flex-col items-center justify-center py-32 gap-4 w-full" style={{ animation: 'posFadeIn 380ms ease' }}>
               <div className="w-16 h-16 rounded-full bg-[#1d222a] flex items-center justify-center border border-[#2b313a]">
                 <Package size={28} className="text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">No inventory data yet. Add products with quantity first.</p>
+              <p className="text-sm font-semibold text-gray-500">
+                {locationFilter === 'all'
+                  ? 'No inventory data yet. Add products with quantity first.'
+                  : `No inventory data found for ${locationFilter}.`}
+              </p>
             </div>
           </div>
         )}
 
         {/* ── Inventory Table ── */}
-        {!loading && !error && inventory.length > 0 && (
+        {!loading && !error && displayInventory.length > 0 && (
           <div className="pos-product-grid px-3 overflow-y-auto pb-8 custom-scrollbar block">
             <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
               <div className="overflow-x-auto custom-scrollbar">
@@ -586,7 +634,7 @@ export const InventoryPage: React.FC = () => {
           <div className="bg-indigo-900/10 border border-indigo-900/30 rounded-xl p-4">
             <h4 className="text-sm font-bold text-white mb-1"><AlertTriangle size={14} className="inline text-indigo-400 mr-2 -translate-y-0.5" />Action Required</h4>
             <p className="text-xs text-gray-400 leading-relaxed">
-              You have {inventory.filter(i => computeStock(i).totalPieces < getEffectiveReorderLevel(i)).length} items currently below reorder threshold.
+              You have {displayInventory.filter(i => computeStock(i).totalPieces < getEffectiveReorderLevel(i)).length} items currently below reorder threshold.
             </p>
             <button
               onClick={() => { setFilterLowStock(true); document.getElementById('inventory-table')?.scrollIntoView({ behavior: 'smooth' }); }}
