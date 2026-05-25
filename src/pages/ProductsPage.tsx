@@ -500,13 +500,7 @@ export const ProductsPage: React.FC = () => {
                             </button>
                             {isAdmin && (
                               <button
-                                onClick={() => {
-                                  if (product.is_active) {
-                                    setActiveHardDeleteTarget(product);
-                                    return;
-                                  }
-                                  handleHardDeleteRequest(product);
-                                }}
+                                onClick={() => handleHardDeleteRequest(product)}
                                 className="w-12 h-12 rounded-2xl bg-[#1d222a] text-red-500 hover:text-red-300 hover:bg-red-900/40 transition-all flex items-center justify-center border border-red-900/40"
                                 title="Hard delete product"
                               >
