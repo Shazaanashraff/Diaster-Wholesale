@@ -470,16 +470,37 @@ export const PurchaseDetailPage: React.FC = () => {
 
       {/* Summary card */}
       <div className="bg-[#1d222a] border border-[#2b313a] rounded-2xl p-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             { label: 'Supplier', value: supplier?.name ?? '—' },
             { label: 'Country', value: supplier?.country ?? '—' },
+            {
+              label: 'Destination',
+              value: purchase.locations
+                ? `${(purchase.locations as any).name} (${(purchase.locations as any).type})`
+                : purchase.location_id
+                  ? 'Loading…'
+                  : 'Not specified',
+              highlight: !!(purchase.locations as any)?.type,
+              locationType: (purchase.locations as any)?.type,
+            },
             { label: 'Total (LKR)', value: fmt(displayTotal), mono: true },
             { label: 'Status', value: statusCfg.label },
           ].map((f) => (
             <div key={f.label}>
               <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{f.label}</p>
-              <p className={cn('text-sm font-semibold text-white mt-1', f.mono && 'font-mono text-xs')}>{f.value}</p>
+              {(f as any).highlight ? (
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide',
+                  (f as any).locationType === 'warehouse'
+                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                )}>
+                  {(f as any).locationType === 'warehouse' ? '🏭' : '🛒'} {f.value}
+                </span>
+              ) : (
+                <p className={cn('text-sm font-semibold text-white mt-1', (f as any).mono && 'font-mono text-xs')}>{f.value}</p>
+              )}
             </div>
           ))}
         </div>

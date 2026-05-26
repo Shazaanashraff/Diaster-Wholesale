@@ -229,7 +229,8 @@ export const InventoryPage: React.FC = () => {
           pieces_sold: 0,
           carton_adj: 0,
           piece_adj: 0,
-        } as ProductStock;
+          _location_type: row.location_type as string | undefined,
+        } as ProductStock & { _location_type?: string };
       });
   }, [inventory, inventoryByLocation, locationFilter]);
 
@@ -425,6 +426,7 @@ export const InventoryPage: React.FC = () => {
                     </th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Qty</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Location</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale Price</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling Price</th>
                     <th className="px-8 py-6"></th>
@@ -485,6 +487,20 @@ export const InventoryPage: React.FC = () => {
                               {stock.availCartons} full + {stock.availLoose} pcs
                             </span>
                           </div>
+                        </td>
+                        <td className="px-8 py-6 text-center">
+                          {(row as any)._location_type ? (
+                            <span className={cn(
+                              'px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider',
+                              (row as any)._location_type === 'warehouse'
+                                ? 'bg-blue-900/30 text-blue-400 border border-blue-900/40'
+                                : 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/40'
+                            )}>
+                              {(row as any)._location_type === 'warehouse' ? 'Warehouse' : 'Shop'}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-800/60 text-gray-500 border border-gray-700/40">All</span>
+                          )}
                         </td>
                         <td className="px-8 py-6 text-right">
                           <span className="text-sm font-bold text-gray-300">LKR {row.wholesale_price.toFixed(2)}</span>

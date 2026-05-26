@@ -21,8 +21,17 @@
 }
 
 @layer base {
+  html, body {
+    overflow: hidden !important;
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+  }
+  
   body {
-    @apply bg-[#f8f9fa] text-black antialiased overflow-x-hidden;
+    @apply bg-[#f8f9fa] text-black antialiased;
     font-family: 'Urbanist', system-ui, -apple-system, sans-serif;
   }
 }
@@ -311,6 +320,8 @@
   .pos-content {
     min-height: 100vh;
     background: #111315;
+    min-width: 0;
+    width: 100%;
   }
 
   .pos-content-standard {
@@ -330,7 +341,7 @@
     min-height: calc(100vh - 56px);
     height: calc(100vh - 56px);
     display: grid;
-    grid-template-columns: 1fr 330px;
+    grid-template-columns: minmax(0, 1fr) 330px;
     width: 100%;
     min-width: 0;
     overflow: hidden;
@@ -338,7 +349,7 @@
   }
 
   .pos-standard-layout.collapsed {
-    grid-template-columns: 1fr 56px;
+    grid-template-columns: minmax(0, 1fr) 56px;
   }
 
   .pos-standard-main {
@@ -370,7 +381,7 @@
       flex-shrink: 0;
     }
     .pos-standard-layout {
-      grid-template-columns: 1fr 280px;
+      grid-template-columns: minmax(0, 1fr) 280px;
     }
     .pos-standard-main {
       max-width: 100%;
@@ -384,7 +395,7 @@
       width: 220px;
     }
     .pos-standard-layout {
-      grid-template-columns: 1fr 220px;
+      grid-template-columns: minmax(0, 1fr) 220px;
     }
     .pos-standard-right-head h3 {
       font-size: 1.4rem;
@@ -785,34 +796,26 @@
 
   .pos-page-grid {
     display: grid;
-    grid-template-columns: 1fr 330px;
+    grid-template-columns: minmax(0, 1fr) 330px;
     min-height: 100%;
+    min-width: 0;
+    width: 100%;
     transition: grid-template-columns 160ms cubic-bezier(0.2, 0, 0, 1);
     will-change: grid-template-columns;
   }
 
   @media (max-width: 1440px) {
     .pos-page-grid {
-      grid-template-columns: 1fr 280px;
+      grid-template-columns: minmax(0, 1fr) 300px;
     }
     .pos-bill {
-      width: 280px;
+      width: 300px;
       flex-shrink: 0;
     }
   }
 
-  @media (max-width: 1450px) {
-    .pos-page-grid {
-      grid-template-columns: 1fr 220px;
-    }
-    .pos-bill {
-      width: 220px;
-      min-width: 220px;
-    }
-  }
-
   .pos-page-grid.right-collapsed {
-    grid-template-columns: 1fr 56px;
+    grid-template-columns: minmax(0, 1fr) 56px;
   }
 
   .pos-page-grid.right-collapsed .pos-bill {
@@ -1095,10 +1098,13 @@
     padding: 1.25rem;
     border-right: 1px solid #1f242c;
     overflow-y: auto;
+    overflow-x: hidden;
     min-height: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    width: 100%;
   }
 
   .pos-main-head {
@@ -1213,7 +1219,7 @@
     }
 
     .pos-page-grid {
-      grid-template-columns: 1fr 210px;
+      grid-template-columns: minmax(0, 1fr) 210px;
     }
 
     .pos-bill {
@@ -1597,32 +1603,19 @@
     overflow: hidden;
     transition: all 200ms ease;
     width: 330px;
+    min-width: 0;
     flex-shrink: 0;
   }
 
   @media (max-width: 1440px) {
     .pos-bill {
       padding: 0.9rem;
-      min-width: 280px;
-      width: 280px;
+      width: 300px;
+      min-width: 0;
       flex-shrink: 0;
     }
     .pos-bill-head h2 {
-      font-size: 1.6rem !important;
-    }
-  }
-
-  @media (max-width: 1450px) {
-    .pos-bill {
-      padding: 0.7rem;
-      min-width: 220px;
-      width: 220px;
-    }
-    .pos-bill-head h2 {
-      font-size: 1.2rem !important;
-    }
-    .pos-bill-head p {
-      font-size: 0.72rem;
+      font-size: 1.5rem !important;
     }
   }
 
@@ -1650,19 +1643,32 @@
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pos-bill-head > div {
+    min-width: 0;
+    overflow: hidden;
   }
 
   .pos-bill-head h2 {
-    font-size: 2rem;
+    font-size: 1.6rem;
     line-height: 1;
     font-weight: 650;
     letter-spacing: -0.03em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .pos-bill-head p {
     color: #97a4b0;
     font-size: 0.9rem;
     margin-top: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .pos-clear-btn {
@@ -2025,7 +2031,7 @@
 /* ─── Below 1150px: Single-column layout for very small screens ─── */
 @media (max-width: 1150px) {
   .pos-page-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: auto;
   }
 
@@ -2042,7 +2048,7 @@
 
 @media (max-width: 1100px) {
   .pos-frame {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pos-sidebar {
@@ -2054,11 +2060,11 @@
   }
 
   .pos-page-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pos-standard-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pos-standard-right {
@@ -2120,6 +2126,313 @@
   @apply bg-[#1f2630];
 }
 
+/* ─── 13-inch MacBook (1280px viewport) ────────────────────────────────────────
+   Viewport at normal (100%) zoom on a 13" MacBook is ~1280×800px.
+   Goal: keep the full 2-column POS layout usable by scaling components down.
+   NOTE: Do NOT override pos-frame grid-template-columns here — pos-frame-2col
+   (auto 1fr) already sets the correct 2-column frame. The sidebar width is
+   controlled purely by width on pos-sidebar, which auto-column follows.
+   ─────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1300px) and (min-width: 1101px) {
+
+  /* ── Sidebar ── */
+  .pos-sidebar {
+    width: 160px;
+    padding: 0.75rem 0.55rem;
+    gap: 0.5rem;
+  }
+
+  .pos-sidebar.sidebar-collapsed {
+    width: 52px;
+    padding: 0.75rem 0.25rem;
+  }
+
+  .pos-brand-meta > span {
+    font-size: 1.1rem;
+  }
+
+  .pos-brand-meta > p {
+    font-size: 0.62rem;
+  }
+
+  .pos-nav-link {
+    font-size: 0.78rem;
+    padding: 0.42rem 0.48rem;
+    gap: 0.45rem;
+  }
+
+  .pos-nav-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .pos-nav-section-label {
+    font-size: 0.62rem;
+  }
+
+  /* ── Standard page right panel ── */
+  .pos-standard-layout {
+    grid-template-columns: minmax(0, 1fr) 200px;
+    height: calc(100vh - 56px);
+    min-height: calc(100vh - 56px);
+  }
+
+  .pos-standard-layout.collapsed {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+
+  .pos-standard-right {
+    min-width: 200px;
+    width: 200px;
+    padding: 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .pos-standard-right-head h3 {
+    font-size: 1.25rem;
+  }
+
+  .pos-standard-right-head p {
+    font-size: 0.78rem;
+  }
+
+  .pos-standard-right-btn {
+    font-size: 0.72rem;
+    padding: 0.44rem 0.55rem;
+  }
+
+  /* ── Standard pages padding & typography ── */
+  .pos-standard-page {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  .pos-standard-page h1 {
+    font-size: 1.35rem !important;
+  }
+
+  .pos-standard-page h2 {
+    font-size: 1.1rem !important;
+  }
+
+  .pos-standard-page .pos-page-header h1 {
+    font-size: 1.35rem !important;
+  }
+
+  .pos-standard-page tbody td {
+    font-size: 11.5px;
+  }
+
+  .pos-standard-page thead th {
+    font-size: 9.5px !important;
+  }
+
+  .pos-standard-page .text-xl {
+    font-size: 1rem !important;
+  }
+
+  .pos-standard-page .text-2xl {
+    font-size: 1.25rem !important;
+  }
+
+  .pos-standard-page .text-3xl {
+    font-size: 1.5rem !important;
+  }
+
+  /* Tighten grid gaps */
+  .pos-standard-page .grid {
+    gap: 0.6rem;
+  }
+
+  .pos-standard-page .space-y-8 > * + * {
+    margin-top: 0.75rem !important;
+  }
+
+  /* ── POS page grid & bill ── */
+  .pos-page-grid {
+    grid-template-columns: minmax(0, 1fr) 230px;
+  }
+
+  .pos-bill {
+    width: 230px;
+    min-width: 230px;
+    padding: 0.85rem 0.75rem;
+    gap: 0.55rem;
+  }
+
+  .pos-bill-head h2 {
+    font-size: 1.45rem !important;
+  }
+
+  .pos-bill-head p {
+    font-size: 0.76rem;
+  }
+
+  /* ── POS main area ── */
+  .pos-main {
+    padding: 0.7rem 0.6rem;
+  }
+
+  .pos-main-head {
+    gap: 0.45rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .pos-search {
+    min-width: 180px;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.82rem;
+  }
+
+  .pos-search input {
+    font-size: 0.82rem;
+  }
+
+  .pos-mode-toggle button {
+    font-size: 0.7rem;
+    padding: 0.28rem 0.5rem;
+  }
+
+  /* ── Category tiles ── */
+  .pos-tile-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.2rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .pos-tile {
+    padding: 0.48rem;
+    min-height: 76px;
+  }
+
+  .pos-tile h3 {
+    font-size: 0.82rem;
+  }
+
+  .pos-tile p {
+    font-size: 0.62rem;
+  }
+
+  .pos-tile svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* ── Product cards ── */
+  .pos-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 0.28rem;
+  }
+
+  .pos-product-card {
+    padding: 0.48rem;
+    gap: 0.4rem;
+    border-radius: 9px;
+  }
+
+  .pos-product-top p {
+    font-size: 0.65rem;
+  }
+
+  .pos-product-top h4 {
+    font-size: 0.82rem;
+    margin-top: 0.08rem;
+  }
+
+  .pos-product-top strong {
+    font-size: 0.72rem;
+    margin-top: 0.04rem;
+  }
+
+  /* ── Cart & bill ── */
+  .pos-cart-list {
+    gap: 0.32rem;
+    min-height: 100px;
+  }
+
+  .pos-cart-item-front {
+    padding: 0.42rem;
+    gap: 0.32rem;
+    border-radius: 8px;
+  }
+
+  .pos-cart-item-front h4 {
+    font-size: 0.84rem;
+  }
+
+  .pos-cart-item-front p {
+    font-size: 0.7rem;
+  }
+
+  .pos-cart-item-front strong {
+    font-size: 0.82rem;
+  }
+
+  .pos-bill-total div {
+    font-size: 0.76rem;
+  }
+
+  .pos-bill-total .total {
+    font-size: 0.92rem;
+  }
+
+  .pos-pay-grid button {
+    min-height: 44px;
+    font-size: 0.65rem;
+  }
+
+  .pos-submit {
+    font-size: 0.84rem;
+    padding: 0.5rem;
+  }
+
+  .pos-qty-row {
+    font-size: 0.62rem;
+  }
+
+  .pos-qty-row button {
+    width: 1.45rem;
+    height: 1.45rem;
+  }
+
+  .pos-add-btn {
+    font-size: 0.64rem;
+    padding: 0.32rem 0.35rem;
+  }
+
+  .pos-warning,
+  .pos-error {
+    font-size: 0.72rem;
+    padding: 0.38rem 0.45rem;
+  }
+
+  /* ── Skeleton ── */
+  .pos-skeleton-main {
+    padding: 0.85rem;
+  }
+
+  .pos-skeleton-search {
+    width: 200px;
+    height: 38px;
+  }
+
+  /* ── Inventory control sidebar (right panel items) ── */
+  .pos-standard-right-item h4 {
+    font-size: 0.82rem;
+  }
+
+  .pos-standard-right-item p {
+    font-size: 0.7rem;
+  }
+
+  .pos-standard-right-item > span {
+    width: 1.25rem;
+    height: 1.25rem;
+    font-size: 0.65rem;
+  }
+}
+
 /* ─── 150% display scale fix ───────────────────────────────────────────────────
    At 150% Windows display scale a 1280px monitor reports ~853px viewport.
    zoom: 0.77 makes the shell render as if it were 1108px wide, restoring the
@@ -2128,21 +2441,25 @@
    ─────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .pos-shell {
-    zoom: 0.77;
-    width: calc(100vw / 0.77);
-    height: calc(100vh / 0.77);
+    width: 130vw !important;
+    height: 130vh !important;
+    transform: scale(0.769);
+    transform-origin: top left;
+    position: absolute;
+    top: 0;
+    left: 0;
     overflow: hidden;
   }
 
   .pos-frame {
     width: 100%;
-    height: calc(100vh / 0.77);
+    height: 100%;
     grid-template-columns: auto minmax(0, 1fr) !important;
   }
 
   .pos-sidebar {
     display: flex !important;
-    width: 185px;
+    width: 220px;
     padding: 0.75rem 0.6rem;
   }
 
@@ -2166,19 +2483,19 @@
   }
 
   .pos-page-grid {
-    grid-template-columns: 1fr 280px !important;
+    grid-template-columns: minmax(0, 1fr) 350px !important;
     grid-auto-rows: unset !important;
   }
 
   .pos-bill {
-    width: 280px !important;
-    min-width: 280px !important;
+    width: 350px !important;
+    min-width: 350px !important;
     height: calc(100vh / 0.77) !important;
     min-height: unset !important;
   }
 
   .pos-standard-layout {
-    grid-template-columns: 1fr 280px !important;
+    grid-template-columns: minmax(0, 1fr) 280px !important;
     height: calc(100vh / 0.77 - 56px) !important;
     min-height: calc(100vh / 0.77 - 56px) !important;
   }
