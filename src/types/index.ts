@@ -116,6 +116,8 @@ export interface ProductStock {
   pieces_sold: number;
   carton_adj: number;
   piece_adj: number;
+  location_name?: string | null;
+  location_type?: 'warehouse' | 'shop' | null;
 }
 
 /** Computed stock values derived from ProductStock */
