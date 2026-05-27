@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getShopProducts } from '../services/productService';
 import { getCustomers, createCustomer } from '../services/customerService';
@@ -36,6 +36,7 @@ import {
 import type { PaymentSplit } from '../services/posService';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../lib/supabase';
 
 export interface CartItem {
   product: Product;
@@ -66,6 +67,8 @@ export const POSPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   const [stockPiecesByProduct, setStockPiecesByProduct] = useState<Record<string, number>>({});
   const [avgCostByProduct, setAvgCostByProduct] = useState<Record<string, number>>({});
@@ -199,66 +202,91 @@ export const POSPage: React.FC = () => {
     );
   }, [selectedCustomerId]);
 
-  useEffect(() => {
+  // ── Reusable data loader (initial + refresh) ──────────────────
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+
+    const startedAt = Date.now();
     let active = true;
 
-    async function loadData() {
-      const startedAt = Date.now();
+    try {
+      const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
+        getShopProducts().catch((e) => { console.error('getShopProducts failed:', e); return [] as Product[]; }),
+        getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
+        getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
+        getSalespeople().catch(() => [] as Salesperson[]),
+      ]);
 
-      try {
-        const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
-          getShopProducts().catch((e) => { console.error('getShopProducts failed:', e); return [] as Product[]; }),
-          getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
-          getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
-          getSalespeople().catch(() => [] as Salesperson[]),
-        ]);
+      if (!active) return;
 
-        if (!active) return;
+      setProducts(fetchedProducts);
+      setCustomers(fetchedCustomers);
+      setSalespeople(fetchedSalespeople);
 
-        setProducts(fetchedProducts);
-        setCustomers(fetchedCustomers);
-        setSalespeople(fetchedSalespeople);
-
-        if (fetchedInventory.length > 0) {
-          const stockMap: Record<string, number> = {};
-          for (const row of fetchedInventory) {
-            stockMap[row.product_id] = computeStock(row).totalPieces;
-          }
-
-          setStockPiecesByProduct(stockMap);
-          setIsInventoryEnforced(true);
-
-          try {
-            const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
-            if (!active) return;
-            setAvgCostByProduct(costMap);
-          } catch {
-            // non-fatal — POS works without cost floor data
-          }
-        } else {
-          setStockPiecesByProduct({});
-          setAvgCostByProduct({});
-          setIsInventoryEnforced(false);
+      if (fetchedInventory.length > 0) {
+        const stockMap: Record<string, number> = {};
+        for (const row of fetchedInventory) {
+          stockMap[row.product_id] = computeStock(row).totalPieces;
         }
-      } catch (err) {
-        console.error('Error loading POS data', err);
-      } finally {
-        if (!active) return;
+
+        setStockPiecesByProduct(stockMap);
+        setIsInventoryEnforced(true);
+
+        try {
+          const costMap = await getAverageCostPerPiece(fetchedProducts.map((p) => p.id));
+          if (!active) return;
+          setAvgCostByProduct(costMap);
+        } catch {
+          // non-fatal — POS works without cost floor data
+        }
+      } else {
+        setStockPiecesByProduct({});
+        setAvgCostByProduct({});
+        setIsInventoryEnforced(false);
+      }
+
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error('Error loading POS data', err);
+    } finally {
+      if (!active) return;
+      if (!isRefresh) {
         const elapsed = Date.now() - startedAt;
         const delay = Math.max(0, 650 - elapsed);
         window.setTimeout(() => {
-          if (!active) return;
           setLoading(false);
         }, delay);
+      } else {
+        setRefreshing(false);
       }
     }
+  }, []);
 
-    loadData();
+  // ── Initial load ──────────────────────────────────────────────
+  useEffect(() => {
+    loadData(false);
+  }, [loadData]);
+
+  // ── Supabase Realtime: auto-refresh when shop stock changes ───
+  useEffect(() => {
+    // Subscribe to stock_adjustments (transfers into shop) and products (new products)
+    const channel = supabase
+      .channel('pos-realtime-refresh')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_adjustments' }, () => {
+        loadData(true);
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'products' }, () => {
+        loadData(true);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_batches' }, () => {
+        loadData(true);
+      })
+      .subscribe();
 
     return () => {
-      active = false;
+      supabase.removeChannel(channel);
     };
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     setCart((prev) =>
@@ -685,6 +713,17 @@ export const POSPage: React.FC = () => {
               </button>
               <button type="button" className={cn(!isWholesale && 'active')} onClick={() => setIsWholesale(false)}>
                 Public
+              </button>
+              <button
+                type="button"
+                onClick={() => loadData(true)}
+                disabled={refreshing}
+                title={`Last refreshed: ${lastRefreshed.toLocaleTimeString()}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-900/20 border border-emerald-700/30 text-emerald-400 text-[10px] font-bold hover:bg-emerald-900/30 transition-all disabled:opacity-60"
+              >
+                <span className={cn('w-1.5 h-1.5 rounded-full bg-emerald-400', refreshing ? 'animate-pulse' : 'opacity-80')} />
+                <RefreshCw size={11} className={cn(refreshing && 'animate-spin')} />
+                {refreshing ? 'Syncing…' : 'LIVE'}
               </button>
             </div>
           </div>

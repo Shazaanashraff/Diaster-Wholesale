@@ -22,7 +22,10 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
     (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
   );
   const [hydrated, setHydrated] = useState(false);
-  const [isSessionCollapsed, setIsSessionCollapsed] = useState(false);
+  const [isSessionCollapsed, setIsSessionCollapsed] = useState(
+    // Auto-collapse the right panel on 13" MacBook (≤1300px) to maximise content space
+    () => window.innerWidth <= 1300
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {

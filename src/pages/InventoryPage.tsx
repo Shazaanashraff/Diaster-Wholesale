@@ -202,21 +202,7 @@ export const InventoryPage: React.FC = () => {
   }
 
   const displayInventory = useMemo(() => {
-    if (locationFilter === 'all') {
-      // When showing all locations, merge location data into inventory rows
-      const locationMap = new Map<string, { location_name: string | null; location_type: 'warehouse' | 'shop' | null }>();
-      for (const row of inventoryByLocation) {
-        const key = row.product_id;
-        if (!locationMap.has(key)) {
-          locationMap.set(key, { location_name: row.location_name, location_type: row.location_type });
-        }
-      }
-      return inventory.map(row => ({
-        ...row,
-        location_name: locationMap.get(row.product_id)?.location_name ?? null,
-        location_type: locationMap.get(row.product_id)?.location_type ?? null,
-      }));
-    }
+    if (locationFilter === 'all') return inventory;
 
     const baseByProductId = new Map(inventory.map((row) => [row.product_id, row]));
 
@@ -243,9 +229,8 @@ export const InventoryPage: React.FC = () => {
           pieces_sold: 0,
           carton_adj: 0,
           piece_adj: 0,
-          location_name: row.location_name,
-          location_type: row.location_type,
-        } as ProductStock;
+          _location_type: row.location_type as string | undefined,
+        } as ProductStock & { _location_type?: string };
       });
   }, [inventory, inventoryByLocation, locationFilter]);
 
@@ -434,7 +419,6 @@ export const InventoryPage: React.FC = () => {
                   <thead>
                     <tr className="bg-[#1d222a] border-b border-[#2b313a]">
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Item Code</th>
-                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">Location</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">
                       <div className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
                         Product Name <ArrowUpDown size={14} />
@@ -442,6 +426,7 @@ export const InventoryPage: React.FC = () => {
                     </th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Qty</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Location</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale Price</th>
                     <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling Price</th>
                     <th className="px-8 py-6"></th>
@@ -470,18 +455,6 @@ export const InventoryPage: React.FC = () => {
                         >
                         <td className="px-8 py-6 text-xs font-bold text-primary font-mono tracking-tighter uppercase">
                           {row.item_code}
-                        </td>
-                        <td className="px-8 py-6">
-                          <span className={cn(
-                            "text-xs font-semibold px-2.5 py-1 rounded-lg",
-                            row.location_type === 'warehouse' 
-                              ? 'bg-blue-900/30 text-blue-300 border border-blue-900/50'
-                              : row.location_type === 'shop'
-                              ? 'bg-green-900/30 text-green-300 border border-green-900/50'
-                              : 'bg-gray-900/30 text-gray-400 border border-gray-900/50'
-                          )}>
-                            {row.location_name ? `${row.location_name}${row.location_type ? ` (${row.location_type})` : ''}` : 'Unknown'}
-                          </span>
                         </td>
                         <td className="px-8 py-6">
                           <div className="flex items-center gap-4">
@@ -514,6 +487,20 @@ export const InventoryPage: React.FC = () => {
                               {stock.availCartons} full + {stock.availLoose} pcs
                             </span>
                           </div>
+                        </td>
+                        <td className="px-8 py-6 text-center">
+                          {(row as any)._location_type ? (
+                            <span className={cn(
+                              'px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider',
+                              (row as any)._location_type === 'warehouse'
+                                ? 'bg-blue-900/30 text-blue-400 border border-blue-900/40'
+                                : 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/40'
+                            )}>
+                              {(row as any)._location_type === 'warehouse' ? 'Warehouse' : 'Shop'}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-800/60 text-gray-500 border border-gray-700/40">All</span>
+                          )}
                         </td>
                         <td className="px-8 py-6 text-right">
                           <span className="text-sm font-bold text-gray-300">LKR {row.wholesale_price.toFixed(2)}</span>
