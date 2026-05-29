@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, Check, ArrowRight, PanelRightClose, PanelRightOpen, X, ArrowLeftRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, RefreshCw, X } from 'lucide-react';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,7 +22,6 @@ function readThreshold(): number {
 }
 
 export const InventoryPage: React.FC = () => {
-  const navigate = useNavigate();
   const [inventory, setInventory] = useState<ProductStock[]>([]);
   const [inventoryByLocation, setInventoryByLocation] = useState<InventoryByLocationRow[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -57,13 +55,12 @@ export const InventoryPage: React.FC = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterLowStock, setFilterLowStock] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'cartons' | 'pieces'>('name');
-  const [locationFilter, setLocationFilter] = useState<'all' | 'warehouse' | 'shop'>('all');
+  const [locationFilter, setLocationFilter] = useState<'warehouse' | 'shop'>('shop');
 
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
 
   const { can } = usePermissions();
-  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   useEffect(() => {
     fetchInventory();
@@ -218,8 +215,6 @@ export const InventoryPage: React.FC = () => {
   }
 
   const displayInventory = useMemo(() => {
-    if (locationFilter === 'all') return inventory;
-
     const baseByProductId = new Map(inventory.map((row) => [row.product_id, row]));
 
     return inventoryByLocation
@@ -263,11 +258,11 @@ export const InventoryPage: React.FC = () => {
       return a.name.localeCompare(b.name);
     }), [displayInventory, searchDebounced, filterLowStock, sortBy, threshold]);
 
-  const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '' || locationFilter !== 'all';
-  const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); setLocationFilter('all'); };
+  const hasActiveFilters = filterLowStock || sortBy !== 'name' || searchQuery !== '' || locationFilter !== 'shop';
+  const clearFilters = () => { setFilterLowStock(false); setSortBy('name'); setSearchQuery(''); setLocationFilter('shop'); };
 
   return (
-    <div className={cn("pos-page-grid", rightCollapsed && "right-collapsed")}>
+    <div className="pos-page-grid">
       <section className="pos-main">
         <div className="pos-main-head">
           <label className="pos-search">
@@ -279,13 +274,23 @@ export const InventoryPage: React.FC = () => {
               onChange={e => setSearchQuery(e.target.value)}
             />
           </label>
+          <button
+            type="button"
+            onClick={fetchInventory}
+            disabled={loading}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1d222a] border border-[#2b313a] text-xs font-bold text-gray-300 hover:text-white hover:bg-[#2b313a] transition-all disabled:opacity-60"
+            aria-label="Refresh inventory"
+            title="Refresh inventory"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            {loading && <span className="text-[10px] font-bold">Refreshing...</span>}
+          </button>
           <div className="pos-mode-toggle">
             <select
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value as 'all' | 'warehouse' | 'shop')}
+              onChange={(e) => setLocationFilter(e.target.value as 'warehouse' | 'shop')}
               className="px-3 py-2 rounded-lg bg-[#1d222a] border border-[#2b313a] text-xs font-bold text-gray-300 focus:outline-none"
             >
-              <option value="all">All Locations</option>
               <option value="warehouse">Warehouse</option>
               <option value="shop">Shop</option>
             </select>
@@ -297,7 +302,7 @@ export const InventoryPage: React.FC = () => {
               Filter
               {hasActiveFilters && (
                 <span className="w-4 h-4 rounded-full bg-white/20 text-[9px] font-black flex items-center justify-center">
-                  {[filterLowStock, sortBy !== 'name', searchQuery !== '', locationFilter !== 'all'].filter(Boolean).length}
+                  {[filterLowStock, sortBy !== 'name', searchQuery !== '', locationFilter !== 'shop'].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -621,82 +626,6 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
       </section>
-
-      <aside className="pos-bill">
-        <button
-          type="button"
-          onClick={() => setRightCollapsed((prev) => !prev)}
-          className="pos-bill-collapse-toggle"
-          aria-label={rightCollapsed ? 'Expand right panel' : 'Collapse right panel'}
-          title={rightCollapsed ? 'Expand panel' : 'Collapse panel'}
-        >
-          {rightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}
-        </button>
-
-        <div className="pos-bill-inner">
-        <div className="pos-bill-head flex flex-col items-start gap-1 pb-6 border-b border-[#1f242c]">
-          <h2 className="text-xl font-bold tracking-tight">Inventory Control</h2>
-          <p className="text-xs font-semibold text-gray-500">Configure global rules</p>
-        </div>
-
-        <div className="mt-6">
-          <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-3">Global Low-Stock Alert (Qty)</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={0}
-              value={threshold}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                setThreshold(isNaN(val) ? 0 : val);
-              }}
-              className="flex-1 text-sm font-bold text-white bg-[#171c23] rounded-xl px-4 py-3 outline-none border border-[#2b313a] focus:border-primary/50 transition-all"
-            />
-            <button
-              onClick={() => setToast(`Low stock threshold set to ${threshold} units`)}
-              className="p-3 bg-[#1d222a] border border-[#2b313a] text-gray-300 rounded-xl hover:text-white hover:bg-[#2b313a] transition-all"
-            >
-              <Check size={18} />
-            </button>
-          </div>
-          <p className="text-[10px] text-gray-500 font-medium mt-2">Any item dropping below this quantity will flag as low stock across the system.</p>
-        </div>
-
-        <div className="mt-8 border-t border-[#1f242c] pt-6">
-          <div className="bg-indigo-900/10 border border-indigo-900/30 rounded-xl p-4">
-            <h4 className="text-sm font-bold text-white mb-1"><AlertTriangle size={14} className="inline text-indigo-400 mr-2 -translate-y-0.5" />Action Required</h4>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              You have {displayInventory.filter(i => computeStock(i).totalPieces < getEffectiveReorderLevel(i)).length} items currently below reorder threshold.
-            </p>
-            <button
-              onClick={() => { setFilterLowStock(true); document.getElementById('inventory-table')?.scrollIntoView({ behavior: 'smooth' }); }}
-              className="mt-3 text-[11px] font-bold text-indigo-400 uppercase tracking-wider hover:text-indigo-300 transition-colors"
-            >
-              Review flagged products <ArrowRight size={14} className="inline ml-1" />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-8 border-t border-[#1f242c] pt-6">
-          <h4 className="text-sm font-bold text-white mb-1">Stock Transfers</h4>
-          <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">Move stock between warehouse and shop locations with approval tracking.</p>
-          <button
-            type="button"
-            onClick={() => navigate('/stock-transfers')}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1d222a] border border-[#2b313a] text-gray-300 text-[11px] font-bold hover:text-white hover:bg-[#2b313a] transition-all"
-          >
-            <ArrowLeftRight size={13} />
-            Go to Stock Transfers
-          </button>
-        </div>
-
-        <div className="mt-auto pt-6">
-           <button type="button" className="pos-submit" onClick={() => fetchInventory()}>
-             Refresh Inventory
-           </button>
-        </div>
-        </div>
-      </aside>
 
       {/* ── Stock Adjustment Modal ── */}
       <Modal

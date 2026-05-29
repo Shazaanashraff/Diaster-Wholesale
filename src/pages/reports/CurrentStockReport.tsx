@@ -52,14 +52,16 @@ export const CurrentStockReport: React.FC = () => {
     return loc.location_type === locationFilter;
   });
 
+  const clampUnits = (units?: number | null) => Math.max(0, Number(units ?? 0));
+
   // Calculate totals across filtered locations
   const totalProducts = filteredData.reduce((sum, loc) => sum + loc.products.length, 0);
-  const totalUnits = filteredData.reduce((sum, loc) => sum + loc.products.reduce((pSum, p) => pSum + (p.total_units || 0), 0), 0);
+  const totalUnits = filteredData.reduce((sum, loc) => sum + loc.products.reduce((pSum, p) => pSum + clampUnits(p.total_units), 0), 0);
 
   // Calculate per-location totals
   const getLocationStats = (location: LocationStockData) => {
     const products = location.products.length;
-    const units = location.products.reduce((sum, p) => sum + (p.total_units || 0), 0);
+    const units = location.products.reduce((sum, p) => sum + clampUnits(p.total_units), 0);
     return { products, units };
   };
 
@@ -106,7 +108,7 @@ export const CurrentStockReport: React.FC = () => {
           p.name,
           p.item_code ?? '—',
           p.pieces_per_carton || 1,
-          p.total_units
+          clampUnits(p.total_units)
         ]);
 
         const locationIcon = location.location_type === 'warehouse' ? Warehouse : ShoppingCart;
@@ -148,7 +150,7 @@ export const CurrentStockReport: React.FC = () => {
                 { header: 'Product', accessor: 'name' },
                 { header: 'Code', accessor: (r) => r.item_code ?? '—' },
                 { header: 'Qty / Carton', accessor: (r) => r.pieces_per_carton || 1, className: 'text-center' },
-                { header: 'Total Qty (Units)', accessor: (r) => <span className="font-bold text-white">{r.total_units || 0}</span>, className: 'text-right' },
+                { header: 'Total Qty (Units)', accessor: (r) => <span className="font-bold text-white">{clampUnits(r.total_units)}</span>, className: 'text-right' },
               ]}
               data={location.products}
               emptyMessage={`No stock available in ${location.location_name}`}

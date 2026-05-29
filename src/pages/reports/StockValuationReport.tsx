@@ -65,7 +65,7 @@ export const StockValuationReport: React.FC = () => {
           };
         }
 
-        const available = stock.total_units || 0;
+        const available = Math.max(0, stock.total_units || 0);
         const unitCost = costMap[stock.product_id] || productCostMap[stock.product_id] || 0;
         const valuation = available * unitCost;
 
