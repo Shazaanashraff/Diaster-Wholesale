@@ -7,6 +7,8 @@ import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ProductStock } from '../types';
 import { getInventory, getInventoryByLocation, insertStockAdjustment, getStockLedger, type StockLedgerEntry, type InventoryByLocationRow } from '../services/inventoryService';
+import { getLocations } from '../services/supplierService';
+import type { Location } from '../types';
 import { computeStock } from '../utils/stockUtils';
 
 // ── localStorage key for low-stock threshold ──
@@ -24,6 +26,7 @@ export const InventoryPage: React.FC = () => {
   const navigate = useNavigate();
   const [inventory, setInventory] = useState<ProductStock[]>([]);
   const [inventoryByLocation, setInventoryByLocation] = useState<InventoryByLocationRow[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ledger, setLedger] = useState<StockLedgerEntry[]>([]);
@@ -46,6 +49,7 @@ export const InventoryPage: React.FC = () => {
   const [adjReason, setAdjReason] = useState('');
   const [adjSaving, setAdjSaving] = useState(false);
   const [adjError, setAdjError] = useState<string | null>(null);
+  const [adjLocationId, setAdjLocationId] = useState<string>('');
 
   // ── Search & filter ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +67,12 @@ export const InventoryPage: React.FC = () => {
 
   useEffect(() => {
     fetchInventory();
+    getLocations().then(locs => {
+      setLocations(locs);
+      // Default adjustment location to the first warehouse
+      const wh = locs.find(l => l.type === 'warehouse');
+      if (wh) setAdjLocationId(wh.id);
+    }).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -178,11 +188,17 @@ export const InventoryPage: React.FC = () => {
       const ppc = adjustRow.pieces_per_carton || 1;
       const totalPieceDelta = cartonDelta * ppc + pieceDelta;
 
+      // Default to warehouse if no location selected (should not happen in practice)
+      const warehouseId = locations.find(l => l.type === 'warehouse')?.id ?? adjLocationId;
+      const locationId = adjLocationId || warehouseId;
+
       await insertStockAdjustment({
         product_id: adjustRow.product_id,
         adjustment_pieces: totalPieceDelta,
+        adjustment_cartons: 0,
         reason: `[${adjType.toUpperCase()}] ${adjReason.trim()}`,
         adjusted_by: 'admin',
+        location_id: locationId,
       });
 
       closeAdjustModal();
@@ -741,7 +757,25 @@ export const InventoryPage: React.FC = () => {
               )}
             </div>
 
+            {/* Location selector */}
+            <div>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Location</label>
+              <select
+                value={adjLocationId}
+                onChange={e => setAdjLocationId(e.target.value)}
+                className="w-full bg-[#1d222a] border border-[#2b313a] text-white text-sm rounded-xl px-4 py-3 focus:outline-none focus:border-primary/50"
+              >
+                {locations.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.type === 'warehouse' ? 'Warehouse' : 'Shop'})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-500 mt-1">Which location is this adjustment for?</p>
+            </div>
+
             {/* Delta inputs */}
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
