@@ -22,7 +22,8 @@
     "dist:publish": "npm run build:renderer && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
-    "verify:egress": "supabase db query --linked --agent=no -f scripts/verify-egress-optimization.sql"
+    "verify:egress": "supabase db query --linked --agent=no -f scripts/verify-egress-optimization.sql",
+    "simulate:egress": "node scripts/simulate-egress.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
