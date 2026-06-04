@@ -236,7 +236,7 @@ export async function confirmImport(
 export async function getRollbackableShipments(): Promise<Shipment[]> {
   const { data, error } = await supabase
     .from('shipments')
-    .select('*')
+    .select('id, reference, supplier, notes, arrived_at, created_at')
     .order('created_at', { ascending: false });
 
   if (error) {

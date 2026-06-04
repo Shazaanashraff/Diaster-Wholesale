@@ -10,6 +10,8 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
 
+const EXPENSE_COLUMNS = 'id, category, description, amount, method, location_id, notes, created_by, reference, created_at';
+
 // ── Fetch ──────────────────────────────────────────────────────────────────────
 
 export async function getExpenses(filters?: {
@@ -19,7 +21,7 @@ export async function getExpenses(filters?: {
 }): Promise<Expense[]> {
   let q = supabase
     .from('expenses')
-    .select('*, locations(name)')
+    .select(`${EXPENSE_COLUMNS}, locations(name)`)
     .order('created_at', { ascending: false });
 
   if (filters?.category) q = q.eq('category', filters.category);
@@ -28,7 +30,7 @@ export async function getExpenses(filters?: {
 
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as Expense[];
+  return (data ?? []) as unknown as Expense[];
 }
 
 // ── Total company cash (expenses in - income) — simplified ───────────────────
@@ -135,7 +137,7 @@ export async function updateExpense(
 
 export async function deleteExpense(id: string): Promise<void> {
   // Audit before delete
-  const { data: existing } = await supabase.from('expenses').select('*').eq('id', id).single();
+  const { data: existing } = await supabase.from('expenses').select(EXPENSE_COLUMNS).eq('id', id).single();
 
   const { error } = await supabase.from('expenses').delete().eq('id', id);
   if (error) throw new Error(error.message);

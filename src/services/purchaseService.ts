@@ -327,7 +327,7 @@ export async function resolveDiscountApproval(id: string, status: 'approved' | '
 export async function getPendingApprovals(purchaseId: string): Promise<PurchaseDiscountApproval[]> {
   const { data, error } = await supabase
     .from('purchase_discount_approvals')
-    .select('*')
+    .select('id, purchase_id, discount_type, discount_percent, discount_amount, status, requested_by, approved_by, notes, created_at, resolved_at')
     .eq('purchase_id', purchaseId)
     .eq('status', 'pending');
   if (error) throw new Error(error.message);

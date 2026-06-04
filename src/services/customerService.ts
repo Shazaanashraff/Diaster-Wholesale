@@ -1,10 +1,13 @@
 import { supabase } from '../lib/supabase';
 import type { Customer, Invoice, Payment } from '../types';
 
+const CUSTOMER_COLUMNS = 'id, name, phone, email, address, type, credit_limit, outstanding_balance, created_at, updated_at';
+const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, paid_at, created_at';
+
 export const getCustomers = async (): Promise<Customer[]> => {
   const { data, error } = await supabase
     .from('customers')
-    .select('*')
+    .select(CUSTOMER_COLUMNS)
     .eq('is_active', true)
     .order('name', { ascending: true });
 
@@ -27,7 +30,7 @@ export const getPosCustomers = async (): Promise<Pick<Customer, 'id' | 'name'>[]
 export const getCustomerById = async (id: string): Promise<Customer> => {
   const { data, error } = await supabase
     .from('customers')
-    .select('*')
+    .select(CUSTOMER_COLUMNS)
     .eq('id', id)
     .single();
 
@@ -76,7 +79,7 @@ export const getCustomerLedger = async (
 
   const { data: payments, error: payError } = await supabase
     .from('payments')
-    .select('*')
+    .select(PAYMENT_COLUMNS)
     .eq('customer_id', id)
     .order('paid_at', { ascending: false });
 

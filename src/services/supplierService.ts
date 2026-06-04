@@ -365,7 +365,7 @@ export async function deleteSupplierPayment(id: string): Promise<void> {
   // Fetch before delete for audit and credit reversal
   const { data: pmt, error: fe } = await supabase
     .from('supplier_payments')
-    .select('*')
+    .select('id, supplier_id, purchase_id, amount, method, cheque_number, bank_name, due_date, notes, paid_at, created_at')
     .eq('id', id)
     .single();
   if (fe) throw new Error(fe.message);
