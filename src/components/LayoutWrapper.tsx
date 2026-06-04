@@ -12,14 +12,14 @@ interface LayoutWrapperProps {
 export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier'].some(
-    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier', '/developer'].some(
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/') || location.pathname.startsWith('/developer')
   );
   const isProductsRoute = [
     '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier',
-    '/returns', '/supplier-returns', '/expenses', '/stock-transfers', '/day-transactions',
+    '/returns', '/supplier-returns', '/expenses', '/stock-transfers', '/day-transactions', '/developer',
   ].some(
-    (p) => location.pathname === p || location.pathname.startsWith('/purchases/')
+    (p) => location.pathname === p || location.pathname.startsWith('/purchases/') || location.pathname.startsWith('/developer')
   );
   const [hydrated, setHydrated] = useState(false);
   const [isSessionCollapsed, setIsSessionCollapsed] = useState(

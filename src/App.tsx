@@ -20,6 +20,7 @@ import { StockTransfersPage } from './pages/StockTransfersPage';
 import { UpdatesPage } from './pages/UpdatesPage';
 import { CashierPage } from './pages/CashierPage';
 import { SalespeoplePage } from './pages/SalespeoplePage';
+import { DeveloperPortal } from './pages/DeveloperPortal';
 import { usePermissions, type Permission } from './utils/permissions';
 
 
@@ -32,6 +33,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; req: Permission | Pe
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
+};
+
+const DashboardRoute: React.FC = () => {
+  const { role } = usePermissions();
+  if (role === 'developer') {
+    return <Navigate to="/developer" replace />;
+  }
+  return <DashboardPage />;
 };
 
 const App: React.FC = () => {
@@ -47,7 +56,7 @@ const App: React.FC = () => {
     <Router>
       <LayoutWrapper>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<DashboardRoute />} />
           <Route path="/pos" element={<ProtectedRoute req="pos"><POSPage /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute req="view_inventory"><InventoryPage /></ProtectedRoute>} />
           <Route path="/products" element={<ProtectedRoute req="manage_products"><ProductsPage /></ProtectedRoute>} />
@@ -66,6 +75,7 @@ const App: React.FC = () => {
           <Route path="/expenses" element={<Navigate to="/day-transactions" replace />} />
           <Route path="/cashier" element={<ProtectedRoute req="pos"><CashierPage /></ProtectedRoute>} />
           <Route path="/updates" element={<UpdatesPage />} />
+          <Route path="/developer" element={<ProtectedRoute req="view_dev_portal"><DeveloperPortal /></ProtectedRoute>} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

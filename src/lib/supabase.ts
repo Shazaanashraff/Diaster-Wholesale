@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { captureFetch } from '../services/captureFetch';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -13,4 +14,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   db: { schema },
+  global: {
+    fetch: (input, init) => captureFetch(input, init),
+  },
 });

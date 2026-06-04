@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getShopProducts } from '../services/productService';
-import { getCustomers, createCustomer } from '../services/customerService';
+import { getPosCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
-import { getShopInventory, getAverageCostPerPiece } from '../services/inventoryService';
+import { getPosShopCatalog, getAverageCostPerPiece } from '../services/inventoryService';
 import {
   checkout, checkoutOffline, syncOfflineSales, getOfflinePendingCount,
   getCustomerLoyalty, computeRedemptionValue, checkCreditLimit,
@@ -65,7 +64,8 @@ export const POSPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [productPage, setProductPage] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<Pick<Customer, 'id' | 'name'>[]>([]);
+  const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
@@ -210,12 +210,16 @@ export const POSPage: React.FC = () => {
     let active = true;
 
     try {
-      const [fetchedProducts, fetchedCustomers, fetchedInventory, fetchedSalespeople] = await Promise.all([
-        getShopProducts().catch((e) => { console.error('getShopProducts failed:', e); return [] as Product[]; }),
-        getCustomers().catch((e) => { console.error('getCustomers failed:', e); return [] as Customer[]; }),
-        getShopInventory().catch((e) => { console.error('getShopInventory failed:', e); return []; }),
+      const [catalog, fetchedCustomers, fetchedSalespeople] = await Promise.all([
+        getPosShopCatalog().catch((e) => {
+          console.error('getPosShopCatalog failed:', e);
+          return { products: [] as Product[], inventory: [] };
+        }),
+        getPosCustomers().catch((e) => { console.error('getPosCustomers failed:', e); return []; }),
         getSalespeople().catch(() => [] as Salesperson[]),
       ]);
+      const fetchedProducts = catalog.products;
+      const fetchedInventory = catalog.inventory;
 
       if (!active) return;
 
@@ -267,23 +271,22 @@ export const POSPage: React.FC = () => {
     loadData(false);
   }, [loadData]);
 
-  // ── Supabase Realtime: auto-refresh when shop stock changes ───
+  // ── Supabase Realtime: debounced refresh (avoids egress bursts) ───
   useEffect(() => {
-    // Subscribe to stock_adjustments (transfers into shop) and products (new products)
+    const scheduleRefresh = () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = setTimeout(() => loadData(true), 800);
+    };
+
     const channel = supabase
       .channel('pos-realtime-refresh')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_adjustments' }, () => {
-        loadData(true);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'products' }, () => {
-        loadData(true);
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_batches' }, () => {
-        loadData(true);
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_adjustments' }, scheduleRefresh)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'products' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_batches' }, scheduleRefresh)
       .subscribe();
 
     return () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
       supabase.removeChannel(channel);
     };
   }, [loadData]);

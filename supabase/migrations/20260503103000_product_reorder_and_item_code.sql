@@ -39,7 +39,10 @@ CREATE TRIGGER products_set_item_code
   FOR EACH ROW
   EXECUTE FUNCTION set_product_item_code();
 
-CREATE OR REPLACE VIEW product_stock AS
+-- Must drop first: CREATE OR REPLACE cannot insert reorder_level before cartons_in (42P16).
+DROP VIEW IF EXISTS public.product_stock CASCADE;
+
+CREATE VIEW public.product_stock AS
 SELECT
   p.id AS product_id,
   p.item_code,

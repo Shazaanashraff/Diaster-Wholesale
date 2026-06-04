@@ -96,6 +96,7 @@ export interface StockAdjustment {
   adjustment_pieces: number;
   reason: string;
   adjusted_by: string;
+  location_id?: string;
   created_at: string;
 }
 

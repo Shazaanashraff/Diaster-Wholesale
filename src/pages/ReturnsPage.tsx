@@ -523,11 +523,13 @@ export const ReturnsPage: React.FC = () => {
           if (excInv) await supabase.from('invoices').delete().eq('id', (excInv as any).id);
         }
         const { data: retItems } = await supabase
-          .from('sales_return_items').select('*').eq('return_id', ret.id);
-        for (const item of (retItems ?? []) as any[]) {
+          .from('sales_return_items')
+          .select('product_id, return_cartons, return_pieces')
+          .eq('return_id', ret.id);
+        for (const item of (retItems ?? []) as Array<{ product_id: string; return_cartons: number; return_pieces: number }>) {
           const { data: prod } = await supabase
             .from('products').select('pieces_per_carton').eq('id', item.product_id).single();
-          const ppc = Number((prod as any)?.pieces_per_carton ?? 1) || 1;
+          const ppc = Number((prod as { pieces_per_carton?: number } | null)?.pieces_per_carton ?? 1) || 1;
           const units = item.return_cartons * ppc + item.return_pieces;
           if (units > 0) await deductStock(item.product_id, units);
         }
@@ -538,7 +540,9 @@ export const ReturnsPage: React.FC = () => {
 
       } else if (ret.resolution_type === 'Replaced') {
         const { data: retItems } = await supabase
-          .from('sales_return_items').select('*').eq('return_id', ret.id);
+          .from('sales_return_items')
+          .select('product_id, return_cartons, return_pieces')
+          .eq('return_id', ret.id);
         for (const item of (retItems ?? []) as any[]) {
           const { data: prod } = await supabase
             .from('products').select('pieces_per_carton').eq('id', item.product_id).single();

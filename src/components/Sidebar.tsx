@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   ClipboardList,
   UserCog,
+  Activity,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getCurrentRole, can, type Permission } from '../utils/permissions';
@@ -54,14 +55,18 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: Wallet,          label: 'Day Transactions',  path: '/day-transactions',  requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: Upload,          label: 'Bulk Import',       path: '/import',            requires: 'bulk_import',          section: 'Admin' },
   { icon: UserCog,         label: 'Salespeople',       path: '/salespeople',       requires: 'manage_salespeople',    section: 'Admin' },
+  { icon: Activity,        label: 'Developer Portal',  path: '/developer',         requires: 'view_dev_portal',       section: 'Admin' },
   { icon: Download,        label: 'Updates',           path: '/updates',                                             section: 'Admin' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const role = getCurrentRole();
-  const navItems = ALL_NAV_ITEMS.filter(
-    (item) => !item.requires || (Array.isArray(item.requires) ? item.requires.some(r => can(r, role)) : can(item.requires, role))
-  );
+  const navItems = ALL_NAV_ITEMS.filter((item) => {
+    if (role === 'developer') {
+      return item.path === '/developer';
+    }
+    return !item.requires || (Array.isArray(item.requires) ? item.requires.some(r => can(r, role)) : can(item.requires, role));
+  });
 
   const handleLogout = () => {
     localStorage.clear();

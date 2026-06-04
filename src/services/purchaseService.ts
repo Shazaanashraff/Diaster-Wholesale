@@ -3,13 +3,16 @@ import type { Purchase, PurchaseItem, PurchaseCost, PurchaseReceive, Carton, Pur
 
 // ── List & fetch ──────────────────────────────────────────────────────────────
 
+const PURCHASE_LIST_COLUMNS =
+  'id, reference, supplier_id, location_id, rep_name, status, exchange_rate, total_rmb, discount_amount, total_lkr, cost_finalized, notes, created_at, updated_at';
+
 export async function getPurchases(): Promise<Purchase[]> {
   const { data, error } = await supabase
     .from('purchases')
-    .select('*, suppliers(id, name, country)')
+    .select(`${PURCHASE_LIST_COLUMNS}, suppliers(id, name, country)`)
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return data as Purchase[];
+  return data as unknown as Purchase[];
 }
 
 export async function getPurchaseById(id: string): Promise<{
@@ -21,30 +24,30 @@ export async function getPurchaseById(id: string): Promise<{
 }> {
   const [{ data: purchase, error: pe }, { data: items }, { data: costs }, { data: received }, { data: cartons }] =
     await Promise.all([
-      supabase.from('purchases').select('*, suppliers(*)').eq('id', id).single(),
+      supabase.from('purchases').select(`${PURCHASE_LIST_COLUMNS}, suppliers(id, name, country, contact_person, phone, email)`).eq('id', id).single(),
       supabase
         .from('purchase_items')
-        .select('*, products(id, name, model, item_code, sku, pieces_per_carton, cost_price)')
+        .select('id, purchase_id, product_id, quantity_units, quantity_cartons, unit_price_rmb, discount_percent, created_at, products(id, name, model, item_code, sku, pieces_per_carton, cost_price)')
         .eq('purchase_id', id),
-      supabase.from('purchase_costs').select('*').eq('purchase_id', id),
+      supabase.from('purchase_costs').select('id, purchase_id, cost_type, amount_lkr, notes, created_at').eq('purchase_id', id),
       supabase
         .from('purchase_receive')
-        .select('*, products(id, name, model)')
+        .select('id, purchase_id, product_id, ordered_units, received_units, damaged_units, notes, received_at, products(id, name, model)')
         .eq('purchase_id', id),
       supabase
         .from('cartons')
-        .select('*, products(id, name, model)')
+        .select('id, purchase_id, product_id, carton_index, carton_code, status, created_at, products(id, name, model)')
         .eq('purchase_id', id)
         .order('carton_index', { ascending: true }),
     ]);
 
   if (pe) throw new Error(pe.message);
   return {
-    purchase: purchase as Purchase,
-    items: (items ?? []) as PurchaseItem[],
+    purchase: purchase as unknown as Purchase,
+    items: (items ?? []) as unknown as PurchaseItem[],
     costs: (costs ?? []) as PurchaseCost[],
-    received: (received ?? []) as PurchaseReceive[],
-    cartons: (cartons ?? []) as Carton[],
+    received: (received ?? []) as unknown as PurchaseReceive[],
+    cartons: (cartons ?? []) as unknown as Carton[],
   };
 }
 

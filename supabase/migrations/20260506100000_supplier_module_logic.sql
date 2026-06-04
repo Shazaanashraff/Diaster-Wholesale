@@ -168,10 +168,13 @@ CREATE TRIGGER trg_supplier_payments_credit
 
 -- Enable RLS & Add basic policies for new tables
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "All access locations" ON locations FOR ALL USING (true);
+DROP POLICY IF EXISTS "All access locations" ON locations;
+CREATE POLICY "All access locations" ON locations FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE supplier_returns ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "All access supplier_returns" ON supplier_returns FOR ALL USING (true);
+DROP POLICY IF EXISTS "All access supplier_returns" ON supplier_returns;
+CREATE POLICY "All access supplier_returns" ON supplier_returns FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE supplier_return_items ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "All access supplier_return_items" ON supplier_return_items FOR ALL USING (true);
+DROP POLICY IF EXISTS "All access supplier_return_items" ON supplier_return_items;
+CREATE POLICY "All access supplier_return_items" ON supplier_return_items FOR ALL USING (true) WITH CHECK (true);

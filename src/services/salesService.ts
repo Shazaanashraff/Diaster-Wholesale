@@ -34,10 +34,19 @@ export const processSale = async (data: SaleData): Promise<string> => {
   return invoiceId;
 };
 
+const INVOICE_LIST_COLUMNS =
+  'id, invoice_no, customer_id, mode, subtotal, discount, total, payment_status, salesperson_id, notes, created_at, updated_at, customers(name)';
+
+const INVOICE_DETAIL_COLUMNS =
+  'id, invoice_no, customer_id, mode, subtotal, discount, total, payment_status, salesperson_id, notes, created_at, updated_at, customers(id, name, phone, email, address, type, credit_limit, outstanding_balance)';
+
+const INVOICE_ITEM_DETAIL_COLUMNS =
+  'id, invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(id, name, item_code, model, pieces_per_carton, wholesale_price, retail_price)';
+
 export const getInvoices = async () => {
   const { data, error } = await supabase
     .from('invoices')
-    .select('*, customers(name)')
+    .select(INVOICE_LIST_COLUMNS)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -47,7 +56,7 @@ export const getInvoices = async () => {
 export const getInvoiceById = async (id: string) => {
   const { data, error } = await supabase
     .from('invoices')
-    .select('*, customers(*), invoice_items(*, products(*))')
+    .select(`${INVOICE_DETAIL_COLUMNS}, invoice_items(${INVOICE_ITEM_DETAIL_COLUMNS})`)
     .eq('id', id)
     .single();
 

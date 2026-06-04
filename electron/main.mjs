@@ -224,9 +224,32 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', () => {
+let isFlushingCompleted = false;
+
+app.on('before-quit', (e) => {
   if (updateCheckTimer) {
     clearInterval(updateCheckTimer);
     updateCheckTimer = null;
+  }
+
+  // If we haven't flushed metrics yet, prevent close, trigger flush, and wait
+  if (!isFlushingCompleted && mainWindow && !mainWindow.isDestroyed()) {
+    e.preventDefault();
+    log.info('App is quitting: sending flush metrics request to renderer...');
+    mainWindow.webContents.send('app:flush-metrics');
+
+    // Force quit after 2.5 seconds max timeout
+    const forceQuitTimeout = setTimeout(() => {
+      log.warn('Metrics flush timed out, force quitting.');
+      isFlushingCompleted = true;
+      app.quit();
+    }, 2500);
+
+    ipcMain.once('app:metrics-flushed', () => {
+      log.info('Renderer metrics flushed successfully. Quitting app...');
+      clearTimeout(forceQuitTimeout);
+      isFlushingCompleted = true;
+      app.quit();
+    });
   }
 });

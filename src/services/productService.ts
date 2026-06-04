@@ -1,6 +1,9 @@
 import { supabase } from '../lib/supabase';
 import type { Product } from '../types';
 
+const PRODUCT_COLUMNS =
+  'id, item_code, sku, name, model, description, category, wholesale_price, retail_price, pieces_per_carton, reorder_level, cost_price, created_at, updated_at';
+
 // ============================================================
 // Product Service — CRUD operations against Supabase
 // ============================================================
@@ -31,7 +34,7 @@ export async function generateItemCode(prefetchedCodes?: string[]): Promise<stri
 export async function getProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(PRODUCT_COLUMNS)
     .eq('is_active', true)
     .order('name', { ascending: true });
 
@@ -49,7 +52,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function getArchivedProducts(): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(PRODUCT_COLUMNS)
     .eq('is_active', false)
     .order('name', { ascending: true });
 
@@ -63,37 +66,11 @@ export async function getArchivedProducts(): Promise<Product[]> {
 
 /**
  * Fetch products visible to the shop (POS) by reading the `shop_stock` view.
- * Returns a list shaped like `Product` but with `id` populated from `product_id`.
+ * Prefer `getPosShopCatalog()` when you also need inventory rows (one query).
  */
 export async function getShopProducts(): Promise<Product[]> {
-  // Only return products that have stock in shop (cartons_in > 0 OR pieces_in > 0)
-  const { data, error } = await supabase
-    .from('shop_stock')
-    .select('*')
-    .or('cartons_in.gt.0,pieces_in.gt.0')
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.error('getShopProducts error:', error.message);
-    throw new Error(error.message);
-  }
-
-  // Map view columns to Product shape (pick commonly used fields)
-  const products = (data ?? []).map((r: any) => ({
-    id: r.product_id,
-    item_code: r.item_code,
-    name: r.name,
-    model: r.model ?? '',
-    category: r.category ?? 'general',
-    wholesale_price: Number(r.wholesale_price ?? 0),
-    retail_price: Number(r.retail_price ?? 0),
-    pieces_per_carton: r.pieces_per_carton ?? 1,
-    reorder_level: r.reorder_level ?? 0,
-    is_active: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  } as Product));
-
+  const { getPosShopCatalog } = await import('./inventoryService');
+  const { products } = await getPosShopCatalog();
   return products;
 }
 
@@ -103,7 +80,7 @@ export async function getShopProducts(): Promise<Product[]> {
 export async function getProductById(id: string): Promise<Product> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(PRODUCT_COLUMNS)
     .eq('id', id)
     .single();
 
@@ -178,7 +155,7 @@ export async function updateProduct(
 export async function checkDuplicate(name: string): Promise<Product[]> {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select(PRODUCT_COLUMNS)
     .ilike('name', name.trim());
 
   if (error) {

@@ -1,5 +1,28 @@
 import { supabase } from '../lib/supabase';
-import type { ProductStock, StockAdjustment } from '../types';
+import type { Product, ProductStock, StockAdjustment } from '../types';
+
+/** Columns for stock views — avoids select('*') egress. */
+export const SHOP_STOCK_COLUMNS =
+  'product_id, item_code, name, model, category, wholesale_price, retail_price, pieces_per_carton, reorder_level, cartons_in, pieces_in, cartons_sold, pieces_sold, carton_adj, piece_adj' as const;
+
+export const PRODUCT_STOCK_COLUMNS = SHOP_STOCK_COLUMNS;
+
+function mapShopStockRowToProduct(r: ProductStock): Product {
+  return {
+    id: r.product_id,
+    item_code: r.item_code,
+    name: r.name,
+    model: r.model ?? '',
+    category: r.category ?? 'general',
+    wholesale_price: Number(r.wholesale_price ?? 0),
+    retail_price: Number(r.retail_price ?? 0),
+    pieces_per_carton: r.pieces_per_carton ?? 1,
+    reorder_level: r.reorder_level ?? 0,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as Product;
+}
 
 export type StockLocation = 'store' | 'shop';
 
@@ -39,7 +62,7 @@ export interface StockLedgerEntry {
 export async function getInventory(): Promise<ProductStock[]> {
   const { data, error } = await supabase
     .from('product_stock')
-    .select('*')
+    .select(PRODUCT_STOCK_COLUMNS)
     .order('name', { ascending: true });
 
   if (error) {
@@ -70,21 +93,37 @@ export async function getInventoryByLocation(): Promise<InventoryByLocationRow[]
 }
 
 /**
+ * Single shop_stock fetch for POS — products + inventory rows (one round trip).
+ */
+export async function getPosShopCatalog(): Promise<{
+  products: Product[];
+  inventory: ProductStock[];
+}> {
+  const { data, error } = await supabase
+    .from('shop_stock')
+    .select(SHOP_STOCK_COLUMNS)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('getPosShopCatalog error:', error.message);
+    throw new Error(error.message);
+  }
+
+  const inventory = (data ?? []) as ProductStock[];
+  const products = inventory
+    .filter((r) => Number(r.cartons_in) > 0 || Number(r.pieces_in) > 0)
+    .map(mapShopStockRowToProduct);
+
+  return { products, inventory };
+}
+
+/**
  * Fetch stock from the shop_stock view — only products physically in the shop.
  * Used by POS cashier. Stock only appears here after a Warehouse→Shop transfer.
  */
 export async function getShopInventory(): Promise<ProductStock[]> {
-  const { data, error } = await supabase
-    .from('shop_stock')
-    .select('*')
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.error('getShopInventory error:', error.message);
-    throw new Error(error.message);
-  }
-
-  return data as ProductStock[];
+  const { inventory } = await getPosShopCatalog();
+  return inventory;
 }
 
 /**
@@ -194,7 +233,7 @@ export async function getBatchesForProducts(productIds: string[]): Promise<any[]
   if (productIds.length === 0) return [];
   const { data, error } = await supabase
     .from('stock_batches')
-    .select('*, shipments(reference)')
+    .select('id, product_id, cartons, loose_pieces, cost_per_piece, notes, received_at, shipments(reference)')
     .in('product_id', productIds)
     .gt('cartons', 0)
     .order('received_at', { ascending: true });

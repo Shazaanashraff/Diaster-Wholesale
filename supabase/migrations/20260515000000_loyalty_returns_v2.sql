@@ -65,9 +65,20 @@ CREATE TABLE IF NOT EXISTS sales_returns (
 ALTER TABLE sales_returns DISABLE ROW LEVEL SECURITY;
 
 -- Back-fill FK from loyalty_transactions now that the table exists
-ALTER TABLE loyalty_transactions
-  ADD CONSTRAINT IF NOT EXISTS fk_loyalty_return
-  FOREIGN KEY (return_id) REFERENCES sales_returns(id) ON DELETE SET NULL;
+-- (Postgres does not support ADD CONSTRAINT IF NOT EXISTS on ALTER TABLE)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'fk_loyalty_return'
+      AND conrelid = 'public.loyalty_transactions'::regclass
+  ) THEN
+    ALTER TABLE public.loyalty_transactions
+      ADD CONSTRAINT fk_loyalty_return
+      FOREIGN KEY (return_id) REFERENCES public.sales_returns(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 -- =====================================
 -- 5. SALES RETURN ITEMS TABLE

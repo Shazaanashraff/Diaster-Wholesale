@@ -19,4 +19,10 @@ contextBridge.exposeInMainWorld('desktop', {
     electron: process.versions.electron,
     node: process.versions.node,
   },
+  onFlushMetrics: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('app:flush-metrics', listener);
+    return () => ipcRenderer.removeListener('app:flush-metrics', listener);
+  },
+  sendMetricsFlushed: () => ipcRenderer.send('app:metrics-flushed'),
 });

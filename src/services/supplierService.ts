@@ -18,10 +18,14 @@ function normalizePurchaseTotal(p: { total_lkr?: number; total_rmb?: number; exc
   return totalRmb;
 }
 
+const LOCATION_COLUMNS = 'id, name, type, is_active, created_at';
+const SUPPLIER_COLUMNS =
+  'id, name, contact_person, phone, email, country, notes, credit_limit, credit_days, current_payable, created_at';
+
 export async function getLocations(): Promise<Location[]> {
   const { data, error } = await supabase
     .from('locations')
-    .select('*')
+    .select(LOCATION_COLUMNS)
     .eq('is_active', true)
     .order('name', { ascending: true });
   if (error) throw new Error(error.message);
@@ -31,7 +35,7 @@ export async function getLocations(): Promise<Location[]> {
 export async function getSuppliers(): Promise<SupplierWithBalance[]> {
   const [{ data: suppliers }, { data: purchaseTotals }, { data: paymentTotals }] =
     await Promise.all([
-      supabase.from('suppliers').select('*').eq('is_active', true).order('name', { ascending: true }),
+      supabase.from('suppliers').select(SUPPLIER_COLUMNS).eq('is_active', true).order('name', { ascending: true }),
       supabase.from('purchases').select('supplier_id, total_lkr, total_rmb, exchange_rate').neq('status', 'draft').neq('status', 'cancelled'),
       supabase.from('supplier_payments').select('supplier_id, amount'),
     ]);
@@ -61,7 +65,7 @@ export async function getSuppliers(): Promise<SupplierWithBalance[]> {
 export async function getSupplierById(id: string): Promise<Supplier> {
   const { data, error } = await supabase
     .from('suppliers')
-    .select('*')
+    .select(SUPPLIER_COLUMNS)
     .eq('id', id)
     .single();
   if (error) throw new Error(error.message);

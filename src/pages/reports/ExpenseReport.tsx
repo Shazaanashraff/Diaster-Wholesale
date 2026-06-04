@@ -17,7 +17,10 @@ export const ExpenseReport: React.FC = () => {
     async function load() {
       const { from, to } = getReportDateRange(period, customFrom, customTo);
       
-      let query = supabase.from('expenses').select('*').order('created_at', { ascending: false });
+      let query = supabase
+        .from('expenses')
+        .select('id, amount, category, description, reference, created_at, location_id')
+        .order('created_at', { ascending: false });
       if (from) query = query.gte('created_at', from);
       if (to) query = query.lte('created_at', to);
 

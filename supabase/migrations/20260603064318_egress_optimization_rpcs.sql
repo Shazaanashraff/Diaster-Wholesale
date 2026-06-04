@@ -1,0 +1,2 @@
+-- Placeholder migration (applied on remote before consolidated into 20260603120000).
+-- Intentionally empty; do not remove — keeps local/remote migration history in sync.

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { PRODUCT_STOCK_COLUMNS } from './inventoryService';
 
 // ============================================================
 // Types & Interfaces
@@ -51,10 +52,6 @@ export interface ProfitExpensePoint {
 }
 
 // ============================================================
-// Helper: Fetch Expenses (Shared)
-// ============================================================
-
-// ============================================================
 // Phase 1: Service Layer Extensions
 // ============================================================
 
@@ -63,8 +60,6 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
   let invQuery = supabase.from('invoices').select('total, subtotal, discount, payment_status, created_at');
   let expQuery = supabase.from('expenses').select('amount, created_at');
   let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton), product_id, invoice_id, created_at');
-  let batchQuery = supabase.from('stock_batches').select('product_id, cost_per_piece');
-
   if (from) {
     invQuery = invQuery.gte('created_at', from);
     expQuery = expQuery.gte('created_at', from);
@@ -76,12 +71,20 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
     itemQuery = itemQuery.lte('created_at', to);
   }
 
-  const [invRes, expRes, itemRes, batchRes] = await Promise.all([invQuery, expQuery, itemQuery, batchQuery]);
+  const [invRes, expRes, itemRes] = await Promise.all([invQuery, expQuery, itemQuery]);
 
   const invoices = invRes.data || [];
   const expenses = expRes.data || [];
   const items = itemRes.data || [];
-  const batches = batchRes.data || [];
+
+  const productIds = [...new Set(items.map((i) => i.product_id).filter(Boolean))] as string[];
+  const { data: batches = [] } =
+    productIds.length > 0
+      ? await supabase
+          .from('stock_batches')
+          .select('product_id, cost_per_piece')
+          .in('product_id', productIds)
+      : { data: [] as { product_id: string; cost_per_piece: number | null }[] };
 
   const revenue = invoices
     .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
@@ -89,7 +92,6 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-  // Calculate COGS
   const costMap: Record<string, number> = {};
   batches.forEach(b => {
     if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece);
@@ -97,7 +99,7 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 
   let cogs = 0;
   items.forEach(item => {
-    const ppc = (item.products as any)?.pieces_per_carton || 1;
+    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
     const unitCost = costMap[item.product_id as string] || 0;
     cogs += unitCost * totalPieces;
@@ -121,21 +123,35 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
   const { data, error } = await query;
   if (error) throw error;
 
-  const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
+  const productIds = [...new Set((data ?? []).map((i) => i.product_id).filter(Boolean))] as string[];
+  const { data: batches } =
+    productIds.length > 0
+      ? await supabase
+          .from('stock_batches')
+          .select('product_id, cost_per_piece')
+          .in('product_id', productIds)
+      : { data: [] as { product_id: string; cost_per_piece: number | null }[] };
   const costMap: Record<string, number> = {};
   batches?.forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
 
   return (data || []).map(item => {
-    const ppc = (item.products as any)?.pieces_per_carton || 1;
+    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
     const unitCost = costMap[item.product_id as string] || 0;
     const totalCost = unitCost * totalPieces;
     const profit = Number(item.total) - totalCost;
+    const inv = item.invoices as {
+      invoice_no?: string;
+      salesperson?: { name?: string } | { name?: string }[];
+      salesperson_name?: string;
+    } | null;
+    const salesperson = inv?.salesperson;
+    const spName = Array.isArray(salesperson) ? salesperson[0]?.name : salesperson?.name;
 
     return {
-      invoice_no: (item.invoices as any)?.invoice_no,
-      product: (item.products as any)?.name,
-      salesperson_name: (item.invoices as any)?.salesperson?.name ?? (item.invoices as any)?.salesperson_name ?? null,
+      invoice_no: inv?.invoice_no,
+      product: (item.products as { name?: string } | null)?.name,
+      salesperson_name: spName ?? inv?.salesperson_name ?? null,
       quantity: totalPieces,
       selling_price: item.unit_price,
       cost_price: unitCost,
@@ -150,17 +166,11 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
 export const getCurrentStockReport = async () => {
   const { data, error } = await supabase
     .from('product_stock')
-    .select('*')
+    .select(PRODUCT_STOCK_COLUMNS)
     .order('name', { ascending: true });
 
   if (error) throw error;
-  
-  // Fetch active products to filter out deleted ones
-  const { data: products } = await supabase.from('products').select('id');
-  const activeProductIds = new Set((products || []).map(p => p.id));
-  
-  // Filter out deleted products
-  return (data || []).filter(item => activeProductIds.has(item.product_id));
+  return data ?? [];
 };
 
 /** 2.1a Current Stock Report by Location */
@@ -172,18 +182,10 @@ export const getCurrentStockReportByLocation = async () => {
     .order('name', { ascending: true });
 
   if (error) throw error;
-  
-  // Fetch active products to filter out deleted ones
-  const { data: products } = await supabase.from('products').select('id');
-  const activeProductIds = new Set((products || []).map(p => p.id));
-  
-  // Group by location_id, filtering out deleted products
-  const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: typeof data }> = {};
-  
+
+  const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: NonNullable<typeof data> }> = {};
+
   (data || []).forEach(row => {
-    // Skip deleted products
-    if (!activeProductIds.has(row.product_id)) return;
-    
     const locKey = row.location_id || 'unassigned';
     if (!grouped[locKey]) {
       grouped[locKey] = {
@@ -195,7 +197,7 @@ export const getCurrentStockReportByLocation = async () => {
     }
     grouped[locKey].products.push(row);
   });
-  
+
   return Object.values(grouped);
 };
 
@@ -220,26 +222,20 @@ export const getDailySalesReport = async (from?: string, to?: string) => {
 
   const totalSales = (data || []).reduce((sum, i) => sum + Number(i.total), 0);
   const transactions = data?.length || 0;
-  
+
   return { totalSales, transactions, data };
 };
 
-// Existing dashboard functions kept for compatibility
 export const getDashboardStats = async (): Promise<DashboardStats> => {
-  const { data: invoices, error: invError } = await supabase.from('invoices').select('total, payment_status');
-  if (invError) throw invError;
-
-  const { count: customerCount, error: custError } = await supabase.from('customers').select('*', { count: 'exact', head: true });
-  if (custError) throw custError;
-
-  const totalRevenue = (invoices || [])
-    .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
-    .reduce((sum, i) => sum + Number(i.total), 0);
-
-  const paidInvoices = (invoices || []).filter(i => i.payment_status === 'paid').length;
-  const successRate = invoices && invoices.length > 0 ? (paidInvoices / invoices.length) * 100 : 100;
-
-  return { totalRevenue, totalOrders: invoices?.length || 0, newCustomers: customerCount || 0, successRate };
+  const { data, error } = await supabase.rpc('get_dashboard_stats');
+  if (error) throw error;
+  const row = data as Record<string, number>;
+  return {
+    totalRevenue: Number(row.totalRevenue ?? 0),
+    totalOrders: Number(row.totalOrders ?? 0),
+    newCustomers: Number(row.newCustomers ?? 0),
+    successRate: Number(row.successRate ?? 100),
+  };
 };
 
 export const getRecentSales = async (): Promise<RecentSale[]> => {
@@ -252,95 +248,81 @@ export const getRecentSales = async (): Promise<RecentSale[]> => {
   if (error) throw error;
 
   return (data || []).map(inv => {
-    const items = (inv.invoice_items as any[]) || [];
+    const items = (inv.invoice_items as { total?: number; products?: { name?: string } }[]) || [];
     const productName = items.length === 1 ? (items[0]?.products?.name || 'Item') : `${items.length} items`;
     return {
       invoice_no: inv.invoice_no,
-      customer_name: (inv.customers as any)?.name || '—',
+      customer_name: (inv.customers as { name?: string } | null)?.name || '—',
       product_name: productName,
       total: Number(inv.total),
-      payment_status: inv.payment_status as any,
+      payment_status: inv.payment_status as RecentSale['payment_status'],
       created_at: inv.created_at || '',
     };
   });
 };
 
 export const getDashboardMetrics = async (): Promise<DashboardMetrics> => {
-  const stats = await getProfitAndLoss();
-  const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
-  const lowStock = await getLowStockReport();
-
+  const { data, error } = await supabase.rpc('get_dashboard_metrics', { p_low_stock_threshold: 10 });
+  if (error) throw error;
+  const row = data as Record<string, number>;
   return {
-    revenue: stats.revenue,
-    expenses: stats.expenses,
-    customers: customerCount || 0,
-    lowStockCount: lowStock.length,
-    cogs: stats.cogs,
-    netProfit: stats.netProfit
+    revenue: Number(row.revenue ?? 0),
+    expenses: Number(row.expenses ?? 0),
+    customers: Number(row.customers ?? 0),
+    lowStockCount: Number(row.lowStockCount ?? 0),
+    cogs: Number(row.cogs ?? 0),
+    netProfit: Number(row.netProfit ?? 0),
   };
 };
 
 export const getTopPerformers = async (period: 'day' | 'month' | 'all' = 'month'): Promise<TopPerformer[]> => {
-  let from: string | undefined;
-  const now = new Date();
-  if (period === 'day') from = new Date(now.setHours(0,0,0,0)).toISOString();
-  if (period === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-  let query = supabase.from('invoice_items').select('product_id, total, cartons, pieces, products(name, pieces_per_carton)');
-  if (from) query = query.gte('created_at', from);
-
-  const { data } = await query;
-  const map: Record<string, any> = {};
-
-  (data || []).forEach(item => {
-    const id = item.product_id;
-    const ppc = (item.products as any)?.pieces_per_carton || 1;
-    const qty = (item.cartons * ppc) + item.pieces;
-    if (!map[id]) map[id] = { product_id: id, name: (item.products as any)?.name, revenue: 0, unitsSold: 0 };
-    map[id].revenue += Number(item.total);
-    map[id].unitsSold += qty;
-  });
-
-  return Object.values(map)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5)
-    .map((item, i) => ({ ...item, rank: i + 1 }));
+  const { data, error } = await supabase.rpc('get_top_performers', { p_period: period });
+  if (error) throw error;
+  return ((data as TopPerformer[]) ?? []).map((item) => ({
+    product_id: item.product_id,
+    name: item.name,
+    revenue: Number(item.revenue ?? 0),
+    unitsSold: Number(item.unitsSold ?? 0),
+    rank: Number(item.rank ?? 0),
+  }));
 };
 
 export const getProfitExpensesTimeline = async (): Promise<ProfitExpensePoint[]> => {
-  const { data: invoices } = await supabase.from('invoices').select('total, created_at').in('payment_status', ['paid', 'partial']);
-  const { data: expenses } = await supabase.from('expenses').select('amount, created_at');
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const resMap: Record<string, ProfitExpensePoint> = {};
-
-  // Initialize last 6 months
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const m = months[d.getMonth()];
-    resMap[m] = { month: m, revenue: 0, expenses: 0, profit: 0 };
-  }
-
-  (invoices || []).forEach(inv => {
-    const m = months[new Date(inv.created_at).getMonth()];
-    if (resMap[m]) resMap[m].revenue += Number(inv.total);
-  });
-
-  (expenses || []).forEach(exp => {
-    const m = months[new Date(exp.created_at).getMonth()];
-    if (resMap[m]) resMap[m].expenses += Number(exp.amount);
-  });
-
-  return Object.values(resMap).map(pt => ({ ...pt, profit: pt.revenue - pt.expenses }));
+  const { data, error } = await supabase.rpc('get_profit_expenses_timeline');
+  if (error) throw error;
+  return ((data as ProfitExpensePoint[]) ?? []).map((pt) => ({
+    month: pt.month,
+    revenue: Number(pt.revenue ?? 0),
+    expenses: Number(pt.expenses ?? 0),
+    profit: Number(pt.profit ?? 0),
+  }));
 };
 
 export const getCategoryDistribution = async (): Promise<{ name: string; value: number }[]> => {
-  const { data } = await supabase.from('products').select('category');
-  const map: Record<string, number> = {};
-  (data || []).forEach(p => {
-    const cat = p.category || 'Other';
-    map[cat] = (map[cat] || 0) + 1;
-  });
-  return Object.entries(map).map(([name, value]) => ({ name, value }));
+  const { data, error } = await supabase.rpc('get_category_distribution');
+  if (error) throw error;
+  return ((data as { name: string; value: number }[]) ?? []).map((row) => ({
+    name: row.name,
+    value: Number(row.value ?? 0),
+  }));
+};
+
+/** Stock valuation grouped by location (server-side aggregate). */
+export const getStockValuationReport = async () => {
+  const { data, error } = await supabase.rpc('get_stock_valuation_report');
+  if (error) throw error;
+  return (data ?? []) as Array<{
+    location_id: string | null;
+    location_name: string;
+    location_type: string | null;
+    products: Array<{
+      product_id: string;
+      name: string;
+      item_code: string;
+      available: number;
+      unitCost: number;
+      valuation: number;
+    }>;
+    totalValuation: number;
+  }>;
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { getStockValuationReport } from '../../services/reportService';
 import { fmtCurrency } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
@@ -28,70 +28,23 @@ export const StockValuationReport: React.FC = () => {
   const [locationFilter, setLocationFilter] = useState<'all' | 'shop' | 'warehouse'>('all');
 
   const loadData = async () => {
-    try {
-      const { data: locationStocks } = await supabase
-        .from('product_stock_by_location')
-        .select('product_id, name, item_code, location_id, location_name, location_type, total_units');
-
-      const { data: products } = await supabase.from('products').select('id, cost_price');
-      const { data: batches } = await supabase.from('stock_batches').select('product_id, cost_per_piece');
-
-      const productCostMap: Record<string, number> = {};
-      const activeProductIds = new Set<string>();
-      (products || []).forEach(p => {
-        if (p.cost_price) productCostMap[p.id] = Number(p.cost_price);
-        activeProductIds.add(p.id);
-      });
-
-      const costMap: Record<string, number> = {};
-      (batches || []).forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
-
-      // Group by location
-      const grouped: Record<string, LocationValuationData> = {};
-
-      (locationStocks || []).forEach(stock => {
-        // Skip deleted products (not in active products list)
-        if (!activeProductIds.has(stock.product_id)) return;
-
-        const locKey = stock.location_id || 'unassigned';
-
-        if (!grouped[locKey]) {
-          grouped[locKey] = {
-            location_id: stock.location_id,
-            location_name: stock.location_name || 'Unassigned',
-            location_type: stock.location_type,
-            products: [],
-            totalValuation: 0
-          };
-        }
-
-        const available = Math.max(0, stock.total_units || 0);
-        const unitCost = costMap[stock.product_id] || productCostMap[stock.product_id] || 0;
-        const valuation = available * unitCost;
-
-        grouped[locKey].products.push({
-          product_id: stock.product_id,
-          name: stock.name,
-          item_code: stock.item_code,
-          available,
-          unitCost,
-          valuation
-        });
-
-        grouped[locKey].totalValuation += valuation;
-      });
-
-      // Sort products within each location by valuation descending
-      Object.values(grouped).forEach(loc => {
-        loc.products.sort((a, b) => b.valuation - a.valuation);
-      });
-
-      setLocationData(Object.values(grouped).sort((a, b) => {
-        // Sort locations: shop first, then warehouse, then unassigned
-        const typeOrder = { 'shop': 0, 'warehouse': 1, null: 2 };
-        return (typeOrder[a.location_type as keyof typeof typeOrder] ?? 2) - 
-               (typeOrder[b.location_type as keyof typeof typeOrder] ?? 2);
-      }));
+      const rows = await getStockValuationReport();
+      setLocationData(
+        rows.map((loc) => ({
+          location_id: loc.location_id,
+          location_name: loc.location_name,
+          location_type: loc.location_type,
+          products: loc.products.map((p) => ({
+            product_id: p.product_id,
+            name: p.name,
+            item_code: p.item_code,
+            available: Number(p.available),
+            unitCost: Number(p.unitCost),
+            valuation: Number(p.valuation),
+          })),
+          totalValuation: Number(loc.totalValuation),
+        }))
+      );
     } catch (err) {
       console.error('Failed to load stock valuation:', err);
     }

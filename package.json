@@ -21,12 +21,14 @@
     "dist:sandbox": "npm run build:sandbox && electron-builder --publish never",
     "dist:publish": "npm run build:renderer && electron-builder",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:egress": "supabase db query --linked --agent=no -f scripts/verify-egress-optimization.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
     "@tailwindcss/vite": "^4.2.2",
     "clsx": "^2.1.1",
+    "dexie": "^4.4.3",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "framer-motion": "^12.38.0",

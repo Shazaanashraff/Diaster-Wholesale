@@ -28,7 +28,7 @@ export const PinAuthPage: React.FC<PinAuthPageProps> = ({ onSuccess }) => {
 
   const submitPin = useCallback((entered: string) => {
     // Check which role this PIN belongs to
-    const roles: Role[] = ['admin', 'accountant', 'officer', 'pos_operator', 'warehouse'];
+    const roles: Role[] = ['admin', 'accountant', 'officer', 'pos_operator', 'warehouse', 'developer'];
     let matchingRole: Role | null = null;
 
     for (const r of roles) {

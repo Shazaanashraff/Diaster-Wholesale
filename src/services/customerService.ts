@@ -12,6 +12,18 @@ export const getCustomers = async (): Promise<Customer[]> => {
   return data as Customer[];
 }
 
+/** Minimal customer list for POS dropdowns (less egress than getCustomers). */
+export const getPosCustomers = async (): Promise<Pick<Customer, 'id' | 'name'>[]> => {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('id, name')
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+};
+
 export const getCustomerById = async (id: string): Promise<Customer> => {
   const { data, error } = await supabase
     .from('customers')
