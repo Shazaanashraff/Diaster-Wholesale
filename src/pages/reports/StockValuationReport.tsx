@@ -28,6 +28,7 @@ export const StockValuationReport: React.FC = () => {
   const [locationFilter, setLocationFilter] = useState<'all' | 'shop' | 'warehouse'>('all');
 
   const loadData = async () => {
+    try {
       const rows = await getStockValuationReport();
       setLocationData(
         rows.map((loc) => ({

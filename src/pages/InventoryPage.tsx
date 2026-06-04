@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, RefreshCw, X } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, RefreshCw, X, Check } from 'lucide-react';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,7 +37,7 @@ export const InventoryPage: React.FC = () => {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   // ── Low-stock threshold ──
-  const [threshold, setThreshold] = useState<number>(readThreshold);
+  const [threshold] = useState<number>(readThreshold);
 
   // ── Stock adjustment modal ──
   const [adjustRow, setAdjustRow] = useState<ProductStock | null>(null);
@@ -422,9 +422,7 @@ export const InventoryPage: React.FC = () => {
                 <Package size={28} className="text-gray-500" />
               </div>
               <p className="text-sm font-semibold text-gray-500">
-                {locationFilter === 'all'
-                  ? 'No inventory data yet. Add products with quantity first.'
-                  : `No inventory data found for ${locationFilter}.`}
+                No inventory data found for {locationFilter}.
               </p>
             </div>
           </div>
