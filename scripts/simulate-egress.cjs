@@ -68,7 +68,11 @@ async function run() {
   const urlObj = new URL(supabaseUrl);
   const hostname = urlObj.hostname;
 
-  console.log('\n--- 🚀 Running Simulation Fetches ---');
+  // Retrieve total queries count from CLI argument (default to 200)
+  const totalQueriesTarget = parseInt(process.argv[2], 10) || 200;
+  const countPerCase = Math.max(1, Math.floor(totalQueriesTarget / 4));
+
+  console.log(`\n--- 🚀 Running Simulation Fetches (Total: ${countPerCase * 4} queries) ---`);
 
   const testCases = [
     {
@@ -79,7 +83,7 @@ async function run() {
       cols: 'id,item_code,name,wholesale_price,retail_price',
       filter: 'limit',
       body: null,
-      count: 5,
+      count: countPerCase,
     },
     {
       name: 'Legacy-style Product Query (select wildcard *)',
@@ -89,7 +93,7 @@ async function run() {
       cols: '*',
       filter: 'limit',
       body: null,
-      count: 3,
+      count: countPerCase,
     },
     {
       name: 'Dashboard Metrics RPC Call',
@@ -99,7 +103,7 @@ async function run() {
       cols: null,
       filter: null,
       body: { limit_val: 10 },
-      count: 4,
+      count: countPerCase,
     },
     {
       name: 'Stock Valuation RPC Call',
@@ -109,7 +113,7 @@ async function run() {
       cols: null,
       filter: null,
       body: {},
-      count: 3,
+      count: countPerCase,
     }
   ];
 
