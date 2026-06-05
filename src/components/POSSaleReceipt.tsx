@@ -24,13 +24,6 @@ interface POSSaleReceiptProps {
 const fmt = (n: number) =>
   Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const PAD = '                                        '; // 40-char ruler for alignment helpers
-
-function row(left: string, right: string, width = 38): string {
-  const gap = Math.max(1, width - left.length - right.length);
-  return left + ' '.repeat(gap) + right;
-}
-
 export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
