@@ -10,6 +10,7 @@ import {
 import { getSalespeople, type Salesperson } from '../services/salespersonService';
 import type { Product, Customer } from '../types';
 import { Modal } from '../components/Modal';
+import { POSSaleReceipt, type SaleReceiptData } from '../components/POSSaleReceipt';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { computeStock } from '../utils/stockUtils';
 import { AnimatedNumber } from '../components/AnimatedNumber';
@@ -97,6 +98,7 @@ export const POSPage: React.FC = () => {
   const [paymentSplits, setPaymentSplits] = useState<UISplit[]>([mkSplit('cash')]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [lastSaleReceipt, setLastSaleReceipt] = useState<SaleReceiptData | null>(null);
   const [isWholesale, setIsWholesale] = useState(true);
 
   // Discount & approval
@@ -619,7 +621,7 @@ export const POSPage: React.FC = () => {
         return;
       }
 
-      const { earnedPoints } = await checkout(
+      const { invoiceNo, earnedPoints } = await checkout(
         cart,
         selectedCustomerId,
         isWholesale,
@@ -630,6 +632,23 @@ export const POSPage: React.FC = () => {
         safeRedeem > 0 ? { redeemPoints: safeRedeem } : undefined,
         selectedSalesperson || undefined
       );
+
+      // Snapshot the receipt before clearing state
+      const customerName = customers.find(c => c.id === selectedCustomerId)?.name ?? 'Walk-in';
+      setLastSaleReceipt({
+        invoiceNo,
+        cartSnapshot: [...cart],
+        customerName,
+        salespersonName: selectedSalespersonName,
+        paymentSplits: finalSplits.map(s => ({ method: s.method, amount: s.amount })),
+        subtotal,
+        discount,
+        redeemedPoints: computeRedemptionValue(safeRedeem),
+        total,
+        isWholesale,
+        earnedPoints,
+        timestamp: new Date(),
+      });
 
       // Refresh loyalty display
       if (earnedPoints > 0 || safeRedeem > 0) {
@@ -650,15 +669,9 @@ export const POSPage: React.FC = () => {
       setValidationMessage(null);
       setBtnPhase('done');
       setTimeout(() => {
-        setCart([]);
-        setSelectedCustomerId('');
-        setDiscountAmt(0);
-        setRedeemPoints(0);
-        setPricingApproved(false);
-        setPaymentSplits([mkSplit('cash')]);
-        setSelectedSalesperson('');
+        setIsSuccessModalOpen(true);
         setBtnPhase('idle');
-      }, 1600);
+      }, 800);
     } catch (error) {
       console.error('Transaction Failed:', error);
       const message = error instanceof Error ? error.message : 'Transaction failed. See console for details.';
@@ -669,12 +682,15 @@ export const POSPage: React.FC = () => {
 
   const resetAfterSuccess = () => {
     setIsSuccessModalOpen(false);
+    setLastSaleReceipt(null);
     setCart([]);
     setSelectedCustomerId('');
     setDiscountAmt(0);
+    setRedeemPoints(0);
     setPricingApproved(false);
     setValidationMessage(null);
     setPaymentSplits([mkSplit('cash')]);
+    setSelectedSalesperson('');
   };
 
   if (loading) {
@@ -1553,17 +1569,22 @@ export const POSPage: React.FC = () => {
           `}</style>
         </aside>
 
-      <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Success">
-        <div className="text-center py-6 space-y-4">
-          <h3 className="text-2xl font-bold text-white">Payment Completed</h3>
-          <p className="text-sm text-gray-400">Total received: LKR {total.toFixed(2)}</p>
-          <button
-            type="button"
-            onClick={resetAfterSuccess}
-            className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
-          >
-            Back to POS
-          </button>
+      <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Complete">
+        <div style={{ maxHeight: '80vh', overflowY: 'auto', padding: '8px 0' }}>
+          {lastSaleReceipt ? (
+            <POSSaleReceipt data={lastSaleReceipt} onClose={resetAfterSuccess} />
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-sm text-gray-400">Payment Completed</p>
+              <button
+                type="button"
+                onClick={resetAfterSuccess}
+                className="mt-4 w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]"
+              >
+                Back to POS
+              </button>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

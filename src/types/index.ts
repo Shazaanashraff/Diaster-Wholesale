@@ -98,6 +98,7 @@ export interface StockAdjustment {
   adjusted_by: string;
   location_id?: string;
   created_at: string;
+  location_id?: string | null;
 }
 
 /** Matches the product_stock VIEW in Supabase */

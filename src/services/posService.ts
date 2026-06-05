@@ -137,7 +137,7 @@ export const checkout = async (
   paymentSplits: PaymentSplit[],   // empty = full credit / unpaid
   loyalty?: LoyaltyOptions,
   salespersonId?: string
-): Promise<{ invoiceId: string; earnedPoints: number }> => {
+): Promise<{ invoiceId: string; invoiceNo: string; earnedPoints: number }> => {
   // Stock validation
   await validateStock(cart);
 
@@ -297,7 +297,7 @@ export const checkout = async (
     }
   }
 
-  return { invoiceId, earnedPoints };
+  return { invoiceId, invoiceNo, earnedPoints };
 };
 
 // ─── Offline checkout ─────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from '../components/Modal';
-import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, RefreshCw, X, Check } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, ChevronRight, Loader2, AlertTriangle, Package, RefreshCw, Check, X } from 'lucide-react';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,7 +37,7 @@ export const InventoryPage: React.FC = () => {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   // ── Low-stock threshold ──
-  const [threshold] = useState<number>(readThreshold);
+  const [threshold, _setThreshold] = useState<number>(readThreshold);
 
   // ── Stock adjustment modal ──
   const [adjustRow, setAdjustRow] = useState<ProductStock | null>(null);
@@ -253,7 +253,7 @@ export const InventoryPage: React.FC = () => {
     })
     .sort((a, b) => {
       if (sortBy === 'cartons') return computeStock(b).availCartons - computeStock(a).availCartons;
-      if (sortBy === 'pieces') return computeStock(b).totalPieces - computeStock(a).totalPieces;
+      if (sortBy === 'pieces')  return computeStock(b).totalPieces  - computeStock(a).totalPieces;
       return a.name.localeCompare(b.name);
     }), [displayInventory, searchDebounced, filterLowStock, sortBy, threshold]);
 
@@ -319,7 +319,7 @@ export const InventoryPage: React.FC = () => {
                   <div className="flex gap-1">
                     {([
                       { key: false, label: 'All' },
-                      { key: true, label: 'Low Stock' },
+                      { key: true,  label: 'Low Stock' },
                     ] as const).map(opt => (
                       <button
                         key={String(opt.key)}
@@ -346,9 +346,9 @@ export const InventoryPage: React.FC = () => {
                   </span>
                   <div className="flex gap-1">
                     {([
-                      { key: 'name', label: 'Name' },
+                      { key: 'name',    label: 'Name' },
                       { key: 'cartons', label: 'Cartons' },
-                      { key: 'pieces', label: 'Qty' },
+                      { key: 'pieces',  label: 'Qty' },
                     ] as const).map(s => (
                       <button
                         key={s.key}
@@ -404,7 +404,7 @@ export const InventoryPage: React.FC = () => {
                 <AlertTriangle size={28} className="text-red-400" />
               </div>
               <p className="text-sm font-semibold text-red-400">{error}</p>
-              <button
+              <button 
                 onClick={fetchInventory}
                 className="px-6 py-3 bg-[#1d222a] text-white rounded-2xl font-bold text-sm border border-[#2b313a] hover:bg-[#2b313a] transition-all"
               >
@@ -421,9 +421,7 @@ export const InventoryPage: React.FC = () => {
               <div className="w-16 h-16 rounded-full bg-[#1d222a] flex items-center justify-center border border-[#2b313a]">
                 <Package size={28} className="text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-500">
-                No inventory data found for {locationFilter}.
-              </p>
+                <p className="text-sm font-semibold text-gray-500">No inventory data found for {locationFilter}.</p>
             </div>
           </div>
         )}
@@ -436,124 +434,124 @@ export const InventoryPage: React.FC = () => {
                 <table className="w-full min-w-[920px] text-left border-collapse" id="inventory-table">
                   <thead>
                     <tr className="bg-[#1d222a] border-b border-[#2b313a]">
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Item Code</th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">
-                        <div className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
-                          Product Name <ArrowUpDown size={14} />
-                        </div>
-                      </th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Qty</th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Location</th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale Price</th>
-                      <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling Price</th>
-                      <th className="px-8 py-6"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2b313a]">
-                    <AnimatePresence>
-                      {visibleInventory.map((row) => {
-                        const stock = computeStock(row);
-                        const reorderLevel = getEffectiveReorderLevel(row);
-                        const isLowStock = stock.totalPieces < reorderLevel;
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest">Item Code</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-left">
+                      <div className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+                        Product Name <ArrowUpDown size={14} />
+                      </div>
+                    </th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Qty</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Cartons</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-center">Location</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Wholesale Price</th>
+                    <th className="px-8 py-6 text-[11px] font-bold text-gray-500 uppercase tracking-widest text-right">Selling Price</th>
+                    <th className="px-8 py-6"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#2b313a]">
+                  <AnimatePresence>
+                    {visibleInventory.map((row) => {
+                      const stock = computeStock(row);
+                      const reorderLevel = getEffectiveReorderLevel(row);
+                      const isLowStock = stock.totalPieces < reorderLevel;
 
-                        return (
-                          <motion.tr
-                            layout
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 0.2 }}
-                            key={row.product_id}
-                            onClick={() => openHistory(row)}
-                            className={cn(
-                              "hover:bg-[#1d222a] transition-colors group cursor-pointer border-b border-[#2b313a] last:border-0",
-                              isLowStock && "bg-indigo-900/10 hover:bg-indigo-900/20"
+                      return (
+                        <motion.tr 
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.2 }}
+                          key={row.product_id} 
+                          onClick={() => openHistory(row)}
+                          className={cn(
+                            "hover:bg-[#1d222a] transition-colors group cursor-pointer border-b border-[#2b313a] last:border-0",
+                            isLowStock && "bg-indigo-900/10 hover:bg-indigo-900/20"
+                          )}
+                        >
+                        <td className="px-8 py-6 text-xs font-bold text-primary font-mono tracking-tighter uppercase">
+                          {row.item_code}
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-4">
+                            <div>
+                              <p className="text-sm font-bold text-white leading-tight">{row.name}</p>
+                              <p className="text-[11px] text-gray-500 font-semibold uppercase mt-1 tracking-wider">
+                                Qty per carton: {row.pieces_per_carton || 1}
+                                {isLowStock ? ` · Low stock below ${reorderLevel}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <span className={cn(
+                            "text-sm font-bold",
+                            isLowStock ? "text-indigo-400" : "text-white"
+                          )}>
+                            {stock.totalPieces}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className={cn(
+                              "text-sm font-bold",
+                              isLowStock ? "text-indigo-400" : "text-white"
+                            )}>
+                              {(stock.totalPieces / (row.pieces_per_carton || 1)).toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-semibold text-gray-500">
+                              {stock.availCartons} full + {stock.availLoose} pcs
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6 text-center">
+                          {(row as any)._location_type ? (
+                            <span className={cn(
+                              'px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider',
+                              (row as any)._location_type === 'warehouse'
+                                ? 'bg-blue-900/30 text-blue-400 border border-blue-900/40'
+                                : 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/40'
+                            )}>
+                              {(row as any)._location_type === 'warehouse' ? 'Warehouse' : 'Shop'}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-800/60 text-gray-500 border border-gray-700/40">All</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <span className="text-sm font-bold text-gray-300">LKR {row.wholesale_price.toFixed(2)}</span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <span className="text-sm font-bold text-primary">LKR {row.retail_price.toFixed(2)}</span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openHistory(row); }}
+                              className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              History
+                            </button>
+                            {can('manage_inventory') && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
+                                className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                Adjust
+                              </button>
                             )}
-                          >
-                            <td className="px-8 py-6 text-xs font-bold text-primary font-mono tracking-tighter uppercase">
-                              {row.item_code}
-                            </td>
-                            <td className="px-8 py-6">
-                              <div className="flex items-center gap-4">
-                                <div>
-                                  <p className="text-sm font-bold text-white leading-tight">{row.name}</p>
-                                  <p className="text-[11px] text-gray-500 font-semibold uppercase mt-1 tracking-wider">
-                                    Qty per carton: {row.pieces_per_carton || 1}
-                                    {isLowStock ? ` · Low stock below ${reorderLevel}` : ''}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <span className={cn(
-                                "text-sm font-bold",
-                                isLowStock ? "text-indigo-400" : "text-white"
-                              )}>
-                                {stock.totalPieces}
-                              </span>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <div className="flex flex-col items-end">
-                                <span className={cn(
-                                  "text-sm font-bold",
-                                  isLowStock ? "text-indigo-400" : "text-white"
-                                )}>
-                                  {(stock.totalPieces / (row.pieces_per_carton || 1)).toFixed(2)}
-                                </span>
-                                <span className="text-[10px] font-semibold text-gray-500">
-                                  {stock.availCartons} full + {stock.availLoose} pcs
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-8 py-6 text-center">
-                              {(row as any)._location_type ? (
-                                <span className={cn(
-                                  'px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider',
-                                  (row as any)._location_type === 'warehouse'
-                                    ? 'bg-blue-900/30 text-blue-400 border border-blue-900/40'
-                                    : 'bg-emerald-900/30 text-emerald-400 border border-emerald-900/40'
-                                )}>
-                                  {(row as any)._location_type === 'warehouse' ? 'Warehouse' : 'Shop'}
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-gray-800/60 text-gray-500 border border-gray-700/40">All</span>
-                              )}
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <span className="text-sm font-bold text-gray-300">LKR {row.wholesale_price.toFixed(2)}</span>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <span className="text-sm font-bold text-primary">LKR {row.retail_price.toFixed(2)}</span>
-                            </td>
-                            <td className="px-8 py-6 text-right">
-                              <div className="flex items-center gap-2 justify-end">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); openHistory(row); }}
-                                  className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
-                                >
-                                  History
-                                </button>
-                                {can('manage_inventory') && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); openAdjustModal(row); }}
-                                    className="px-4 py-2 rounded-xl text-[11px] font-bold text-gray-400 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100"
-                                  >
-                                    Adjust
-                                  </button>
-                                )}
-                                <div className="p-3 rounded-2xl text-gray-500 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100 inline-flex">
-                                  <ChevronRight size={18} />
-                                </div>
-                              </div>
-                            </td>
-                          </motion.tr>
-                        );
-                      })}
-                    </AnimatePresence>
-                  </tbody>
-                </table>
-              </div>
+                            <div className="p-3 rounded-2xl text-gray-500 bg-[#1d222a] border border-[#2b313a] hover:text-white hover:bg-[#2b313a] transition-all opacity-0 group-hover:opacity-100 inline-flex">
+                              <ChevronRight size={18} />
+                            </div>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                  </AnimatePresence>
+                </tbody>
+              </table>
+            </div>
             </div>
           </div>
         )}
@@ -624,7 +622,6 @@ export const InventoryPage: React.FC = () => {
         </div>
       </section>
 
-
       {/* ── Stock Adjustment Modal ── */}
       <Modal
         isOpen={adjustRow !== null}
@@ -656,10 +653,10 @@ export const InventoryPage: React.FC = () => {
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Adjustment Type</label>
               <div className="grid grid-cols-4 gap-2">
                 {([
-                  { key: 'recount', label: 'Recount', color: 'blue' },
-                  { key: 'damage', label: 'Damage', color: 'red' },
-                  { key: 'return', label: 'Return', color: 'green' },
-                  { key: 'other', label: 'Other', color: 'gray' },
+                  { key: 'recount',  label: 'Recount',  color: 'blue'   },
+                  { key: 'damage',   label: 'Damage',   color: 'red'    },
+                  { key: 'return',   label: 'Return',   color: 'green'  },
+                  { key: 'other',    label: 'Other',    color: 'gray'   },
                 ] as const).map(t => (
                   <button
                     key={t.key}
@@ -668,10 +665,10 @@ export const InventoryPage: React.FC = () => {
                     className={cn(
                       'py-2 rounded-xl text-[11px] font-bold border transition-all',
                       adjType === t.key
-                        ? t.key === 'damage' ? 'bg-red-900/30 text-red-400 border-red-900/50'
-                          : t.key === 'return' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50'
-                            : t.key === 'recount' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50'
-                              : 'bg-[#2b313a] text-white border-[#3a424f]'
+                        ? t.key === 'damage'  ? 'bg-red-900/30 text-red-400 border-red-900/50'
+                        : t.key === 'return'  ? 'bg-emerald-900/30 text-emerald-400 border-emerald-900/50'
+                        : t.key === 'recount' ? 'bg-blue-900/30 text-blue-400 border-blue-900/50'
+                        : 'bg-[#2b313a] text-white border-[#3a424f]'
                         : 'bg-[#1d222a] text-gray-500 border-[#2b313a] hover:text-gray-300'
                     )}
                   >
