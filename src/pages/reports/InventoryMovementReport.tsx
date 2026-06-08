@@ -18,11 +18,9 @@ export const InventoryMovementReport: React.FC = () => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [rows, setRows] = useState<MovementRow[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period, customFrom, customTo);
 
       const [receivedRes, soldRes] = await Promise.all([
@@ -64,7 +62,6 @@ export const InventoryMovementReport: React.FC = () => {
 
       for (const r of Object.values(map)) r.net = r.received - r.sold;
       setRows(Object.values(map).sort((a, b) => b.sold - a.sold));
-      setLoading(false);
     }
     load();
   }, [period, customFrom, customTo]);

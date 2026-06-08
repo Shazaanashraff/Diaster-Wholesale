@@ -14,11 +14,9 @@ interface PayableRow {
 
 export const PayablesReport: React.FC = () => {
   const [rows, setRows] = useState<PayableRow[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const [purchasesRes, paymentsRes] = await Promise.all([
         supabase
           .from('purchases')
@@ -48,7 +46,6 @@ export const PayablesReport: React.FC = () => {
         row.outstanding  = Math.max(0, row.totalBilled - row.totalPaid);
       }
       setRows(Object.values(map).sort((a, b) => b.outstanding - a.outstanding));
-      setLoading(false);
     }
     load();
   }, []);

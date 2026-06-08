@@ -30,11 +30,9 @@ function ageBucket(days: number): string {
 export const StockAgingReport: React.FC = () => {
   const [rows, setRows] = useState<AgingBatch[]>([]);
   const [bucketFilter, setBucketFilter] = useState('all');
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { data } = await supabase
         .from('stock_batches')
         .select('product_id, cartons, loose_pieces, received_at, products(name, item_code, pieces_per_carton), locations(type)')
@@ -71,7 +69,6 @@ export const StockAgingReport: React.FC = () => {
         }
       }
       setRows(Object.values(map).sort((a, b) => b.ageDays - a.ageDays));
-      setLoading(false);
     }
     load();
   }, []);

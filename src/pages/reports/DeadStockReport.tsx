@@ -17,11 +17,9 @@ export const DeadStockReport: React.FC = () => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [rows, setRows] = useState<DeadRow[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period, customFrom, customTo);
 
       // Get all products currently in shop stock
@@ -54,7 +52,6 @@ export const DeadStockReport: React.FC = () => {
       }
 
       setRows(Object.values(map).sort((a, b) => b.ageDays - a.ageDays));
-      setLoading(false);
     }
     load();
   }, [period, customFrom, customTo]);

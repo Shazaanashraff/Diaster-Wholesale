@@ -18,11 +18,9 @@ export const CreditReport: React.FC = () => {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [rows, setRows] = useState<CreditRow[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { from, to } = getReportDateRange(period, customFrom, customTo);
       let q = supabase
         .from('invoices')
@@ -46,7 +44,6 @@ export const CreditReport: React.FC = () => {
         if (inv.created_at < map[cid].oldestInvoice) map[cid].oldestInvoice = inv.created_at;
       }
       setRows(Object.values(map).sort((a, b) => b.outstanding - a.outstanding));
-      setLoading(false);
     }
     load();
   }, [period, customFrom, customTo]);

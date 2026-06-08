@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { fmtCurrency } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
 import { ReportKPICard } from './shared/ReportKPICard';
@@ -22,11 +22,9 @@ const bucketColor = (val: number, bucket: string) => {
 
 export const ARAgingReport: React.FC = () => {
   const [rows, setRows] = useState<AgingRow[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
       const { data } = await supabase
         .from('invoices')
         .select('total, created_at, customer_id, customers(name), payments(amount)')
@@ -53,7 +51,6 @@ export const ARAgingReport: React.FC = () => {
         else                    map[cid].bucket90plus += outstanding;
       }
       setRows(Object.values(map).sort((a, b) => b.total - a.total));
-      setLoading(false);
     }
     load();
   }, []);
