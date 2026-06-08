@@ -27,6 +27,10 @@ const fmt = (n: number) =>
 export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose }) => {
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Logo lives in /public; BASE_URL keeps it resolvable in dev and the
+  // Electron file:// build (vite base is './').
+  const logoSrc = `${import.meta.env.BASE_URL}diastar-logo.png`;
+
   const {
     invoiceNo, cartSnapshot, customerName, salespersonName,
     paymentSplits, subtotal, discount, redeemedPoints, total,
@@ -100,6 +104,13 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
             font-size: 13px !important;
             line-height: 1.42 !important;
           }
+          #pos-receipt-printable img {
+            display: block !important;
+            margin: 0 auto 4px !important;
+            width: 34mm !important;
+            height: auto !important;
+            filter: grayscale(100%) contrast(1.6) brightness(0.5) !important;
+          }
           @page {
             size: 80mm auto;
             margin: 0;
@@ -112,7 +123,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 6 }}>
-          <div style={{ fontSize: 21, fontWeight: 900, letterSpacing: 4 }}>DIASTAR</div>
+          <img src={logoSrc} alt="Diastar" style={{ width: '34mm', height: 'auto', display: 'block', margin: '0 auto 4px', filter: 'grayscale(100%) contrast(1.6) brightness(0.5)' }} />
           <div style={{ fontSize: 12 }}>No. 240, Dam Street, Colombo-12</div>
           <div style={{ fontSize: 12 }}>Tel: 0112324066  Mob: 0777495894</div>
         </div>
@@ -122,7 +133,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {/* Transaction meta */}
         <div style={{ fontSize: 12, marginBottom: 2 }}>
           {line('Customer', customerName || 'Walk-in')}
-          {line('', isWholesale ? 'Wholesale' : 'Retail')}
+          {line(isWholesale ? 'Wholesale' : 'Retail')}
           {salespersonName && line('Sales Rep', salespersonName)}
           {line('Invoice No', invoiceNo)}
           {line('Date', `${dateStr}  ${timeStr}`)}
@@ -132,11 +143,11 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Column header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '16px 1fr 58px 36px 62px', gap: '0 2px', fontSize: 12, fontWeight: 900, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
-          <span>#</span>
-          <span>Product</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 26px 50px 60px', gap: '0 2px', fontSize: 12, fontWeight: 900, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
+          <span>Item</span>
           <span style={{ textAlign: 'right' }}>Rate</span>
           <span style={{ textAlign: 'right' }}>Qty</span>
+          <span style={{ textAlign: 'right' }}>Disc</span>
           <span style={{ textAlign: 'right' }}>Amt</span>
         </div>
 
@@ -144,19 +155,24 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {cartSnapshot.map((item, i) => {
           const ppc = item.product.pieces_per_carton || 1;
           const qty = item.quantityCartons * ppc + item.quantityPieces;
-          const rate = Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price));
-          const amt = rate * qty;
+          const basePrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+          const rate = Number(item.unitPrice ?? basePrice);
+          const lineDisc = Math.max(0, (basePrice - rate) * qty);
+          const amt = rate * qty; // basePrice*qty - lineDisc
           return (
             <div key={item.product.id} style={{ marginBottom: 5, fontSize: 12 }}>
               <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {i + 1}. {item.product.name.toUpperCase()}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '16px 1fr 58px 36px 62px', gap: '0 2px' }}>
-                <span style={{ color: '#000' }}>{item.product.item_code || ''}</span>
+              {item.product.item_code && (
+                <div style={{ fontSize: 10, color: '#000', marginBottom: 1 }}>{item.product.item_code}</div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 26px 50px 60px', gap: '0 2px' }}>
                 <span />
-                <span style={{ textAlign: 'right' }}>{fmt(rate)}</span>
+                <span style={{ textAlign: 'right' }}>{fmt(basePrice)}</span>
                 <span style={{ textAlign: 'right' }}>{qty}</span>
-                <span style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(amt)}</span>
+                <span style={{ textAlign: 'right' }}>{lineDisc > 0 ? fmt(lineDisc) : '-'}</span>
+                <span style={{ textAlign: 'right', fontWeight: 900 }}>{fmt(amt)}</span>
               </div>
             </div>
           );
