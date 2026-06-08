@@ -1608,6 +1608,9 @@
   }
 
   @media (max-width: 1440px) {
+    .pos-page-grid {
+      grid-template-columns: minmax(0, 1fr) 300px;
+    }
     .pos-bill {
       padding: 0.9rem;
       width: 300px;
@@ -2431,6 +2434,113 @@
     height: 1.25rem;
     font-size: 0.65rem;
   }
+}
+
+/* ─── 1366px POS terminal (1301–1400px viewport) ───────────────────────────────
+   Targets Windows POS screens at 1366×768 / 100% scale.
+   Must be placed after all broader breakpoint blocks so it wins the cascade.
+   ─────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1400px) and (min-width: 1301px) {
+
+  /* Sidebar — slightly narrower than the 220px default */
+  .pos-sidebar {
+    width: 170px;
+    padding: 0.8rem 0.6rem;
+    gap: 0.55rem;
+  }
+  .pos-sidebar.sidebar-collapsed {
+    width: 54px;
+    padding: 0.8rem 0.3rem;
+  }
+  .pos-brand-meta > span { font-size: 1.15rem; }
+  .pos-nav-link { font-size: 0.8rem; padding: 0.44rem 0.5rem; gap: 0.48rem; }
+  .pos-nav-icon { width: 1.42rem; height: 1.42rem; }
+  .pos-nav-section-label { font-size: 0.63rem; }
+
+  /* ── POS page: fix pos-page-grid / pos-bill mismatch ── */
+  .pos-page-grid {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+  .pos-bill {
+    width: 260px;
+    min-width: 260px;
+    padding: 1rem 0.8rem;
+    gap: 0.6rem;
+  }
+  .pos-bill-head h2 { font-size: 1.45rem !important; }
+  .pos-bill-head p  { font-size: 0.78rem; }
+
+  /* POS main area */
+  .pos-main { padding: 0.75rem 0.6rem; }
+  .pos-main-head { gap: 0.48rem; margin-bottom: 0.6rem; }
+  .pos-search { min-width: 190px; padding: 0.52rem 0.6rem; }
+  .pos-search input { font-size: 0.83rem; }
+  .pos-mode-toggle button { font-size: 0.71rem; padding: 0.28rem 0.5rem; }
+
+  /* Category tiles */
+  .pos-tile-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.22rem;
+    margin-bottom: 0.48rem;
+  }
+  .pos-tile { padding: 0.5rem; min-height: 80px; }
+  .pos-tile h3 { font-size: 0.85rem; }
+  .pos-tile p  { font-size: 0.63rem; }
+  .pos-tile svg { width: 13px; height: 13px; }
+
+  /* Product cards */
+  .pos-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.28rem;
+  }
+  .pos-product-card { padding: 0.5rem; gap: 0.4rem; border-radius: 9px; }
+  .pos-product-top p      { font-size: 0.67rem; }
+  .pos-product-top h4     { font-size: 0.85rem; }
+  .pos-product-top strong { font-size: 0.74rem; }
+  .pos-add-btn { font-size: 0.65rem; padding: 0.32rem 0.36rem; }
+  .pos-qty-row { font-size: 0.63rem; }
+  .pos-qty-row button { width: 1.4rem; height: 1.4rem; }
+
+  /* Cart / bill detail */
+  .pos-cart-list { gap: 0.34rem; min-height: 110px; }
+  .pos-cart-item-front { padding: 0.44rem; gap: 0.34rem; }
+  .pos-cart-item-front h4     { font-size: 0.86rem; }
+  .pos-cart-item-front p      { font-size: 0.72rem; }
+  .pos-cart-item-front strong { font-size: 0.84rem; }
+  .pos-bill-total div   { font-size: 0.78rem; }
+  .pos-bill-total .total { font-size: 0.94rem; }
+  .pos-pay-grid button { min-height: 46px; font-size: 0.66rem; }
+  .pos-submit { font-size: 0.86rem; padding: 0.52rem; }
+
+  /* Standard pages (reports, inventory, cashier, etc.) */
+  .pos-standard-layout {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    height: calc(100vh - 56px);
+    min-height: calc(100vh - 56px);
+  }
+  .pos-standard-layout.collapsed {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+  .pos-standard-right {
+    min-width: 240px;
+    width: 240px;
+    padding: 0.8rem;
+    gap: 0.65rem;
+  }
+  .pos-standard-page {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+  .pos-standard-page h1,
+  .pos-standard-page .pos-page-header h1 { font-size: 1.4rem !important; }
+  .pos-standard-page h2 { font-size: 1.15rem !important; }
+  .pos-standard-page .text-xl  { font-size: 1.0rem !important; }
+  .pos-standard-page .text-2xl { font-size: 1.2rem !important; }
+  .pos-standard-page .grid { gap: 0.65rem; }
+  .pos-standard-page .space-y-8 > * + * { margin-top: 0.8rem !important; }
+  .pos-standard-page tbody td { font-size: 12px; }
+  .pos-standard-page thead th { font-size: 9.5px !important; }
 }
 
 /* ─── 150% display scale fix ───────────────────────────────────────────────────

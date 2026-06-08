@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
 import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle } from 'lucide-react';
 
-interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string }
+interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
 interface InvoiceRow {
   id: string;
   invoice_no: string;
@@ -57,7 +57,7 @@ export const DailySalesReport: React.FC = () => {
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [paymentsRes, invoicesRes] = await Promise.all([
       (() => {
-        let q = supabase.from('payments').select('method, bank_name, amount, paid_at');
+        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference');
         if (from) q = q.gte('paid_at', from);
         if (to)   q = q.lte('paid_at', to);
         return q;
@@ -66,6 +66,7 @@ export const DailySalesReport: React.FC = () => {
         let q = supabase
           .from('invoices')
           .select('id, invoice_no, total, payment_status, created_at, salesperson_name, salesperson:salespeople(id, name), customers(name)');
+        if (from) q = q.gte('created_at', from);
         if (to)   q = q.lte('created_at', to);
         return q.order('created_at', { ascending: false });
       })(),
@@ -95,8 +96,8 @@ export const DailySalesReport: React.FC = () => {
   }
 
   // Split into sales receipts and returns
-  const salesPayments = payments.filter(p => Number(p.amount) > 0);
-  const returnPayments = payments.filter(p => Number(p.amount) < 0);
+  const salesPayments  = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-'));
+  const returnPayments = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
 
   // Group sales by method
   const methodMap = new Map<string, MethodGroup>();

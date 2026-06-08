@@ -23,8 +23,8 @@ export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   );
   const [hydrated, setHydrated] = useState(false);
   const [isSessionCollapsed, setIsSessionCollapsed] = useState(
-    // Auto-collapse the right panel on 13" MacBook (≤1300px) to maximise content space
-    () => window.innerWidth <= 1300
+    // Auto-collapse the right panel on screens ≤1400px (covers 1366px POS terminals)
+    () => window.innerWidth <= 1400
   );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 

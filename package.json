@@ -1,7 +1,7 @@
 {
   "name": "diaster-wholesale",
   "private": true,
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "Desktop wholesale operations app built with React, Vite, and Electron.",
   "author": "Diaster",
   "type": "module",
