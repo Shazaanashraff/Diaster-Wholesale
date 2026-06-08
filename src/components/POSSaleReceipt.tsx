@@ -96,18 +96,19 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           #pos-receipt-printable {
             position: fixed !important;
             top: 0 !important;
-            left: 0 !important;
-            /* Fill the full 80mm roll edge-to-edge; only the printer's own
-               hardware margin remains. Zero @page margin is essential here. */
+            /* Centre on the page so left/right margins are symmetric instead
+               of the content hugging the left with a wide right margin. */
+            left: 50% !important;
+            transform: translateX(-50%) !important;
             width: 80mm !important;
-            padding: 1mm 1.5mm !important;
+            padding: 0 1mm !important;
             font-size: 13px !important;
             line-height: 1.42 !important;
           }
           #pos-receipt-printable img {
             display: block !important;
             margin: 0 auto 4px !important;
-            width: 34mm !important;
+            width: 48mm !important;
             height: auto !important;
             filter: grayscale(100%) contrast(1.6) brightness(0.5) !important;
           }
@@ -123,7 +124,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 6 }}>
-          <img src={logoSrc} alt="Diastar" style={{ width: '34mm', height: 'auto', display: 'block', margin: '0 auto 4px', filter: 'grayscale(100%) contrast(1.6) brightness(0.5)' }} />
+          <img src={logoSrc} alt="Diastar" style={{ width: '48mm', height: 'auto', display: 'block', margin: '0 auto 4px', filter: 'grayscale(100%) contrast(1.6) brightness(0.5)' }} />
           <div style={{ fontSize: 12 }}>No. 240, Dam Street, Colombo-12</div>
           <div style={{ fontSize: 12 }}>Tel: 0112324066  Mob: 0777495894</div>
         </div>
