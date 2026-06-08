@@ -51,16 +51,17 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
     window.print();
   };
 
-  // ─── Thermal layout (302px ≈ 80mm) ────────────────────────────────────────
+  // ─── Thermal layout (272px ≈ 72mm printable area of an 80mm printer) ───────
   const s: React.CSSProperties = {
     fontFamily: "'Courier New', Courier, monospace",
     background: 'white',
-    color: 'black',
-    width: 302,
-    padding: '10px 8px',
+    color: '#000',
+    width: 290,
+    padding: '8px 6px',
     margin: '0 auto',
-    fontSize: 10,
-    lineHeight: '1.35',
+    fontSize: 11,
+    lineHeight: '1.4',
+    fontWeight: 700,
   };
 
   const divider = (dashed = false) => (
@@ -68,7 +69,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
   );
 
   const line = (left: string, right?: string, bold = false) => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: bold ? 700 : 400, fontSize: 10 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: bold ? 900 : 700, fontSize: 11 }}>
       <span>{left}</span>
       {right !== undefined && <span style={{ textAlign: 'right' }}>{right}</span>}
     </div>
@@ -80,17 +81,27 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
-          #pos-receipt-printable, #pos-receipt-printable * { visibility: visible !important; }
+          #pos-receipt-printable, #pos-receipt-printable * {
+            visibility: visible !important;
+            /* Force every line bold + pure black so thermal output is dark and legible */
+            font-weight: 700 !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           #pos-receipt-printable {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
-            width: 80mm !important;
-            padding: 3mm 2mm !important;
+            /* 72mm = printable width of an 80mm thermal head; 80mm gets scaled down by the driver */
+            width: 72mm !important;
+            padding: 0 !important;
+            font-size: 12px !important;
+            line-height: 1.4 !important;
           }
           @page {
             size: 80mm auto;
-            margin: 0;
+            margin: 3mm;
           }
         }
       `}</style>
@@ -100,15 +111,15 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 6 }}>
-          <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 2 }}>DIASTAR</div>
-          <div style={{ fontSize: 9 }}>No. 240, Dam Street, Colombo-12</div>
-          <div style={{ fontSize: 9 }}>Tel: 0112324066  Mob: 0777495894</div>
+          <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: 3 }}>DIASTAR</div>
+          <div style={{ fontSize: 11 }}>No. 240, Dam Street, Colombo-12</div>
+          <div style={{ fontSize: 11 }}>Tel: 0112324066  Mob: 0777495894</div>
         </div>
 
         {divider()}
 
         {/* Transaction meta */}
-        <div style={{ fontSize: 9, marginBottom: 2 }}>
+        <div style={{ fontSize: 11, marginBottom: 2 }}>
           {line('Customer', customerName || 'Walk-in')}
           {line('', isWholesale ? 'Wholesale' : 'Retail')}
           {salespersonName && line('Sales Rep', salespersonName)}
@@ -120,7 +131,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Column header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 52px 40px 52px', gap: '0 2px', fontSize: 9, fontWeight: 700, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 52px 34px 56px', gap: '0 2px', fontSize: 11, fontWeight: 900, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
           <span>#</span>
           <span>Product</span>
           <span style={{ textAlign: 'right' }}>Rate</span>
@@ -135,12 +146,12 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           const rate = Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price));
           const amt = rate * qty;
           return (
-            <div key={item.product.id} style={{ marginBottom: 4, fontSize: 9 }}>
-              <div style={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div key={item.product.id} style={{ marginBottom: 5, fontSize: 11 }}>
+              <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {i + 1}. {item.product.name.toUpperCase()}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 52px 40px 52px', gap: '0 2px' }}>
-                <span style={{ color: '#666' }}>{item.product.item_code || ''}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '14px 1fr 52px 34px 56px', gap: '0 2px' }}>
+                <span style={{ color: '#000' }}>{item.product.item_code || ''}</span>
                 <span />
                 <span style={{ textAlign: 'right' }}>{fmt(rate)}</span>
                 <span style={{ textAlign: 'right' }}>{qty}</span>
@@ -153,7 +164,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Totals block */}
-        <div style={{ fontSize: 9 }}>
+        <div style={{ fontSize: 11 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span>No. of Item  {cartSnapshot.length}</span>
             <span>Net Total  {fmt(subtotal)}</span>
@@ -192,7 +203,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Grand total */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 12, margin: '4px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 15, margin: '5px 0' }}>
           <span>TOTAL</span>
           <span>LKR {fmt(total)}</span>
         </div>
@@ -200,7 +211,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Exchange policy */}
-        <div style={{ textAlign: 'center', fontSize: 8, fontWeight: 700, margin: '4px 0', lineHeight: 1.5 }}>
+        <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 900, margin: '4px 0', lineHeight: 1.5 }}>
           <div>EXCHANGE WITHIN 3 DAYS ONLY</div>
           <div>BILL MUST BE PRODUCED</div>
         </div>
@@ -208,20 +219,20 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider(true)}
 
         {/* Warranty note */}
-        <div style={{ textAlign: 'center', fontSize: 8, fontWeight: 700, margin: '4px 0', lineHeight: 1.5 }}>
+        <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 900, margin: '4px 0', lineHeight: 1.5 }}>
           <div>6 MONTHS WARRANTY APPLICABLE</div>
           <div>BILL MUST BE PRODUCED FOR</div>
           <div>WARRANTY CLAIM</div>
         </div>
 
-        <div style={{ textAlign: 'center', fontWeight: 900, fontSize: 10, margin: '5px 0' }}>
+        <div style={{ textAlign: 'center', fontWeight: 900, fontSize: 13, margin: '5px 0' }}>
           THANK YOU COME AGAIN
         </div>
 
         {divider()}
 
         {/* Print footer */}
-        <div style={{ fontSize: 8, color: '#444' }}>
+        <div style={{ fontSize: 10, color: '#000' }}>
           <div>Printed on {dateStr} At {timeStr}</div>
           <div>User Id  POS</div>
           {earnedPoints > 0 && (
