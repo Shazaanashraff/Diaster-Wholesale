@@ -17,6 +17,7 @@ export type Permission =
   | 'view_inventory'
   | 'manage_inventory'
   | 'manage_returns'
+  | 'view_sales_report'
   | 'view_dev_portal';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -25,7 +26,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'manage_costs', 'manage_payments', 'view_reports', 'manage_salespeople', 'pos',
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
-    'manage_inventory', 'manage_returns',
+    'manage_inventory', 'manage_returns', 'view_sales_report',
   ],
   developer: [
     'view_dev_portal',
@@ -39,7 +40,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import', 'manage_returns',
   ],
   pos_operator: [
-    'pos', 'manage_returns', 'view_inventory', 'manage_costs',
+    'pos', 'manage_returns', 'view_inventory', 'manage_costs', 'view_sales_report',
   ],
   warehouse: [
     'view_inventory', 'manage_inventory', 'manage_procurement',

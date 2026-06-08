@@ -12,7 +12,7 @@ interface LayoutWrapperProps {
 export const LayoutWrapper: React.FC<LayoutWrapperProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier', '/developer'].some(
+  const isPosRoute = ['/pos', '/', '/inventory', '/products', '/customers', '/reports', '/suppliers', '/purchases', '/cashier', '/sales-report', '/developer'].some(
     (p) => location.pathname === p || location.pathname.startsWith('/purchases/') || location.pathname.startsWith('/developer')
   );
   const isProductsRoute = [

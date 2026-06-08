@@ -136,7 +136,7 @@ export const DayTransactionsPage: React.FC = () => {
     finally { setDeleteTarget(null); }
   }
 
-  const showAddButton = tab !== 'day-end';
+  const showAddButton = tab === 'expenses' || tab === 'income';
 
   return (
     <div className="pos-standard-page p-6 space-y-6 relative">
@@ -160,7 +160,7 @@ export const DayTransactionsPage: React.FC = () => {
           <p className="text-xs text-gray-500 mt-0.5">Expenses, income, and daily financial summary</p>
         </div>
         <div className="flex items-center gap-2">
-          {tab !== 'day-end' && (
+          {(tab === 'expenses' || tab === 'income') && (
             <button onClick={load} className="p-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl hover:text-white transition-all">
               <RefreshCw size={13} />
             </button>
@@ -181,7 +181,7 @@ export const DayTransactionsPage: React.FC = () => {
       </div>
 
       {/* KPI strip — only for expenses/income tabs */}
-      {tab !== 'day-end' && (
+      {(tab === 'expenses' || tab === 'income') && (
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: 'Total Expenses', value: fmt(totalExpenses), accent: 'text-red-400',     icon: TrendingDown },
@@ -223,7 +223,7 @@ export const DayTransactionsPage: React.FC = () => {
       {tab === 'day-end' && <DailyFinanceReport />}
 
       {/* ── Expenses / Income tables ── */}
-      {tab !== 'day-end' && (
+      {(tab === 'expenses' || tab === 'income') && (
         <>
           {/* Search */}
           <div className="relative">

@@ -19,6 +19,7 @@ import { DayTransactionsPage } from './pages/DayTransactionsPage';
 import { StockTransfersPage } from './pages/StockTransfersPage';
 import { UpdatesPage } from './pages/UpdatesPage';
 import { CashierPage } from './pages/CashierPage';
+import { DailySalesReport } from './pages/reports/DailySalesReport';
 import { SalespeoplePage } from './pages/SalespeoplePage';
 import { DeveloperPortal } from './pages/DeveloperPortal';
 import { usePermissions, type Permission } from './utils/permissions';
@@ -74,6 +75,7 @@ const App: React.FC = () => {
           <Route path="/day-transactions" element={<ProtectedRoute req={['manage_costs', 'manage_payments']}><DayTransactionsPage /></ProtectedRoute>} />
           <Route path="/expenses" element={<Navigate to="/day-transactions" replace />} />
           <Route path="/cashier" element={<ProtectedRoute req="pos"><CashierPage /></ProtectedRoute>} />
+          <Route path="/sales-report" element={<ProtectedRoute req="view_sales_report"><div className="p-6"><DailySalesReport /></div></ProtectedRoute>} />
           <Route path="/updates" element={<UpdatesPage />} />
           <Route path="/developer" element={<ProtectedRoute req="view_dev_portal"><DeveloperPortal /></ProtectedRoute>} />
           <Route path="/settings" element={<div className="p-8 flex items-center justify-center text-gray-400">Settings Page Placeholder</div>} />

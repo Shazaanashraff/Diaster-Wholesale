@@ -42,7 +42,8 @@ interface SidebarProps {
 const ALL_NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard,   label: 'Dashboard',   path: '/' },
   { icon: MonitorSmartphone, label: 'Digital POS', path: '/pos',       requires: 'pos' },
-  { icon: ClipboardList,     label: 'Cashier',     path: '/cashier',   requires: 'pos' },
+  { icon: ClipboardList,     label: 'Cashier',     path: '/cashier',      requires: 'pos' },
+  { icon: BarChart3,         label: 'Sales Report', path: '/sales-report', requires: 'view_sales_report' },
   { icon: Boxes,             label: 'Inventory',   path: '/inventory', requires: 'view_inventory' },
   { icon: Package2,          label: 'Products',    path: '/products',  requires: 'manage_products' },
   { icon: Users,             label: 'Customers',   path: '/customers', requires: 'view_customers' },

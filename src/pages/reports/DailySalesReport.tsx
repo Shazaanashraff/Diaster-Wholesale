@@ -7,13 +7,18 @@ import { ExportBar } from './shared/ExportBar';
 import { ReportKPICard } from './shared/ReportKPICard';
 import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
-import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle } from 'lucide-react';
+import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleReceipt';
+import type { Product } from '../../types';
+import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X } from 'lucide-react';
 
 interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
 interface InvoiceRow {
   id: string;
   invoice_no: string;
+  subtotal: number;
+  discount: number;
   total: number;
+  mode: string | null;
   payment_status: string;
   created_at: string;
   salesperson_name: string | null;
@@ -21,6 +26,18 @@ interface InvoiceRow {
   customers: { name: string } | null;
 }
 interface TxRow { invoice_no: string; customer: string; salesperson: string; status: string; method: string; bank: string; amount: number; created_at: string }
+interface DetailItem {
+  cartons: number;
+  pieces: number;
+  unit_price: number;
+  total: number;
+  batch_id: string | null;
+  products: {
+    id: string; name: string; item_code: string; pieces_per_carton: number;
+    wholesale_price: number; retail_price: number; model: string; category: string;
+    created_at: string; updated_at: string;
+  } | null;
+}
 
 const canCancelSales = () => { const r = getCurrentRole(); return r === 'admin' || r === 'accountant'; };
 
@@ -52,6 +69,13 @@ export const DailySalesReport: React.FC = () => {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const allowCancel = canCancelSales();
 
+  // Invoice detail state
+  const [detailInvoice, setDetailInvoice] = useState<InvoiceRow | null>(null);
+  const [detailItems, setDetailItems] = useState<DetailItem[]>([]);
+  const [detailPayments, setDetailPayments] = useState<PaymentRow[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [receiptData, setReceiptData] = useState<SaleReceiptData | null>(null);
+
   async function load() {
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
@@ -65,7 +89,7 @@ export const DailySalesReport: React.FC = () => {
       (() => {
         let q = supabase
           .from('invoices')
-          .select('id, invoice_no, total, payment_status, created_at, salesperson_name, salesperson:salespeople(id, name), customers(name)');
+          .select('id, invoice_no, subtotal, discount, total, mode, payment_status, created_at, salesperson_name, salesperson:salespeople(id, name), customers(name)');
         if (from) q = q.gte('created_at', from);
         if (to)   q = q.lte('created_at', to);
         return q.order('created_at', { ascending: false });
@@ -79,6 +103,55 @@ export const DailySalesReport: React.FC = () => {
   }
 
   useEffect(() => { load(); }, [period, customFrom, customTo]);
+
+  async function openDetail(inv: InvoiceRow) {
+    setDetailInvoice(inv);
+    setDetailItems([]);
+    setDetailPayments([]);
+    setDetailLoading(true);
+    setReceiptData(null);
+    const [itemsRes, paymentsRes] = await Promise.all([
+      supabase
+        .from('invoice_items')
+        .select('cartons, pieces, unit_price, total, batch_id, products(id, name, item_code, pieces_per_carton, wholesale_price, retail_price, model, category, created_at, updated_at)')
+        .eq('invoice_id', inv.id),
+      supabase
+        .from('payments')
+        .select('method, bank_name, amount, paid_at, reference')
+        .eq('invoice_id', inv.id)
+        .gt('amount', 0),
+    ]);
+    setDetailItems((itemsRes.data ?? []) as unknown as DetailItem[]);
+    setDetailPayments((paymentsRes.data ?? []) as PaymentRow[]);
+    setDetailLoading(false);
+  }
+
+  function handlePrintReceipt() {
+    if (!detailInvoice) return;
+    const rd: SaleReceiptData = {
+      invoiceNo: detailInvoice.invoice_no,
+      cartSnapshot: detailItems
+        .filter(item => item.products !== null)
+        .map(item => ({
+          product: item.products as Product,
+          quantityCartons: item.cartons,
+          quantityPieces: item.pieces,
+          unitPrice: item.unit_price,
+          batchId: item.batch_id ?? undefined,
+        })),
+      customerName: detailInvoice.customers?.name ?? 'Walk-in',
+      salespersonName: detailInvoice.salesperson?.name ?? detailInvoice.salesperson_name ?? '—',
+      paymentSplits: detailPayments.map(p => ({ method: p.method, amount: Number(p.amount) })),
+      subtotal: Number(detailInvoice.subtotal),
+      discount: Number(detailInvoice.discount),
+      redeemedPoints: 0,
+      total: Number(detailInvoice.total),
+      isWholesale: detailInvoice.mode === 'wholesale',
+      earnedPoints: 0,
+      timestamp: new Date(detailInvoice.created_at),
+    };
+    setReceiptData(rd);
+  }
 
   async function handleCancel() {
     if (!cancelTarget) return;
@@ -253,16 +326,16 @@ export const DailySalesReport: React.FC = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[#2b313a]">
-                {['Date', 'Invoice', 'Customer', 'Sold By', 'Status', 'Amount', ...(allowCancel ? [''] : [])].map(h => (
+                {['Date', 'Invoice', 'Customer', 'Sold By', 'Status', 'Amount', ''].map(h => (
                   <th key={h} className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest px-5 py-3">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={allowCancel ? 7 : 6} className="px-5 py-8 text-center text-gray-500 text-sm">Loading...</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 text-sm">Loading...</td></tr>
               ) : allInvoices.length === 0 ? (
-                <tr><td colSpan={allowCancel ? 7 : 6} className="px-5 py-8 text-center text-gray-500 text-sm">No invoices for this period.</td></tr>
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 text-sm">No invoices for this period.</td></tr>
               ) : allInvoices.map(inv => (
                 <tr key={inv.id} className={cn('border-b border-[#2b313a]/60 hover:bg-[#1d222a] transition-colors', inv.payment_status === 'cancelled' && 'opacity-50')}>
                   <td className="px-5 py-3 text-xs text-gray-500">{fmtDate(inv.created_at)}</td>
@@ -278,9 +351,16 @@ export const DailySalesReport: React.FC = () => {
                     )}>{inv.payment_status}</span>
                   </td>
                   <td className="px-5 py-3 text-sm font-bold font-mono text-right text-white">{fmtCurrency(Number(inv.total))}</td>
-                  {allowCancel && (
-                    <td className="px-5 py-3 text-right">
-                      {inv.payment_status !== 'cancelled' && (
+                  <td className="px-5 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => openDetail(inv)}
+                        className="p-1 rounded text-gray-600 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                        title="View invoice"
+                      >
+                        <Eye size={13} />
+                      </button>
+                      {allowCancel && inv.payment_status !== 'cancelled' && (
                         <button
                           onClick={() => { setCancelTarget(inv); setCancelError(null); }}
                           className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
@@ -289,14 +369,167 @@ export const DailySalesReport: React.FC = () => {
                           <XCircle size={13} />
                         </button>
                       )}
-                    </td>
-                  )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Invoice detail modal */}
+      {detailInvoice && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal header */}
+            <div className="px-6 py-4 border-b border-[#2b313a] flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-white">{detailInvoice.invoice_no}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {fmtDate(detailInvoice.created_at)} · {detailInvoice.customers?.name ?? 'Walk-in'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {!detailLoading && detailItems.length > 0 && (
+                  <button
+                    onClick={handlePrintReceipt}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/80 text-white text-xs font-bold hover:bg-blue-600 transition-colors"
+                  >
+                    <Printer size={12} />
+                    Print Receipt
+                  </button>
+                )}
+                <button
+                  onClick={() => { setDetailInvoice(null); setReceiptData(null); }}
+                  className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal body */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
+              {detailLoading ? (
+                <div className="text-center text-gray-500 text-sm py-12">Loading invoice details…</div>
+              ) : (
+                <>
+                  {/* Invoice meta */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sold By</p>
+                      <p className="text-sm text-white font-semibold mt-0.5">
+                        {detailInvoice.salesperson?.name ?? detailInvoice.salesperson_name ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Mode</p>
+                      <p className="text-sm text-white font-semibold mt-0.5 capitalize">
+                        {detailInvoice.mode ?? '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status</p>
+                      <span className={cn('inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase',
+                        detailInvoice.payment_status === 'paid'       ? 'bg-green-900/20 text-green-400' :
+                        detailInvoice.payment_status === 'partial'    ? 'bg-amber-900/20 text-amber-400' :
+                        detailInvoice.payment_status === 'cancelled'  ? 'bg-gray-900/20 text-gray-500'   :
+                                                                         'bg-red-900/20 text-red-400'
+                      )}>{detailInvoice.payment_status}</span>
+                    </div>
+                  </div>
+
+                  {/* Line items */}
+                  <div className="rounded-xl border border-[#2b313a] overflow-hidden">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-[#2b313a] bg-[#12161d]">
+                          <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Product</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Qty</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Unit Price</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailItems.length === 0 ? (
+                          <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-500 text-xs">No items found</td></tr>
+                        ) : detailItems.map((item, i) => {
+                          const ppc = item.products?.pieces_per_carton || 1;
+                          const totalPieces = item.cartons * ppc + item.pieces;
+                          return (
+                            <tr key={i} className="border-b border-[#2b313a]/60 hover:bg-[#1d222a] transition-colors">
+                              <td className="px-4 py-2.5">
+                                <p className="text-sm font-semibold text-white">{item.products?.name ?? '—'}</p>
+                                <p className="text-[10px] text-gray-500 font-mono">{item.products?.item_code ?? ''}</p>
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-xs text-gray-300 font-mono whitespace-nowrap">
+                                {item.cartons > 0 && <span>{item.cartons} ctn</span>}
+                                {item.cartons > 0 && item.pieces > 0 && <span className="mx-1 text-gray-600">+</span>}
+                                {item.pieces > 0 && <span>{item.pieces} pcs</span>}
+                                <span className="ml-1 text-gray-600">({totalPieces})</span>
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-xs font-mono text-gray-300">{fmtCurrency(item.unit_price)}</td>
+                              <td className="px-4 py-2.5 text-right text-sm font-bold font-mono text-white">{fmtCurrency(item.total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totals + Payments side by side */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Summary</p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-400">Subtotal</span>
+                        <span className="text-gray-300 font-mono">{fmtCurrency(Number(detailInvoice.subtotal))}</span>
+                      </div>
+                      {Number(detailInvoice.discount) > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-400">Discount</span>
+                          <span className="text-red-400 font-mono">− {fmtCurrency(Number(detailInvoice.discount))}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm font-bold border-t border-[#2b313a] pt-2 mt-1">
+                        <span className="text-white">Total</span>
+                        <span className="text-white font-mono">{fmtCurrency(Number(detailInvoice.total))}</span>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Payments</p>
+                      {detailPayments.length === 0 ? (
+                        <p className="text-xs text-gray-500">No payments recorded</p>
+                      ) : detailPayments.map((p, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-gray-400 capitalize">{METHOD_LABELS[p.method] ?? p.method}</span>
+                          <span className="text-gray-300 font-mono">{fmtCurrency(Number(p.amount))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt print overlay */}
+      {receiptData && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="relative">
+            <button
+              onClick={() => setReceiptData(null)}
+              className="absolute -top-8 right-0 flex items-center gap-1 text-gray-400 hover:text-white text-xs transition-colors"
+            >
+              <X size={12} /> Close Preview
+            </button>
+            <POSSaleReceipt data={receiptData} onClose={() => setReceiptData(null)} />
+          </div>
+        </div>
+      )}
 
       {/* Cancel confirm modal */}
       {cancelTarget && (

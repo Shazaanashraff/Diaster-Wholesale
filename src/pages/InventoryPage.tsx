@@ -60,7 +60,8 @@ export const InventoryPage: React.FC = () => {
   // ── Success toast ──
   const [toast, setToast] = useState<string | null>(null);
 
-  const { can } = usePermissions();
+  const { can, role } = usePermissions();
+  const isShopOnly = role === 'pos_operator';
 
   useEffect(() => {
     fetchInventory();
@@ -287,10 +288,11 @@ export const InventoryPage: React.FC = () => {
           <div className="pos-mode-toggle">
             <select
               value={locationFilter}
-              onChange={(e) => setLocationFilter(e.target.value as 'warehouse' | 'shop')}
-              className="px-3 py-2 rounded-lg bg-[#1d222a] border border-[#2b313a] text-xs font-bold text-gray-300 focus:outline-none"
+              onChange={(e) => !isShopOnly && setLocationFilter(e.target.value as 'warehouse' | 'shop')}
+              disabled={isShopOnly}
+              className="px-3 py-2 rounded-lg bg-[#1d222a] border border-[#2b313a] text-xs font-bold text-gray-300 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <option value="warehouse">Warehouse</option>
+              {!isShopOnly && <option value="warehouse">Warehouse</option>}
               <option value="shop">Shop</option>
             </select>
             <button

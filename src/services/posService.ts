@@ -384,15 +384,22 @@ export async function cancelInvoice(invoiceId: string): Promise<void> {
   if (fetchErr || !inv) throw new Error('Invoice not found');
   if (inv.payment_status === 'cancelled') throw new Error('Invoice is already cancelled');
 
-  // If there was an unpaid balance, reverse it on the customer account
-  const { data: payments } = await supabase
-    .from('payments')
-    .select('amount')
-    .eq('invoice_id', invoiceId);
+  // Fetch invoice items and payments in parallel
+  const [{ data: items }, { data: payments }] = await Promise.all([
+    supabase
+      .from('invoice_items')
+      .select('product_id, cartons, pieces, batch_id, products(pieces_per_carton)')
+      .eq('invoice_id', invoiceId),
+    supabase
+      .from('payments')
+      .select('amount')
+      .eq('invoice_id', invoiceId),
+  ]);
 
-  const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
+  const totalPaid = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
   const outstanding = Math.max(0, Number(inv.total) - totalPaid);
 
+  // 1. Reverse customer outstanding balance
   if (outstanding > 0 && inv.customer_id) {
     const { data: cust } = await supabase
       .from('customers')
@@ -407,6 +414,54 @@ export async function cancelInvoice(invoiceId: string): Promise<void> {
     }
   }
 
+  // 2. Restore stock for each invoice item
+  for (const item of (items ?? []) as any[]) {
+    const ppc = item.products?.pieces_per_carton || 1;
+    const totalPieces = Number(item.cartons) * ppc + Number(item.pieces);
+    if (totalPieces <= 0) continue;
+    const { error: restoreErr } = await supabase.rpc('restore_stock_to_batch', {
+      p_batch_id:   item.batch_id ?? null,
+      p_product_id: item.product_id,
+      p_units:      totalPieces,
+    });
+    if (restoreErr) console.warn('Stock restore warning:', restoreErr.message);
+  }
+
+  // 3. Reverse earned loyalty points linked to this invoice
+  if (inv.customer_id) {
+    const { data: loyaltyTx } = await supabase
+      .from('loyalty_transactions')
+      .select('points')
+      .eq('invoice_id', invoiceId)
+      .eq('transaction_type', 'EARN');
+
+    const earnedPoints = (loyaltyTx ?? []).reduce((s: number, t: any) => s + Number(t.points), 0);
+    if (earnedPoints > 0) {
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('loyalty_points, total_loyalty_earned')
+        .eq('id', inv.customer_id)
+        .single();
+      if (cust) {
+        await supabase
+          .from('customers')
+          .update({
+            loyalty_points:       Math.max(0, Number(cust.loyalty_points) - earnedPoints),
+            total_loyalty_earned: Math.max(0, Number((cust as any).total_loyalty_earned) - earnedPoints),
+          })
+          .eq('id', inv.customer_id);
+        await supabase.from('loyalty_transactions').insert({
+          customer_id:      inv.customer_id,
+          invoice_id:       invoiceId,
+          transaction_type: 'RETURN_REVERSAL',
+          points:           -earnedPoints,
+          notes:            'Points reversed — invoice cancelled',
+        });
+      }
+    }
+  }
+
+  // 4. Mark invoice as cancelled
   const { error } = await supabase
     .from('invoices')
     .update({ payment_status: 'cancelled' })

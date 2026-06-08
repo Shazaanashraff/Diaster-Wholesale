@@ -8,7 +8,6 @@ import {
   Truck,
   TrendingUp,
   AlertCircle,
-  Clock,
   ChevronRight,
   Search,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ import { CashFlowReport }             from './reports/CashFlowReport';
 import { CurrentStockReport }         from './reports/CurrentStockReport';
 import { LowStockReport }             from './reports/LowStockReport';
 import { InventoryAdjustmentReport }  from './reports/InventoryAdjustmentReport';
-import { DailySalesReport }           from './reports/DailySalesReport';
 import { SalesByProductReport }       from './reports/SalesByProductReport';
 import { SalesByCustomerReport }      from './reports/SalesByCustomerReport';
 import { StockValuationReport }       from './reports/StockValuationReport';
@@ -34,6 +32,14 @@ import { FastMovingReport }           from './reports/FastMovingReport';
 import { SlowMovingReport }           from './reports/SlowMovingReport';
 import { DailyFinanceReport }         from './reports/DailyFinanceReport';
 import { SalesByPersonReport }        from './reports/SalesByPersonReport';
+import { WholesaleRetailReport }      from './reports/WholesaleRetailReport';
+import { InvoiceReport }              from './reports/InvoiceReport';
+import { CreditReport }               from './reports/CreditReport';
+import { ARAgingReport }              from './reports/ARAgingReport';
+import { PayablesReport }             from './reports/PayablesReport';
+import { StockAgingReport }           from './reports/StockAgingReport';
+import { InventoryMovementReport }    from './reports/InventoryMovementReport';
+import { DeadStockReport }            from './reports/DeadStockReport';
 
 const CATEGORIES = [
   {
@@ -58,8 +64,8 @@ const CATEGORIES = [
       { id: 'stock-valuation', label: 'Stock Valuation',     component: StockValuationReport },
       { id: 'low-stock',       label: 'Low Stock',           component: LowStockReport },
       { id: 'adjustment',      label: 'Stock Adjustment',    component: InventoryAdjustmentReport },
-      { id: 'stock-aging',     label: 'Stock Aging',         comingSoon: true },
-      { id: 'movement',        label: 'Inventory Movement',  comingSoon: true },
+      { id: 'stock-aging',     label: 'Stock Aging',         component: StockAgingReport },
+      { id: 'movement',        label: 'Inventory Movement',  component: InventoryMovementReport },
     ],
   },
   {
@@ -67,12 +73,11 @@ const CATEGORIES = [
     label: 'Sales',
     icon: ShoppingCart,
     reports: [
-      { id: 'daily-sales',        label: 'Daily Sales',         component: DailySalesReport },
       { id: 'sales-by-product',   label: 'By Product',          component: SalesByProductReport },
       { id: 'sales-by-customer',  label: 'By Customer',         component: SalesByCustomerReport },
       { id: 'sales-by-person',    label: 'By Salesperson',      component: SalesByPersonReport },
-      { id: 'sales-by-mode',      label: 'Wholesale vs Retail', comingSoon: true },
-      { id: 'invoice-report',     label: 'Invoice Report',      comingSoon: true },
+      { id: 'sales-by-mode',      label: 'Wholesale vs Retail', component: WholesaleRetailReport },
+      { id: 'invoice-report',     label: 'Invoice Report',      component: InvoiceReport },
     ],
   },
   {
@@ -81,8 +86,8 @@ const CATEGORIES = [
     icon: Users,
     reports: [
       { id: 'customer-ledger', label: 'Customer Ledger', component: CustomerLedgerAggregateReport },
-      { id: 'credit-report',   label: 'Credit Report',   comingSoon: true },
-      { id: 'ar-aging',        label: 'AR Aging',        comingSoon: true },
+      { id: 'credit-report',   label: 'Credit Report',   component: CreditReport },
+      { id: 'ar-aging',        label: 'AR Aging',        component: ARAgingReport },
     ],
   },
   {
@@ -91,7 +96,7 @@ const CATEGORIES = [
     icon: Truck,
     reports: [
       { id: 'purchase-history',      label: 'Purchase History', component: PurchaseHistoryReport },
-      { id: 'outstanding-payables',  label: 'Payables',         comingSoon: true },
+      { id: 'outstanding-payables',  label: 'Payables',         component: PayablesReport },
     ],
   },
   {
@@ -110,7 +115,7 @@ const CATEGORIES = [
     reports: [
       { id: 'fast-moving', label: 'Fast Moving', component: FastMovingReport },
       { id: 'slow-moving', label: 'Slow Moving', component: SlowMovingReport },
-      { id: 'dead-stock',  label: 'Dead Stock',  comingSoon: true },
+      { id: 'dead-stock',  label: 'Dead Stock',  component: DeadStockReport },
     ],
   },
 ];
@@ -132,23 +137,6 @@ export const ReportsPage: React.FC = () => {
 
   const renderReport = () => {
     if (!activeReport) return null;
-
-    if (activeReport.comingSoon) {
-      return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-center" style={{ animation: 'posFadeIn 300ms ease' }}>
-          <div className="w-20 h-20 rounded-2xl bg-[#1d222a] border border-[#2b313a] flex items-center justify-center mb-5">
-            <Clock size={34} className="text-gray-500" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">{activeReport.label}</h3>
-          <p className="text-sm text-gray-500 max-w-sm leading-relaxed">
-            This report module is under development and will be available in the next system update.
-          </p>
-          <span className="mt-4 px-3 py-1 rounded-full bg-[#1d222a] border border-[#2b313a] text-[10px] font-bold uppercase tracking-widest text-gray-500">
-            Coming Soon
-          </span>
-        </div>
-      );
-    }
 
     const Component = (activeReport as any).component;
     return Component ? (
@@ -216,11 +204,6 @@ export const ReportsPage: React.FC = () => {
                     >
                       <span className="truncate">{rep.label}</span>
                       <span className="shrink-0 flex items-center gap-1.5 ml-2">
-                        {(rep as any).comingSoon && (
-                          <span className="text-[8px] font-bold uppercase tracking-wider text-gray-600 bg-[#1d222a] px-1.5 py-0.5 rounded-md">
-                            Soon
-                          </span>
-                        )}
                         {isActive && <ChevronRight size={12} className="text-primary" />}
                       </span>
                     </button>
@@ -247,11 +230,6 @@ export const ReportsPage: React.FC = () => {
           <span className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">
             {activeReport?.label}
           </span>
-          {activeReport && (activeReport as any).comingSoon && (
-            <span className="ml-2 px-2 py-0.5 rounded-full bg-[#1d222a] border border-[#2b313a] text-[9px] font-bold uppercase tracking-widest text-gray-500">
-              Coming Soon
-            </span>
-          )}
         </div>
 
         <div className="px-8 py-7 max-w-6xl mx-auto">

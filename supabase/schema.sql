@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   discount      NUMERIC(12,2) NOT NULL DEFAULT 0,
   total         NUMERIC(12,2) NOT NULL DEFAULT 0,
   payment_status TEXT NOT NULL DEFAULT 'unpaid'
-                  CHECK (payment_status IN ('unpaid','partial','paid')),
+                  CHECK (payment_status IN ('unpaid','partial','paid','cancelled')),
   salesperson_id UUID REFERENCES salespeople(id) ON DELETE SET NULL,
   notes         TEXT NOT NULL DEFAULT '',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
