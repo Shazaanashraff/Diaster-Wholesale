@@ -100,9 +100,9 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 6 }}>
-          <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 2 }}>DIASTAR DAM 63</div>
-          <div style={{ fontSize: 9 }}>63, Damstreet Col-12</div>
-          <div style={{ fontSize: 9 }}>0112445597 | 0777171199</div>
+          <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: 2 }}>DIASTAR</div>
+          <div style={{ fontSize: 9 }}>No. 240, Dam Street, Colombo-12</div>
+          <div style={{ fontSize: 9 }}>Tel: 0112324066  Mob: 0777495894</div>
         </div>
 
         {divider()}
@@ -199,7 +199,15 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
 
         {divider()}
 
-        {/* Footer note */}
+        {/* Exchange policy */}
+        <div style={{ textAlign: 'center', fontSize: 8, fontWeight: 700, margin: '4px 0', lineHeight: 1.5 }}>
+          <div>EXCHANGE WITHIN 3 DAYS ONLY</div>
+          <div>BILL MUST BE PRODUCED</div>
+        </div>
+
+        {divider(true)}
+
+        {/* Warranty note */}
         <div style={{ textAlign: 'center', fontSize: 8, fontWeight: 700, margin: '4px 0', lineHeight: 1.5 }}>
           <div>6 MONTHS WARRANTY APPLICABLE</div>
           <div>BILL MUST BE PRODUCED FOR</div>
