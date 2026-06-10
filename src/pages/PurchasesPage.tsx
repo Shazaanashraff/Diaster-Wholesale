@@ -257,6 +257,10 @@ export const PurchasesPage: React.FC = () => {
       ]);
       setSuppliers(s);
       setLocations(locs);
+      const warehouseLoc = locs.find((l: Location) => l.type === 'warehouse');
+      if (warehouseLoc) {
+        setForm(prev => ({ ...prev, location_id: prev.location_id || warehouseLoc.id }));
+      }
       setProducts(pr);
       setInventory(inv);
       setMovementRates(mv);
@@ -292,7 +296,8 @@ export const PurchasesPage: React.FC = () => {
 
   // ── New purchase form ────────────────────────────────────────────
   function openPanel() {
-    setForm({ supplier_id: '', location_id: '', rep_name: '', notes: '' });
+    const warehouseLoc = locations.find((l) => l.type === 'warehouse');
+    setForm({ supplier_id: '', location_id: warehouseLoc?.id ?? '', rep_name: '', notes: '' });
     setFormError('');
     setQuickProductOpen(false);
     setQuickProductError('');

@@ -44,6 +44,7 @@ export interface CartItem {
   quantityPieces: number;
   batchId?: string;
   unitPrice?: number;
+  lineDiscount?: number;
 }
 
 const TILE_COLORS = [
@@ -444,10 +445,12 @@ export const POSPage: React.FC = () => {
   };
 
   const subtotal = cart.reduce((acc, item) => {
-    const pricePerPiece = Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price));
+    const sellingPrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+    const pricePerPiece = Number(item.unitPrice ?? sellingPrice);
+    const effectivePrice = Math.max(0, pricePerPiece - (item.lineDiscount ?? 0));
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = (item.quantityCartons || 0) * ppc + (item.quantityPieces || 0);
-    return acc + pricePerPiece * totalPieces;
+    return acc + effectivePrice * totalPieces;
   }, 0);
 
   const estimatedCostFloor = cart.reduce((acc, item) => {
@@ -468,11 +471,27 @@ export const POSPage: React.FC = () => {
   const safeRedeem = Math.min(redeemPoints, maxRedeemable);
   const redemptionValue = computeRedemptionValue(safeRedeem);
   const total = Math.max(0, subtotal - discount - redemptionValue);
-  const isBelowCost = total < estimatedCostFloor;
+
+  // Per-item pricing checks
+  const hasBelowCostItem = cart.some(item => {
+    const sellingPrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+    const pricePerPiece = Number(item.unitPrice ?? sellingPrice);
+    const effectivePrice = pricePerPiece - (item.lineDiscount ?? 0);
+    const costFloor = Math.max(avgCostByProduct[item.product.id] ?? 0, item.product.cost_price ?? 0);
+    return effectivePrice < costFloor;
+  });
+  const hasBelowSellingPriceItem = cart.some(item => {
+    const sellingPrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+    const pricePerPiece = Number(item.unitPrice ?? sellingPrice);
+    const effectivePrice = pricePerPiece - (item.lineDiscount ?? 0);
+    return effectivePrice < sellingPrice;
+  });
+
+  const isBelowCost = total < estimatedCostFloor || hasBelowCostItem;
   const hasBelowWholesaleItemPrice = cart.some(
     (item) => Number(item.unitPrice ?? item.product.wholesale_price) < Number(item.product.wholesale_price)
   );
-  const isBelowWholesale = total < wholesaleFloor || hasBelowWholesaleItemPrice;
+  const isBelowWholesale = total < wholesaleFloor || hasBelowWholesaleItemPrice || hasBelowSellingPriceItem;
   const needsApproval = (discountAmt > 0 || isBelowWholesale) && !pricingApproved;
   const isFullCredit = paymentSplits.length === 1 && paymentSplits[0].method === 'credit';
   const nonCreditSplits = paymentSplits.filter(s => s.method !== 'credit');
@@ -535,6 +554,14 @@ export const POSPage: React.FC = () => {
     const parsed = Math.max(0, parseFloat(value) || 0);
     setCart((prev) =>
       prev.map((item, i) => (i === index ? { ...item, unitPrice: parsed } : item))
+    );
+    setPricingApproved(false);
+  }
+
+  function updateCartLineDiscount(index: number, value: string) {
+    const parsed = Math.max(0, parseFloat(value) || 0);
+    setCart((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, lineDiscount: parsed || undefined } : item))
     );
     setPricingApproved(false);
   }
@@ -1161,6 +1188,40 @@ export const POSPage: React.FC = () => {
                             className="w-20 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
                           />
                         </div>
+                        {(() => {
+                          const sellingPrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+                          const costFloor = Math.max(avgCostByProduct[item.product.id] ?? 0, item.product.cost_price ?? 0);
+                          const effectivePrice = pricePerPiece - (item.lineDiscount ?? 0);
+                          const isBelowCostItem = effectivePrice < costFloor;
+                          const isBelowSellingItem = effectivePrice < sellingPrice;
+                          return (
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="text-[9px] text-gray-500 uppercase">Discount</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.lineDiscount || ''}
+                                onChange={(e) => updateCartLineDiscount(index, e.target.value)}
+                                placeholder="0"
+                                className={`w-20 bg-[#1d222a] border text-[10px] rounded px-1.5 py-0.5 outline-none font-mono ${
+                                  isBelowCostItem
+                                    ? 'border-red-500/60 text-red-400'
+                                    : isBelowSellingItem
+                                    ? 'border-amber-500/60 text-amber-300'
+                                    : 'border-[#2b313a] text-gray-300'
+                                }`}
+                              />
+                              {(item.lineDiscount ?? 0) > 0 && (
+                                <span className={`text-[9px] font-mono font-bold ${
+                                  isBelowCostItem ? 'text-red-400' : isBelowSellingItem ? 'text-amber-400' : 'text-emerald-400'
+                                }`}>
+                                  {isBelowCostItem ? '✕ below cost' : isBelowSellingItem ? '⚠ needs auth' : `= ${effectivePrice.toFixed(0)}`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div className="mt-1">
                           <select
                             value={item.batchId || ''}

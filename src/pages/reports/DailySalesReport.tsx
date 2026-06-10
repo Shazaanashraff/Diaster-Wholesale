@@ -65,6 +65,7 @@ export const DailySalesReport: React.FC = () => {
   const [creditInvoices, setCreditInvoices] = useState<InvoiceRow[]>([]);
   const [allInvoices, setAllInvoices] = useState<InvoiceRow[]>([]);
   const [cancelTarget, setCancelTarget] = useState<InvoiceRow | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const allowCancel = canCancelSales();
@@ -154,13 +155,14 @@ export const DailySalesReport: React.FC = () => {
   }
 
   async function handleCancel() {
-    if (!cancelTarget) return;
+    if (!cancelTarget || !cancelReason.trim()) return;
     setCancelling(true);
     setCancelError(null);
     try {
-      await cancelInvoice(cancelTarget.id);
+      await cancelInvoice(cancelTarget.id, cancelReason.trim());
       await load();
       setCancelTarget(null);
+      setCancelReason('');
     } catch (e: any) {
       setCancelError(e.message);
     } finally {
@@ -534,28 +536,39 @@ export const DailySalesReport: React.FC = () => {
       {/* Cancel confirm modal */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-6 w-[360px] space-y-4">
+          <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-6 w-[400px] space-y-4">
             <h3 className="text-sm font-bold text-white">Cancel Sale</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
               Cancel <span className="font-bold text-white">{cancelTarget.invoice_no}</span> for{' '}
               <span className="font-bold text-white">{cancelTarget.customers?.name ?? 'customer'}</span>?
-              {' '}Any unpaid balance will be removed from the customer's account.
-              Stock will not be automatically restored.
+              {' '}Any unpaid balance will be removed from the customer's account and stock will be restored.
             </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-gray-400">
+                Reason for cancellation <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={e => setCancelReason(e.target.value)}
+                placeholder="e.g. Customer changed mind, Wrong item ordered…"
+                rows={3}
+                className="w-full bg-[#1d222a] border border-[#2b313a] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-600 resize-none focus:outline-none focus:border-gray-500 transition-colors"
+              />
+            </div>
             {cancelError && (
               <p className="text-xs text-red-400">{cancelError}</p>
             )}
             <div className="flex gap-3 pt-1">
               <button
-                onClick={() => setCancelTarget(null)}
+                onClick={() => { setCancelTarget(null); setCancelReason(''); setCancelError(null); }}
                 className="flex-1 py-2 rounded-xl bg-[#1d222a] border border-[#2b313a] text-gray-400 text-xs font-bold hover:text-white transition-colors"
               >
                 Keep
               </button>
               <button
                 onClick={handleCancel}
-                disabled={cancelling}
-                className="flex-1 py-2 rounded-xl bg-red-600/80 text-white text-xs font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
+                disabled={cancelling || !cancelReason.trim()}
+                className="flex-1 py-2 rounded-xl bg-red-600/80 text-white text-xs font-bold hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {cancelling ? 'Cancelling…' : 'Cancel Sale'}
               </button>

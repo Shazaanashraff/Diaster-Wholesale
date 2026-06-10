@@ -44,7 +44,7 @@ export interface StockLedgerEntry {
   product_name: string;
   quantity: number;
   action: string;
-  location: StockLocation;
+  location: string;
   reference: string;
   actor: string;
   created_at: string;
@@ -279,6 +279,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
   type ProductJoin = { name?: string; item_code?: string; pieces_per_carton?: number } | Array<{ name?: string; item_code?: string; pieces_per_carton?: number }>;
   type ShipmentJoin = { reference?: string } | Array<{ reference?: string }>;
   type InvoiceJoin = { invoice_no?: string; created_at?: string } | Array<{ invoice_no?: string; created_at?: string }>;
+  type LocationJoin = { name?: string; type?: string } | Array<{ name?: string; type?: string }>;
   type StockInRow = {
     id: string;
     product_id: string;
@@ -288,6 +289,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     received_at: string;
     products?: ProductJoin;
     shipments?: ShipmentJoin;
+    locations?: LocationJoin;
   };
   type SalesRow = {
     id: string;
@@ -306,11 +308,12 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     adjusted_by: string;
     created_at: string;
     products?: ProductJoin;
+    locations?: LocationJoin;
   };
 
   let stockBatchQuery = supabase
     .from('stock_batches')
-    .select('id, product_id, cartons, loose_pieces, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference)')
+    .select('id, product_id, cartons, loose_pieces, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference), locations(name, type)')
     .order('received_at', { ascending: false })
     .limit(limit);
 
@@ -322,7 +325,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
   let adjustmentQuery = supabase
     .from('stock_adjustments')
-    .select('id, product_id, adjustment_pieces, reason, adjusted_by, created_at, products(name, item_code)')
+    .select('id, product_id, adjustment_pieces, reason, adjusted_by, created_at, products(name, item_code), locations(name, type)')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -345,6 +348,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
   const stockInLedger = ((stockInRows ?? []) as StockInRow[]).map((row) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
     const shipment = Array.isArray(row.shipments) ? row.shipments[0] : row.shipments;
+    const locationObj = Array.isArray(row.locations) ? row.locations[0] : row.locations;
     const piecesPerCarton = Number(product?.pieces_per_carton ?? 1) || 1;
     const quantity = Number(row.cartons ?? 0) * piecesPerCarton + Number(row.loose_pieces ?? 0);
     return {
@@ -354,7 +358,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
       product_name: product?.name ?? 'Unknown Product',
       quantity,
       action: 'Stock In',
-      location: 'store' as const,
+      location: locationObj?.name ?? 'Store',
       reference: shipment?.reference ?? row.notes ?? '',
       actor: 'procurement',
       created_at: row.received_at,
@@ -382,19 +386,23 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
   const adjustmentLedger = ((adjustmentRows ?? []) as AdjustmentRow[]).map((row) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
+    const locationObj = Array.isArray(row.locations) ? row.locations[0] : row.locations;
     const reason = String(row.reason ?? '');
     let action = Number(row.adjustment_pieces) >= 0 ? 'Adjustment In' : 'Adjustment Out';
-    let location: StockLocation = 'store';
+    let location = locationObj?.name ?? '—';
 
-    if (reason.startsWith('[TRANSFER-OUT STORE->SHOP]')) {
+    if (reason.startsWith('[CANCEL]')) {
+      action = 'Invoice Cancelled';
+      location = locationObj?.name ?? 'Main Shop';
+    } else if (reason.startsWith('[TRANSFER-OUT STORE->SHOP]') || /^Transfer out:/i.test(reason)) {
       action = 'Transfer Out';
-      location = 'store';
-    } else if (reason.startsWith('[TRANSFER-IN STORE->SHOP]')) {
+      location = locationObj?.name ?? 'Main Warehouse';
+    } else if (reason.startsWith('[TRANSFER-IN STORE->SHOP]') || /^Transfer in:/i.test(reason)) {
       action = 'Transfer In';
-      location = 'shop';
+      location = locationObj?.name ?? 'Main Shop';
     } else if (reason.toLowerCase().includes('return')) {
       action = 'Sale Return';
-      location = 'shop';
+      location = locationObj?.name ?? 'Main Shop';
     }
 
     return {

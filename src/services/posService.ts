@@ -186,9 +186,10 @@ export const checkout = async (
 
   // 2. Insert invoice items
   const invoiceItems = cart.map(item => {
-    const piecePrice = Number(
+    const basePrice = Number(
       item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)
     );
+    const effectivePrice = Math.max(0, basePrice - (item.lineDiscount ?? 0));
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = item.quantityCartons * ppc + item.quantityPieces;
     return {
@@ -196,8 +197,8 @@ export const checkout = async (
       product_id: item.product.id,
       cartons: item.quantityCartons,
       pieces: item.quantityPieces,
-      unit_price: piecePrice,
-      total: piecePrice * totalPieces,
+      unit_price: effectivePrice,
+      total: effectivePrice * totalPieces,
       batch_id: item.batchId || null,
     };
   });
@@ -328,8 +329,8 @@ export const checkoutOffline = async (
       quantityCartons: item.quantityCartons,
       quantityPieces: item.quantityPieces,
       piecesPerCarton: item.product.pieces_per_carton || 1,
-      unitPrice: Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)),
-      total: Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price))
+      unitPrice: Math.max(0, Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)) - (item.lineDiscount ?? 0)),
+      total: Math.max(0, Number(item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)) - (item.lineDiscount ?? 0))
         * (item.quantityCartons * (item.product.pieces_per_carton || 1) + item.quantityPieces),
       batchId: item.batchId,
     })),
@@ -374,10 +375,10 @@ export { getPendingCount as getOfflinePendingCount };
 
 // ─── Cancel invoice ───────────────────────────────────────────────────────────
 
-export async function cancelInvoice(invoiceId: string): Promise<void> {
+export async function cancelInvoice(invoiceId: string, reason: string): Promise<void> {
   const { data: inv, error: fetchErr } = await supabase
     .from('invoices')
-    .select('id, total, payment_status, customer_id')
+    .select('id, invoice_no, total, payment_status, customer_id')
     .eq('id', invoiceId)
     .single();
 
@@ -414,7 +415,9 @@ export async function cancelInvoice(invoiceId: string): Promise<void> {
     }
   }
 
-  // 2. Restore stock for each invoice item
+  // 2. Restore stock for each invoice item + log to stock_adjustments
+  const adjustedBy = sessionStorage.getItem('user_role') || 'admin';
+  const adjustmentReason = `[CANCEL] ${(inv as any).invoice_no} — ${reason}`;
   for (const item of (items ?? []) as any[]) {
     const ppc = item.products?.pieces_per_carton || 1;
     const totalPieces = Number(item.cartons) * ppc + Number(item.pieces);
@@ -425,6 +428,13 @@ export async function cancelInvoice(invoiceId: string): Promise<void> {
       p_units:      totalPieces,
     });
     if (restoreErr) console.warn('Stock restore warning:', restoreErr.message);
+    await supabase.from('stock_adjustments').insert({
+      product_id:         item.product_id,
+      adjustment_pieces:  totalPieces,
+      adjustment_cartons: 0,
+      reason:             adjustmentReason,
+      adjusted_by:        adjustedBy,
+    });
   }
 
   // 3. Reverse earned loyalty points linked to this invoice
@@ -461,10 +471,10 @@ export async function cancelInvoice(invoiceId: string): Promise<void> {
     }
   }
 
-  // 4. Mark invoice as cancelled
+  // 4. Mark invoice as cancelled and record the reason
   const { error } = await supabase
     .from('invoices')
-    .update({ payment_status: 'cancelled' })
+    .update({ payment_status: 'cancelled', notes: reason })
     .eq('id', invoiceId);
 
   if (error) throw new Error(error.message);
