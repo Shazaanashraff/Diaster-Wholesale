@@ -13,6 +13,7 @@ export interface CartItem {
   quantityPieces: number;
   batchId?: string;
   unitPrice?: number;
+  lineDiscount?: number;
 }
 
 export interface PaymentSplit {
