@@ -89,12 +89,14 @@ const fmt = (n: number) =>
 async function restoreStock(productId: string, cartons: number, pieces: number, piecesPerCarton: number, reason: string) {
   const totalPieces = cartons * (piecesPerCarton || 1) + pieces;
   if (totalPieces <= 0) return;
-  await supabase.from('stock_adjustments').insert({
-    product_id: productId,
-    adjustment_pieces: totalPieces,
-    reason,
-    adjusted_by: 'returns',
+  // Use restore_stock_to_batch so stock_batches is updated (same as cancelInvoice).
+  // This makes rollback via deduct_stock_fifo correct.
+  const { error } = await supabase.rpc('restore_stock_to_batch', {
+    p_batch_id: null,
+    p_product_id: productId,
+    p_units: totalPieces,
   });
+  if (error) throw new Error(`Stock restore failed: ${error.message}`);
 }
 
 async function deductStock(productId: string, totalPieces: number) {
@@ -118,6 +120,7 @@ export const ReturnsPage: React.FC = () => {
 
   // Step 1
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchDate, setSearchDate] = useState('');
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRow | null>(null);
@@ -128,6 +131,7 @@ export const ReturnsPage: React.FC = () => {
   const [reason, setReason] = useState(RETURN_REASONS[0]);
   const [replacements, setReplacements] = useState<ReplacementItem[]>([]);
   const [settlementMethod, setSettlementMethod] = useState('cash');
+  const [settlementBank, setSettlementBank] = useState('');
   const [products, setProducts] = useState<Array<{ id: string; name: string; pieces_per_carton: number; wholesale_price: number }>>([]);
   const [productSearch, setProductSearch] = useState('');
 
@@ -152,8 +156,6 @@ export const ReturnsPage: React.FC = () => {
 
   const searchInvoices = useCallback(async () => {
     setSearchLoading(true);
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - (isAdmin ? 30 : 10));
 
     let q = supabase
       .from('invoices')
@@ -165,9 +167,16 @@ export const ReturnsPage: React.FC = () => {
           products(name, item_code, pieces_per_carton)
         )
       `)
-      .gte('created_at', cutoff.toISOString())
       .order('created_at', { ascending: false })
       .limit(60);
+
+    if (searchDate) {
+      q = q.gte('created_at', `${searchDate}T00:00:00`).lte('created_at', `${searchDate}T23:59:59`);
+    } else {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (isAdmin ? 30 : 10));
+      q = q.gte('created_at', cutoff.toISOString());
+    }
 
     if (searchTerm.trim()) q = q.ilike('invoice_no', `%${searchTerm.trim()}%`);
 
@@ -175,19 +184,21 @@ export const ReturnsPage: React.FC = () => {
     if (!error && data) {
       const rows: InvoiceRow[] = (data as any[]).map(inv => {
         const customer = Array.isArray(inv.customers) ? inv.customers[0] : inv.customers;
-        const items: InvoiceItemRow[] = (inv.invoice_items ?? []).map((ii: any) => {
-          const prod = Array.isArray(ii.products) ? ii.products[0] : ii.products;
-          return {
-            id: ii.id, product_id: ii.product_id,
-            product_name: prod?.name ?? 'Unknown',
-            item_code: prod?.item_code ?? '—',
-            cartons: Number(ii.cartons ?? 0),
-            pieces: Number(ii.pieces ?? 0),
-            unit_price: Number(ii.unit_price ?? 0),
-            total: Number(ii.total ?? 0),
-            pieces_per_carton: Number(prod?.pieces_per_carton ?? 1) || 1,
-          };
-        });
+        const items: InvoiceItemRow[] = (inv.invoice_items ?? [])
+          .filter((ii: any) => Number(ii.unit_price ?? 0) >= 0)
+          .map((ii: any) => {
+            const prod = Array.isArray(ii.products) ? ii.products[0] : ii.products;
+            return {
+              id: ii.id, product_id: ii.product_id,
+              product_name: prod?.name ?? 'Unknown',
+              item_code: prod?.item_code ?? '—',
+              cartons: Number(ii.cartons ?? 0),
+              pieces: Number(ii.pieces ?? 0),
+              unit_price: Number(ii.unit_price ?? 0),
+              total: Number(ii.total ?? 0),
+              pieces_per_carton: Number(prod?.pieces_per_carton ?? 1) || 1,
+            };
+          });
         return {
           id: inv.id, invoice_no: inv.invoice_no,
           customer_id: inv.customer_id,
@@ -207,13 +218,13 @@ export const ReturnsPage: React.FC = () => {
           .in('original_invoice_id', ids)
           .neq('status', 'Cancelled');
         const returned = new Set((existing ?? []).map((r: any) => r.original_invoice_id));
-        setInvoices(rows.filter(r => !returned.has(r.id)));
+        setInvoices(rows.filter(r => r.payment_status === 'cancelled' || !returned.has(r.id)));
       } else {
         setInvoices(rows);
       }
     }
     setSearchLoading(false);
-  }, [searchTerm, isAdmin]);
+  }, [searchTerm, searchDate, isAdmin]);
 
   useEffect(() => {
     const t = setTimeout(searchInvoices, 400);
@@ -334,53 +345,93 @@ export const ReturnsPage: React.FC = () => {
       }
 
       if (returnType === 'Exchange') {
-        for (const r of returnItems) {
-          await restoreStock(r.product_id, r.return_cartons, r.return_pieces, r.pieces_per_carton,
-            `Exchange return for ${selectedInvoice.invoice_no}`);
-        }
+        // Track completed steps for rollback on failure
+        const restoredProducts: Array<{ product_id: string; pieces: number }> = [];
+        const deductedProducts: Array<{ product_id: string; pieces: number }> = [];
 
-        exchangeInvoiceNo = `EXC-${Date.now().toString(36).toUpperCase()}`;
-        const absDiff = Math.abs(exchangeDiff);
-        const isPaid = absDiff < 0.01 || !!settlementMethod;
+        try {
+          for (const r of returnItems) {
+            const pieces = r.return_cartons * r.pieces_per_carton + r.return_pieces;
+            await restoreStock(r.product_id, r.return_cartons, r.return_pieces, r.pieces_per_carton,
+              `Exchange return for ${selectedInvoice.invoice_no}`);
+            restoredProducts.push({ product_id: r.product_id, pieces });
+          }
 
-        const { data: excInv, error: excInvErr } = await supabase
-          .from('invoices')
-          .insert({
-            invoice_no: exchangeInvoiceNo,
-            customer_id: selectedInvoice.customer_id,
-            mode: 'wholesale',
-            subtotal: absDiff,
-            discount: 0,
-            total: absDiff,
-            payment_status: isPaid ? 'paid' : 'unpaid',
-            notes: `Exchange for ${selectedInvoice.invoice_no}`,
-          })
-          .select('id').single();
+          exchangeInvoiceNo = `EXC-${Date.now().toString(36).toUpperCase()}`;
+          const absDiff = Math.abs(exchangeDiff);
+          const isPaid = absDiff < 0.01 || !!settlementMethod;
 
-        if (excInvErr || !excInv) throw new Error(excInvErr?.message ?? 'Failed to create exchange invoice');
-        exchangeInvoiceId = excInv.id;
+          const { data: excInv, error: excInvErr } = await supabase
+            .from('invoices')
+            .insert({
+              invoice_no: exchangeInvoiceNo,
+              customer_id: selectedInvoice.customer_id,
+              mode: 'wholesale',
+              subtotal: absDiff,
+              discount: 0,
+              total: absDiff,
+              payment_status: isPaid ? 'paid' : 'unpaid',
+              notes: `Exchange for ${selectedInvoice.invoice_no}`,
+            })
+            .select('id').single();
 
-        for (const r of replacements) {
-          const ppc = r.pieces_per_carton || 1;
-          const itemTotal = r.unit_price * (r.cartons * ppc + r.pieces);
-          await supabase.from('invoice_items').insert({
-            invoice_id: exchangeInvoiceId,
-            product_id: r.product_id,
-            cartons: r.cartons, pieces: r.pieces,
-            unit_price: r.unit_price, total: itemTotal,
-          });
-          await deductStock(r.product_id, r.cartons * ppc + r.pieces);
-        }
+          if (excInvErr || !excInv) throw new Error(excInvErr?.message ?? 'Failed to create exchange invoice');
+          exchangeInvoiceId = excInv.id;
 
-        if (absDiff >= 0.01) {
-          await supabase.from('payments').insert({
-            invoice_id: exchangeInvoiceId,
-            customer_id: selectedInvoice.customer_id,
-            amount: exchangeDiff,
-            method: settlementMethod,
-            reference: exchangeInvoiceNo,
-            paid_at: new Date().toISOString(),
-          });
+          for (const r of replacements) {
+            const ppc = r.pieces_per_carton || 1;
+            const itemTotal = r.unit_price * (r.cartons * ppc + r.pieces);
+            const { error: itemErr } = await supabase.from('invoice_items').insert({
+              invoice_id: exchangeInvoiceId,
+              product_id: r.product_id,
+              cartons: r.cartons, pieces: r.pieces,
+              unit_price: r.unit_price, total: itemTotal,
+            });
+            if (itemErr) throw new Error(itemErr.message);
+            await deductStock(r.product_id, r.cartons * ppc + r.pieces);
+            deductedProducts.push({ product_id: r.product_id, pieces: r.cartons * ppc + r.pieces });
+          }
+
+          // Insert returned items as credit lines (negative) for full audit trail
+          for (const r of returnItems) {
+            const ppc = r.pieces_per_carton || 1;
+            const creditTotal = -(r.unit_price * (r.return_cartons * ppc + r.return_pieces));
+            await supabase.from('invoice_items').insert({
+              invoice_id: exchangeInvoiceId,
+              product_id: r.product_id,
+              cartons: r.return_cartons,
+              pieces: r.return_pieces,
+              unit_price: -r.unit_price,
+              total: creditTotal,
+            });
+          }
+
+          if (absDiff >= 0.01) {
+            const { error: payErr } = await supabase.from('payments').insert({
+              invoice_id: exchangeInvoiceId,
+              customer_id: selectedInvoice.customer_id,
+              amount: exchangeDiff,
+              method: settlementMethod,
+              bank_name: settlementMethod === 'bank_transfer' ? settlementBank || null : null,
+              reference: exchangeInvoiceNo,
+              paid_at: new Date().toISOString(),
+            });
+            if (payErr) throw new Error(payErr.message);
+          }
+        } catch (exchangeErr: any) {
+          // Rollback: delete exchange invoice (cascades to items), reverse stock
+          let rollbackNote = '';
+          if (exchangeInvoiceId) {
+            const { error: delErr } = await supabase.from('invoices').delete().eq('id', exchangeInvoiceId);
+            if (delErr) rollbackNote = ` (invoice cleanup failed: ${delErr.message})`;
+          }
+          for (const { product_id, pieces } of restoredProducts) {
+            await deductStock(product_id, pieces);
+          }
+          for (const { product_id, pieces } of deductedProducts) {
+            await restoreStock(product_id, 0, pieces, 1, 'Exchange rollback');
+          }
+          throw new Error(`Exchange failed and was rolled back: ${exchangeErr.message}${rollbackNote}`);
         }
       } else if (isCashRefundReturn) {
         for (const r of returnItems) {
@@ -462,7 +513,7 @@ export const ReturnsPage: React.FC = () => {
   function resetForm() {
     setStep(1); setSelectedInvoice(null); setReturnItems([]);
     setReplacements([]); setReturnType('Return'); setReason(RETURN_REASONS[0]);
-    setSubmitResult(null); setSubmitError(null); setSearchTerm('');
+    setSubmitResult(null); setSubmitError(null); setSearchTerm(''); setSearchDate('');
   }
 
   // ─── Complete ─────────────────────────────────────────────────────────────
@@ -596,7 +647,7 @@ export const ReturnsPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white">Returns & Exchanges</h1>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-sm text-gray-500 mt-0.5">
             {isAdmin ? 'Viewing last 30 days' : 'Viewing last 10 days'}
           </p>
         </div>
@@ -614,7 +665,7 @@ export const ReturnsPage: React.FC = () => {
       <div className="flex items-center gap-1 bg-[#1d222a] border border-[#2b313a] rounded-xl p-1">
         {(['new', 'history'] as const).map(t => (
           <button key={t} onClick={() => { setTab(t); if (t === 'new') resetForm(); }}
-            className={cn('flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all',
+            className={cn('flex-1 py-2 text-[14px] font-bold uppercase tracking-widest rounded-lg transition-all',
               tab === t ? 'bg-[#f8fafc] text-black' : 'text-gray-500 hover:text-gray-300')}>
             {t === 'new' ? 'New Return' : 'History'}
           </button>
@@ -629,38 +680,60 @@ export const ReturnsPage: React.FC = () => {
           {step === 1 && (
             <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
               <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#1d222a]">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Select Invoice</p>
+                <p className="text-[14px] font-bold uppercase tracking-widest text-gray-500">Select Invoice</p>
               </div>
               <div className="p-4 space-y-3">
-                <div className="relative">
-                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                  <input type="text" placeholder="Search invoice number…"
-                    value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl py-2.5 pl-9 pr-9 focus:outline-none focus:border-primary/40" />
-                  {searchLoading
-                    ? <RefreshCw size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-500" />
-                    : searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"><X size={12} /></button>}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input type="text" placeholder="Search invoice number…"
+                      value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                      className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl py-2.5 pl-9 pr-9 focus:outline-none focus:border-primary/40" />
+                    {searchLoading
+                      ? <RefreshCw size={12} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-500" />
+                      : searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"><X size={12} /></button>}
+                  </div>
+                  <input type="date"
+                    value={searchDate} onChange={e => setSearchDate(e.target.value)}
+                    className="bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl py-2.5 px-3 focus:outline-none focus:border-primary/40 w-40" />
+                  {searchDate && (
+                    <button onClick={() => setSearchDate('')} className="text-gray-500 hover:text-white px-2">
+                      <X size={13} />
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-2 max-h-[420px] overflow-y-auto custom-scrollbar">
                   {invoices.length === 0 && !searchLoading && (
                     <p className="text-center text-sm text-gray-600 py-10">No returnable invoices found</p>
                   )}
-                  {invoices.map(inv => (
-                    <button key={inv.id} onClick={() => selectInvoice(inv)}
-                      className="w-full text-left bg-[#1d222a] hover:bg-[#22282f] border border-[#2b313a] rounded-xl px-4 py-3.5 transition-colors">
+                  {invoices.map(inv => {
+                    const isCancelled = inv.payment_status === 'cancelled';
+                    return (
+                    <button key={inv.id}
+                      onClick={() => !isCancelled && selectInvoice(inv)}
+                      disabled={isCancelled}
+                      className={`w-full text-left border rounded-xl px-4 py-3.5 transition-colors ${
+                        isCancelled
+                          ? 'bg-[#1a1e25] border-[#2b313a] opacity-50 cursor-not-allowed'
+                          : 'bg-[#1d222a] hover:bg-[#22282f] border-[#2b313a] cursor-pointer'
+                      }`}>
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-bold text-white font-mono">{inv.invoice_no}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">{inv.customer_name}</p>
+                          <p className="text-sm font-bold text-white font-mono">{inv.invoice_no}</p>
+                          <p className="text-[13px] text-gray-500 mt-0.5">{inv.customer_name}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xs font-bold font-mono text-white">{fmt(inv.total)}</p>
-                          <p className="text-[11px] text-gray-600">{new Date(inv.created_at).toLocaleDateString()}</p>
+                          <p className="text-sm font-bold font-mono text-white">{fmt(inv.total)}</p>
+                          <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                            {isCancelled && <span className="text-[13px] uppercase tracking-wider text-red-500 font-bold">Cancelled</span>}
+                            <p className="text-[13px] text-gray-600">{new Date(inv.created_at).toLocaleDateString()}</p>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-[11px] text-gray-600 mt-1">{inv.items.length} item{inv.items.length !== 1 ? 's' : ''}</p>
+                      <p className="text-[13px] text-gray-600 mt-1">{inv.items.length} item{inv.items.length !== 1 ? 's' : ''}</p>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -672,24 +745,24 @@ export const ReturnsPage: React.FC = () => {
               {/* Invoice bar */}
               <div className="bg-[#1d222a] border border-[#2b313a] rounded-2xl px-5 py-4 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Invoice</p>
+                  <p className="text-[14px] text-gray-500 font-bold uppercase tracking-widest">Invoice</p>
                   <p className="text-sm font-bold text-white font-mono mt-0.5">{selectedInvoice.invoice_no}</p>
-                  <p className="text-[11px] text-gray-500">{selectedInvoice.customer_name}</p>
+                  <p className="text-[13px] text-gray-500">{selectedInvoice.customer_name}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-base font-bold text-white font-mono">{fmt(selectedInvoice.total)}</p>
                   <button onClick={() => { setStep(1); setSelectedInvoice(null); setReturnItems([]); }}
-                    className="text-[11px] text-primary hover:text-white transition-colors mt-1">← Change</button>
+                    className="text-[13px] text-primary hover:text-white transition-colors mt-1">← Change</button>
                 </div>
               </div>
 
               {/* Return type */}
               <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-5">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Return Type</p>
+                <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-3">Return Type</p>
                 <div className="flex gap-1 bg-[#1d222a] border border-[#2b313a] rounded-xl p-1">
                   {(['Return', 'Exchange'] as const).map(t => (
                     <button key={t} onClick={() => setReturnType(t)}
-                      className={cn('flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1.5',
+                      className={cn('flex-1 py-2 text-[14px] font-bold uppercase tracking-widest rounded-lg transition-all flex items-center justify-center gap-1.5',
                         returnType === t ? 'bg-[#f8fafc] text-black' : 'text-gray-500 hover:text-gray-300')}>
                       {t === 'Exchange' ? <ArrowLeftRight size={11} /> : <RotateCcw size={11} />}
                       {t}
@@ -700,11 +773,11 @@ export const ReturnsPage: React.FC = () => {
 
               {/* Reason */}
               <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-5">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Reason</p>
+                <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-3">Reason</p>
                 <div className="flex flex-wrap gap-2">
                   {RETURN_REASONS.map(r => (
                     <button key={r} onClick={() => setReason(r)}
-                      className={cn('px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all',
+                      className={cn('px-3 py-1.5 rounded-xl text-[14px] font-bold border transition-all',
                         reason === r
                           ? 'bg-primary/15 border-primary/30 text-primary'
                           : 'bg-[#1d222a] border-[#2b313a] text-gray-500 hover:text-gray-300')}>
@@ -717,8 +790,8 @@ export const ReturnsPage: React.FC = () => {
               {/* Items to return */}
               <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#1d222a] flex items-center justify-between">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Items to Return</p>
-                  <span className="text-[10px] text-gray-500">{returnItems.length} selected</span>
+                  <p className="text-[14px] font-bold uppercase tracking-widest text-gray-500">Items to Return</p>
+                  <span className="text-[14px] text-gray-500">{returnItems.length} selected</span>
                 </div>
                 <div className="p-4 border-b border-[#2b313a]">
                   <select onChange={e => {
@@ -726,7 +799,7 @@ export const ReturnsPage: React.FC = () => {
                       if (item) addReturnItem(item);
                       e.target.value = '';
                     }} defaultValue=""
-                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-4 py-2.5 outline-none focus:border-primary/40">
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-primary/40">
                     <option value="" disabled>+ Select item to return</option>
                     {selectedInvoice.items.filter(ii => !returnItems.find(r => r.invoice_item_id === ii.id)).map(ii => (
                       <option key={ii.id} value={ii.id}>
@@ -736,30 +809,30 @@ export const ReturnsPage: React.FC = () => {
                   </select>
                 </div>
                 {returnItems.length === 0 ? (
-                  <p className="px-5 py-8 text-center text-xs text-gray-600">No items selected yet</p>
+                  <p className="px-5 py-8 text-center text-sm text-gray-600">No items selected yet</p>
                 ) : (
                   <div className="divide-y divide-[#2b313a]">
                     {returnItems.map(r => (
                       <div key={r.invoice_item_id} className="flex items-center gap-3 px-5 py-3.5">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{r.product_name}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">{fmt(r.unit_price)} / unit</p>
+                          <p className="text-sm font-semibold text-white truncate">{r.product_name}</p>
+                          <p className="text-[13px] text-gray-500 mt-0.5">{fmt(r.unit_price)} / unit</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-gray-500">C</span>
+                            <span className="text-[14px] text-gray-500">C</span>
                             <input type="number" min={0} max={r.max_cartons} value={r.return_cartons}
                               onChange={e => updateReturnItem(r.invoice_item_id, 'return_cartons', parseInt(e.target.value) || 0)}
-                              className="w-12 bg-[#1d222a] border border-[#2b313a] text-xs text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
+                              className="w-12 bg-[#1d222a] border border-[#2b313a] text-sm text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
                           </div>
                           <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-gray-500">P</span>
+                            <span className="text-[14px] text-gray-500">P</span>
                             <input type="number" min={0} max={r.max_pieces} value={r.return_pieces}
                               onChange={e => updateReturnItem(r.invoice_item_id, 'return_pieces', parseInt(e.target.value) || 0)}
-                              className="w-12 bg-[#1d222a] border border-[#2b313a] text-xs text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
+                              className="w-12 bg-[#1d222a] border border-[#2b313a] text-sm text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
                           </div>
                         </div>
-                        <span className="text-xs font-bold font-mono text-amber-400 w-24 text-right shrink-0">
+                        <span className="text-sm font-bold font-mono text-amber-400 w-24 text-right shrink-0">
                           {fmt(r.unit_price * (r.return_cartons * r.pieces_per_carton + r.return_pieces))}
                         </span>
                         <button onClick={() => setReturnItems(prev => prev.filter(x => x.invoice_item_id !== r.invoice_item_id))}
@@ -769,7 +842,7 @@ export const ReturnsPage: React.FC = () => {
                       </div>
                     ))}
                     <div className="flex justify-end px-5 py-3 bg-[#1d222a]">
-                      <span className="text-xs font-bold text-white font-mono">Return Value: {fmt(returnedValue)}</span>
+                      <span className="text-sm font-bold text-white font-mono">Return Value: {fmt(returnedValue)}</span>
                     </div>
                   </div>
                 )}
@@ -779,20 +852,20 @@ export const ReturnsPage: React.FC = () => {
               {returnType === 'Exchange' && (
                 <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
                   <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#1d222a]">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Replacement Items</p>
+                    <p className="text-[14px] font-bold uppercase tracking-widest text-gray-500">Replacement Items</p>
                   </div>
                   <div className="p-4 border-b border-[#2b313a] relative">
                     <div className="relative">
                       <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                       <input type="text" placeholder="Search product to replace…"
                         value={productSearch} onChange={e => setProductSearch(e.target.value)}
-                        className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl py-2.5 pl-9 pr-4 focus:outline-none focus:border-primary/40" />
+                        className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl py-2.5 pl-9 pr-4 focus:outline-none focus:border-primary/40" />
                     </div>
                     {filteredProducts.length > 0 && (
                       <div className="absolute left-4 right-4 top-full mt-1 bg-[#1d222a] border border-[#2b313a] rounded-xl overflow-hidden z-20 max-h-48 overflow-y-auto shadow-xl">
                         {filteredProducts.map(p => (
                           <button key={p.id} onClick={() => addReplacement(p)}
-                            className="w-full text-left px-4 py-2.5 hover:bg-[#22282f] text-xs text-gray-300 flex items-center justify-between transition-colors">
+                            className="w-full text-left px-4 py-2.5 hover:bg-[#22282f] text-sm text-gray-300 flex items-center justify-between transition-colors">
                             <span>{p.name}</span>
                             <span className="text-gray-500 font-mono">{fmt(p.wholesale_price)}</span>
                           </button>
@@ -801,33 +874,33 @@ export const ReturnsPage: React.FC = () => {
                     )}
                   </div>
                   {replacements.length === 0 ? (
-                    <p className="px-5 py-8 text-center text-xs text-gray-600">No replacements added</p>
+                    <p className="px-5 py-8 text-center text-sm text-gray-600">No replacements added</p>
                   ) : (
                     <>
                       <div className="divide-y divide-[#2b313a]">
                         {replacements.map(r => (
                           <div key={r.id} className="flex items-center gap-3 px-5 py-3.5">
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-white truncate">{r.product_name}</p>
+                              <p className="text-sm font-semibold text-white truncate">{r.product_name}</p>
                               <input type="number" min="0.01" step="0.01" value={r.unit_price}
                                 onChange={e => updateReplacement(r.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                                className="mt-1 w-24 bg-[#1d222a] border border-[#2b313a] text-[11px] text-gray-300 rounded-lg px-2 py-1 outline-none font-mono focus:border-primary/40" />
+                                className="mt-1 w-24 bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-300 rounded-lg px-2 py-1 outline-none font-mono focus:border-primary/40" />
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-500">C</span>
+                                <span className="text-[14px] text-gray-500">C</span>
                                 <input type="number" min={0} value={r.cartons}
                                   onChange={e => updateReplacement(r.id, 'cartons', parseInt(e.target.value) || 0)}
-                                  className="w-12 bg-[#1d222a] border border-[#2b313a] text-xs text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
+                                  className="w-12 bg-[#1d222a] border border-[#2b313a] text-sm text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
                               </div>
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-500">P</span>
+                                <span className="text-[14px] text-gray-500">P</span>
                                 <input type="number" min={0} value={r.pieces}
                                   onChange={e => updateReplacement(r.id, 'pieces', parseInt(e.target.value) || 0)}
-                                  className="w-12 bg-[#1d222a] border border-[#2b313a] text-xs text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
+                                  className="w-12 bg-[#1d222a] border border-[#2b313a] text-sm text-white rounded-lg px-2 py-1.5 outline-none text-center font-mono focus:border-primary/40" />
                               </div>
                             </div>
-                            <span className="text-xs font-bold font-mono text-blue-400 w-24 text-right shrink-0">
+                            <span className="text-sm font-bold font-mono text-blue-400 w-24 text-right shrink-0">
                               {fmt(r.unit_price * (r.cartons * r.pieces_per_carton + r.pieces))}
                             </span>
                             <button onClick={() => setReplacements(prev => prev.filter(x => x.id !== r.id))}
@@ -839,15 +912,15 @@ export const ReturnsPage: React.FC = () => {
                       </div>
                       {/* Settlement summary */}
                       <div className="px-5 py-4 border-t border-[#2b313a] bg-[#1d222a] space-y-2">
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Return value</span>
                           <span className="font-mono text-amber-400">{fmt(returnedValue)}</span>
                         </div>
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Replacement value</span>
                           <span className="font-mono text-blue-400">{fmt(replacementValue)}</span>
                         </div>
-                        <div className="flex justify-between text-xs font-bold pt-2 border-t border-[#2b313a]">
+                        <div className="flex justify-between text-sm font-bold pt-2 border-t border-[#2b313a]">
                           <span className={cn(exchangeDiff === 0 ? 'text-gray-400' : exchangeDiff > 0 ? 'text-white' : 'text-green-400')}>
                             {settlementType === 'EvenExchange' ? 'Even Exchange' : exchangeDiff > 0 ? 'Customer pays extra' : 'Refund to customer'}
                           </span>
@@ -859,13 +932,13 @@ export const ReturnsPage: React.FC = () => {
                         </div>
                         {Math.abs(exchangeDiff) >= 0.01 && (
                           <div className="pt-1">
-                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
+                            <p className="text-[14px] text-gray-500 uppercase tracking-widest font-bold mb-2">
                               {exchangeDiff > 0 ? 'Payment method' : 'Refund method'}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               {['cash', 'card', 'bank_transfer'].map(m => (
                                 <button key={m} onClick={() => setSettlementMethod(m)}
-                                  className={cn('px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all capitalize',
+                                  className={cn('px-3 py-1.5 rounded-xl text-[14px] font-bold border transition-all capitalize',
                                     settlementMethod === m
                                       ? 'bg-primary/15 border-primary/30 text-primary'
                                       : 'bg-[#22282f] border-[#2b313a] text-gray-500 hover:text-gray-300')}>
@@ -873,6 +946,15 @@ export const ReturnsPage: React.FC = () => {
                                 </button>
                               ))}
                             </div>
+                            {settlementMethod === 'bank_transfer' && (
+                              <input
+                                type="text"
+                                value={settlementBank}
+                                onChange={e => setSettlementBank(e.target.value)}
+                                placeholder="Bank name (e.g. Commercial Bank)"
+                                className="mt-2 w-full bg-[#1d222a] border border-[#2b313a] rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-primary/50"
+                              />
+                            )}
                           </div>
                         )}
                       </div>
@@ -882,7 +964,7 @@ export const ReturnsPage: React.FC = () => {
               )}
 
               {submitError && (
-                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
+                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
                   <AlertCircle size={13} /> {submitError}
                 </div>
               )}
@@ -905,26 +987,26 @@ export const ReturnsPage: React.FC = () => {
               <h3 className="text-lg font-bold text-white">
                 {returnType === 'Exchange' ? 'Exchange Processed' : 'Return Submitted'}
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-sm text-gray-400">
                 Return: <span className="font-mono font-bold text-white">{submitResult.returnNumber}</span>
               </p>
               {submitResult.exchangeInvoiceNo && (
-                <p className="text-xs text-gray-400">
+                <p className="text-sm text-gray-400">
                   Exchange invoice: <span className="font-mono font-bold text-blue-400">{submitResult.exchangeInvoiceNo}</span>
                 </p>
               )}
               {returnType === 'Return' && reason === 'Damaged' && (
-                <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                <p className="text-sm text-gray-500 max-w-xs mx-auto">
                   Status: Pending — resolve via Return History once the item is inspected.
                 </p>
               )}
               {returnType === 'Return' && reason !== 'Damaged' && (
-                <p className="text-xs text-gray-500 max-w-xs mx-auto">
+                <p className="text-sm text-gray-500 max-w-xs mx-auto">
                   Status: Completed — stock restored and cash refund recorded.
                 </p>
               )}
               <button onClick={resetForm}
-                className="mt-4 px-6 py-2.5 bg-[#1d222a] border border-[#2b313a] rounded-xl text-xs font-bold text-gray-300 hover:text-white hover:bg-[#22282f] transition-colors">
+                className="mt-4 px-6 py-2.5 bg-[#1d222a] border border-[#2b313a] rounded-xl text-sm font-bold text-gray-300 hover:text-white hover:bg-[#22282f] transition-colors">
                 New Return
               </button>
             </div>
@@ -941,7 +1023,7 @@ export const ReturnsPage: React.FC = () => {
             </div>
           )}
           {!historyLoading && returns.length === 0 && (
-            <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl py-16 text-center text-xs text-gray-600">
+            <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl py-16 text-center text-sm text-gray-600">
               No returns found
             </div>
           )}
@@ -956,24 +1038,24 @@ export const ReturnsPage: React.FC = () => {
                   <StatusIcon size={15} className={cfg.color} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-white font-mono">{ret.return_number}</span>
-                      <span className={cn('px-2 py-0.5 rounded-full text-[9px] font-bold uppercase', cfg.badge)}>
+                      <span className="text-sm font-bold text-white font-mono">{ret.return_number}</span>
+                      <span className={cn('px-2 py-0.5 rounded-full text-[13px] font-bold uppercase', cfg.badge)}>
                         {ret.status}
                       </span>
-                      <span className={cn('px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border',
+                      <span className={cn('px-2 py-0.5 rounded-full text-[13px] font-bold uppercase border',
                         ret.return_type === 'Exchange'
                           ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                           : 'bg-amber-500/10 border-amber-500/20 text-amber-400')}>
                         {ret.return_type}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                    <p className="text-[13px] text-gray-500 mt-0.5 truncate">
                       {ret.original_invoice_no} · {ret.customer_name} · {ret.reason}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className={cn(
-                      'text-xs font-bold font-mono',
+                      'text-sm font-bold font-mono',
                       ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
                         ? 'text-red-400'
                         : 'text-amber-400'
@@ -982,7 +1064,7 @@ export const ReturnsPage: React.FC = () => {
                         ? `Loss ${fmt(Math.abs(ret.exchange_difference))}`
                         : fmt(ret.refund_amount)}
                     </p>
-                    <p className="text-[11px] text-gray-600">{new Date(ret.created_at).toLocaleDateString()}</p>
+                    <p className="text-[13px] text-gray-600">{new Date(ret.created_at).toLocaleDateString()}</p>
                   </div>
                   {isExpanded ? <ChevronUp size={13} className="text-gray-500 shrink-0" /> : <ChevronDown size={13} className="text-gray-500 shrink-0" />}
                 </button>
@@ -1007,8 +1089,8 @@ export const ReturnsPage: React.FC = () => {
                           : null,
                       ].filter(Boolean).map((f: any) => (
                         <div key={f.label}>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-600">{f.label}</p>
-                          <p className={cn('text-xs mt-0.5', f.cls)}>{f.value}</p>
+                          <p className="text-[14px] font-bold uppercase tracking-widest text-gray-600">{f.label}</p>
+                          <p className={cn('text-sm mt-0.5', f.cls)}>{f.value}</p>
                         </div>
                       ))}
                     </div>
@@ -1017,12 +1099,12 @@ export const ReturnsPage: React.FC = () => {
                       {ret.status === 'Pending' && ret.return_type === 'Return' && (
                         <>
                           <button onClick={() => completeReturn(ret, 'Repaired')} disabled={completing === ret.id}
-                            className="flex-1 py-2.5 rounded-xl text-[10px] font-bold bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[100px]">
+                            className="flex-1 py-2.5 rounded-xl text-[14px] font-bold bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[100px]">
                             {completing === ret.id ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
                             Repaired
                           </button>
                           <button onClick={() => completeReturn(ret, 'Replaced')} disabled={completing === ret.id}
-                            className="flex-1 py-2.5 rounded-xl text-[10px] font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[100px]">
+                            className="flex-1 py-2.5 rounded-xl text-[14px] font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[100px]">
                             {completing === ret.id ? <Loader2 size={11} className="animate-spin" /> : <ArrowLeftRight size={11} />}
                             Replaced
                           </button>
@@ -1030,7 +1112,7 @@ export const ReturnsPage: React.FC = () => {
                       )}
                       {(ret.status === 'Pending' || (ret.status === 'Completed' && isAdmin)) && (
                         <button onClick={() => undoReturn(ret)} disabled={undoing === ret.id}
-                          className="flex-1 py-2.5 rounded-xl text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[80px]">
+                          className="flex-1 py-2.5 rounded-xl text-[14px] font-bold bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/15 transition-all flex items-center justify-center gap-1.5 min-w-[80px]">
                           {undoing === ret.id ? <Loader2 size={11} className="animate-spin" /> : <XCircle size={11} />}
                           {ret.status === 'Pending' ? 'Cancel' : 'Undo'}
                         </button>

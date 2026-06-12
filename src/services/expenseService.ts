@@ -36,14 +36,15 @@ export async function getExpenses(filters?: {
 // ── Total company cash (expenses in - income) — simplified ───────────────────
 
 export async function getCompanyCashBalance(): Promise<number> {
-  const [{ data: inc }, { data: exp }] = await Promise.all([
+  const [{ data: posCash }, { data: otherInc }, { data: exp }] = await Promise.all([
+    supabase.from('payments').select('amount').eq('method', 'cash').gt('amount', 0),
     supabase.from('other_income').select('amount').eq('method', 'cash'),
     supabase.from('expenses').select('amount').eq('method', 'cash'),
   ]);
-  const totalIncome = (inc ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  const totalExpenses = (exp ?? []).reduce((s, r) => s + Number(r.amount), 0);
-  // This is a simplified model — in production you'd sum POS cash sales too
-  return totalIncome - totalExpenses;
+  const totalPOS     = (posCash  ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const totalOther   = (otherInc ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  const totalExpenses = (exp     ?? []).reduce((s, r) => s + Number(r.amount), 0);
+  return totalPOS + totalOther - totalExpenses;
 }
 
 // ── Create ─────────────────────────────────────────────────────────────────────

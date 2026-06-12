@@ -130,7 +130,7 @@ export async function getCustomerLoyalty(
 
 export const checkout = async (
   cart: CartItem[],
-  customerId: string,
+  customerId: string | null,
   isWholesale: boolean,
   subtotal: number,
   discount: number,
@@ -145,7 +145,7 @@ export const checkout = async (
   const totalPaid = paymentSplits.reduce((s, p) => s + p.amount, 0);
   const outstandingAmount = total - totalPaid;
 
-  if (outstandingAmount > 0) {
+  if (outstandingAmount > 0 && customerId) {
     const check = await checkCreditLimit(customerId, total, outstandingAmount);
     if (!check.ok) throw new Error(check.message!);
   }
@@ -306,7 +306,7 @@ export const checkout = async (
 
 export const checkoutOffline = async (
   cart: CartItem[],
-  customerId: string,
+  customerId: string | null,
   customerName: string,
   isWholesale: boolean,
   subtotal: number,
@@ -438,7 +438,10 @@ export async function cancelInvoice(invoiceId: string, reason: string): Promise<
     });
   }
 
-  // 3. Reverse earned loyalty points linked to this invoice
+  // 3. Delete payment records so they no longer appear in sales totals
+  await supabase.from('payments').delete().eq('invoice_id', invoiceId);
+
+  // 4. Reverse earned loyalty points linked to this invoice
   if (inv.customer_id) {
     const { data: loyaltyTx } = await supabase
       .from('loyalty_transactions')
@@ -472,7 +475,7 @@ export async function cancelInvoice(invoiceId: string, reason: string): Promise<
     }
   }
 
-  // 4. Mark invoice as cancelled and record the reason
+  // 5. Mark invoice as cancelled and record the reason
   const { error } = await supabase
     .from('invoices')
     .update({ payment_status: 'cancelled', notes: reason })

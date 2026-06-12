@@ -24,7 +24,7 @@ export async function getPurchaseById(id: string): Promise<{
 }> {
   const [{ data: purchase, error: pe }, { data: items }, { data: costs }, { data: received }, { data: cartons }] =
     await Promise.all([
-      supabase.from('purchases').select(`${PURCHASE_LIST_COLUMNS}, suppliers(id, name, country, contact_person, phone, email)`).eq('id', id).single(),
+      supabase.from('purchases').select(`${PURCHASE_LIST_COLUMNS}, suppliers(id, name, country, contact_person, phone, email), locations(id, name, type)`).eq('id', id).single(),
       supabase
         .from('purchase_items')
         .select('id, purchase_id, product_id, quantity_units, quantity_cartons, unit_price_rmb, discount_percent, created_at, products(id, name, model, item_code, sku, pieces_per_carton, cost_price)')

@@ -392,16 +392,16 @@ export const PurchaseDetailPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-white font-mono">{purchase.reference}</h1>
-              <span className={cn('flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide', statusCfg.cls)}>
+              <span className={cn('flex items-center gap-1 text-[14px] font-bold px-2 py-1 rounded-lg uppercase tracking-wide', statusCfg.cls)}>
                 <StatusIcon size={10} />
                 {statusCfg.label}
               </span>
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-0.5">
               {supplier?.name ?? '—'} · Created {new Date(purchase.created_at).toLocaleDateString()}
             </p>
             {purchase.rep_name && (
-                <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">
+                <div className="text-[14px] text-gray-500 font-bold uppercase tracking-widest mt-1">
                   Rep: <span className="text-gray-300">{purchase.rep_name}</span>
                 </div>
               )}
@@ -456,7 +456,7 @@ export const PurchaseDetailPage: React.FC = () => {
           const active = i === stepIdx;
           return (
             <React.Fragment key={step}>
-              <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold capitalize transition-all', active ? statusCfg.cls : done ? 'text-gray-400' : 'text-gray-700')}>
+              <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[14px] font-bold capitalize transition-all', active ? statusCfg.cls : done ? 'text-gray-400' : 'text-gray-700')}>
                 {done && !active && <CheckCircle2 size={9} />}
                 {step.replace('_', ' ')}
               </div>
@@ -488,10 +488,10 @@ export const PurchaseDetailPage: React.FC = () => {
             { label: 'Status', value: statusCfg.label },
           ].map((f) => (
             <div key={f.label}>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{f.label}</p>
+              <p className="text-[13px] font-bold uppercase tracking-widest text-gray-600">{f.label}</p>
               {(f as any).highlight ? (
                 <span className={cn(
-                  'inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide',
+                  'inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded-md text-[14px] font-bold uppercase tracking-wide',
                   (f as any).locationType === 'warehouse'
                     ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
                     : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
@@ -499,26 +499,26 @@ export const PurchaseDetailPage: React.FC = () => {
                   {(f as any).locationType === 'warehouse' ? '🏭' : '🛒'} {f.value}
                 </span>
               ) : (
-                <p className={cn('text-sm font-semibold text-white mt-1', (f as any).mono && 'font-mono text-xs')}>{f.value}</p>
+                <p className={cn('text-sm font-semibold text-white mt-1', (f as any).mono && 'font-mono text-sm')}>{f.value}</p>
               )}
             </div>
           ))}
         </div>
         {purchase.notes && (
-          <p className="mt-4 text-xs text-gray-500 border-t border-[#2b313a] pt-4">{purchase.notes}</p>
+          <p className="mt-4 text-sm text-gray-500 border-t border-[#2b313a] pt-4">{purchase.notes}</p>
         )}
       </div>
 
       {/* Items table */}
       <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
         <div className="px-5 py-3.5 border-b border-[#2b313a] flex items-center justify-between">
-          <h2 className="text-xs font-bold text-white uppercase tracking-widest">Order Items</h2>
-          <div className="flex items-center gap-3 text-xs">
+          <h2 className="text-sm font-bold text-white uppercase tracking-widest">Order Items</h2>
+          <div className="flex items-center gap-3 text-sm">
             <span className="text-gray-500">Total: <span className="font-mono font-bold text-primary">{fmt(editMode ? editTotal : displayTotal)}</span></span>
             {isAdmin && !editMode && (
               <button
                 onClick={startEditItems}
-                className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold"
+                className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[14px] font-bold"
               >
                 Edit Items
               </button>
@@ -527,20 +527,20 @@ export const PurchaseDetailPage: React.FC = () => {
               <>
                 <button
                   onClick={addEditItemRow}
-                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[14px] font-bold flex items-center gap-1"
                 >
                   <Plus size={10} /> Add Item
                 </button>
                 <button
                   onClick={cancelEditItems}
-                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[10px] font-bold"
+                  className="px-3 py-1.5 rounded-lg bg-[#1d222a] border border-[#2b313a] text-gray-400 hover:text-white hover:bg-[#252a33] transition-all text-[14px] font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveItems}
                   disabled={editSaving}
-                  className="px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all text-[10px] font-bold flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all text-[14px] font-bold flex items-center gap-1"
                 >
                   {editSaving ? <Loader2 size={10} className="animate-spin" /> : null}
                   Save Changes
@@ -552,10 +552,10 @@ export const PurchaseDetailPage: React.FC = () => {
         {editMode && (
           <div className="px-5 py-2 border-b border-[#2b313a] space-y-1">
             {purchase.status !== 'draft' && (
-              <p className="text-[10px] text-amber-400">Edits will not adjust stock or finalized costs already posted.</p>
+              <p className="text-[14px] text-amber-400">Edits will not adjust stock or finalized costs already posted.</p>
             )}
             {editError && (
-              <p className="text-[10px] text-red-400">{editError}</p>
+              <p className="text-[14px] text-red-400">{editError}</p>
             )}
           </div>
         )}
@@ -563,7 +563,7 @@ export const PurchaseDetailPage: React.FC = () => {
           <thead>
             <tr className="bg-[#1d222a]">
               {['Product', 'Model', 'Qty (Units)', 'Cartons', 'Unit Price (LKR)', 'Total (LKR)'].map((h) => (
-                <th key={h} className="px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
+                <th key={h} className="px-5 py-3 text-[13px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
               ))}
             </tr>
           </thead>
@@ -581,7 +581,7 @@ export const PurchaseDetailPage: React.FC = () => {
                           value={item.product_id}
                           onChange={(e) => updateEditItem(item.id, { product_id: e.target.value })}
                           disabled={editProductsLoading}
-                          className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
+                          className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-200 text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
                         >
                           <option value="">Select product…</option>
                           {editProducts.map((p) => (
@@ -589,44 +589,44 @@ export const PurchaseDetailPage: React.FC = () => {
                           ))}
                         </select>
                         {editProductsLoading && (
-                          <p className="text-[10px] text-gray-500">Loading products…</p>
+                          <p className="text-[14px] text-gray-500">Loading products…</p>
                         )}
                       </div>
                     ) : (
                       <>
-                        <p className="text-xs font-semibold text-white">{product?.name ?? item.product_id}</p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">ID: {cartonId}-*</p>
+                        <p className="text-sm font-semibold text-white">{product?.name ?? item.product_id}</p>
+                        <p className="text-[14px] text-gray-500 mt-0.5">ID: {cartonId}-*</p>
                       </>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-400">{product?.model ?? '—'}</td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-white">
+                  <td className="px-5 py-3.5 text-sm font-mono text-gray-400">{product?.model ?? '—'}</td>
+                  <td className="px-5 py-3.5 text-sm font-mono text-white">
                     {editMode ? (
                       <input
                         type="number"
                         min="0"
                         value={item.quantity_units}
                         onChange={(e) => updateEditItem(item.id, { quantity_units: parseInt(e.target.value, 10) || 0 })}
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-24 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-sm rounded-lg px-2 py-1 w-24 font-mono"
                       />
                     ) : (
                       item.quantity_units.toLocaleString()
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-500">
+                  <td className="px-5 py-3.5 text-sm font-mono text-gray-500">
                     {editMode ? (
                       <input
                         type="number"
                         min="0"
                         value={item.quantity_cartons}
                         onChange={(e) => updateEditItem(item.id, { quantity_cartons: parseInt(e.target.value, 10) || 0 })}
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-20 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-sm rounded-lg px-2 py-1 w-20 font-mono"
                       />
                     ) : (
                       item.quantity_cartons
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-gray-300">
+                  <td className="px-5 py-3.5 text-sm font-mono text-gray-300">
                     {editMode ? (
                       <input
                         type="number"
@@ -634,13 +634,13 @@ export const PurchaseDetailPage: React.FC = () => {
                         step="0.01"
                         value={item.unit_price_rmb}
                         onChange={(e) => updateEditItem(item.id, { unit_price_rmb: parseFloat(e.target.value) || 0 })}
-                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-xs rounded-lg px-2 py-1 w-28 font-mono"
+                        className="bg-[#1d222a] border border-[#2b313a] text-gray-200 text-sm rounded-lg px-2 py-1 w-28 font-mono"
                       />
                     ) : (
                       fmt(item.unit_price_rmb)
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-xs font-mono text-white">
+                  <td className="px-5 py-3.5 text-sm font-mono text-white">
                     <div className="flex items-center gap-2">
                       <span>{fmt(lineLkr)}</span>
                       {editMode && (
@@ -667,7 +667,7 @@ export const PurchaseDetailPage: React.FC = () => {
             <AlertCircle className="text-amber-400" size={24} />
             <div>
               <p className="text-amber-400 font-bold text-sm">Pending Manager Approval</p>
-              <p className="text-amber-500/80 text-xs mt-0.5">
+              <p className="text-amber-500/80 text-sm mt-0.5">
                 {approvals[0].requested_by} requested a {approvals[0].discount_percent}% discount ({fmt(approvals[0].discount_amount || 0)}). This purchase is locked until approved.
               </p>
             </div>
@@ -676,13 +676,13 @@ export const PurchaseDetailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleResolveApproval(approvals[0].id, 'rejected', approvals[0].discount_amount || 0)}
-                className="px-4 py-2 bg-[#1d222a] border border-[#2b313a] text-red-400 hover:bg-red-500/10 rounded-xl text-xs font-bold transition-all"
+                className="px-4 py-2 bg-[#1d222a] border border-[#2b313a] text-red-400 hover:bg-red-500/10 rounded-xl text-sm font-bold transition-all"
               >
                 Reject
               </button>
               <button
                 onClick={() => handleResolveApproval(approvals[0].id, 'approved', approvals[0].discount_amount || 0)}
-                className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 rounded-xl text-xs font-bold transition-all"
+                className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 rounded-xl text-sm font-bold transition-all"
               >
                 Approve Discount
               </button>
@@ -695,15 +695,15 @@ export const PurchaseDetailPage: React.FC = () => {
       {purchase.status === 'ordered' && (
         <div className="bg-[#171c23] border border-blue-500/20 rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a] bg-blue-500/5">
-            <h2 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-sm font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={13} /> Receive Confirmation
             </h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Enter actual quantities received. Damaged units will be logged separately.</p>
+            <p className="text-[14px] text-gray-500 mt-0.5">Enter actual quantities received. Damaged units will be logged separately.</p>
           </div>
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-[2fr_1fr_1fr_1fr_2fr] gap-3 mb-1">
               {['Product', 'Ordered', 'Received', 'Damaged', 'Notes'].map((h) => (
-                <span key={h} className="text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</span>
+                <span key={h} className="text-[13px] font-bold uppercase tracking-widest text-gray-600">{h}</span>
               ))}
             </div>
             {items.map((item) => {
@@ -714,15 +714,15 @@ export const PurchaseDetailPage: React.FC = () => {
               return (
                 <div key={item.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_2fr] gap-3 items-start">
                   <div>
-                    <p className="text-xs font-semibold text-white">{product?.name ?? '—'}</p>
-                    <p className="text-[10px] text-gray-500">Ordered: {item.quantity_units} units</p>
+                    <p className="text-sm font-semibold text-white">{product?.name ?? '—'}</p>
+                    <p className="text-[14px] text-gray-500">Ordered: {item.quantity_units} units</p>
                     {net > 0 && (
-                      <p className={cn('text-[10px] mt-0.5', hasShortage ? 'text-amber-400' : 'text-green-400')}>
+                      <p className={cn('text-[14px] mt-0.5', hasShortage ? 'text-amber-400' : 'text-green-400')}>
                         Net sellable: {net} units
                       </p>
                     )}
                   </div>
-                  <div className="text-xs font-mono text-gray-500 pt-2">{item.quantity_units}</div>
+                  <div className="text-sm font-mono text-gray-500 pt-2">{item.quantity_units}</div>
                   <input
                     type="number"
                     min="0"
@@ -734,7 +734,7 @@ export const PurchaseDetailPage: React.FC = () => {
                       }))
                     }
                     className={cn(
-                      'bg-[#1d222a] border text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none font-mono',
+                      'bg-[#1d222a] border text-gray-300 text-sm rounded-lg px-2 py-1.5 focus:outline-none font-mono',
                       hasShortage ? 'border-amber-500/40 focus:border-amber-500/60' : 'border-[#2b313a] focus:border-primary/40'
                     )}
                   />
@@ -748,7 +748,7 @@ export const PurchaseDetailPage: React.FC = () => {
                         [item.product_id]: { ...rf, damaged: e.target.value },
                       }))
                     }
-                    className="bg-[#1d222a] border border-red-500/20 text-red-400 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-red-500/40 font-mono"
+                    className="bg-[#1d222a] border border-red-500/20 text-red-400 text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-red-500/40 font-mono"
                   />
                   <input
                     type="text"
@@ -760,7 +760,7 @@ export const PurchaseDetailPage: React.FC = () => {
                       }))
                     }
                     placeholder="Notes…"
-                    className="bg-[#1d222a] border border-[#2b313a] text-gray-400 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
+                    className="bg-[#1d222a] border border-[#2b313a] text-gray-400 text-sm rounded-lg px-2 py-1.5 focus:outline-none focus:border-primary/40"
                   />
                 </div>
               );
@@ -780,7 +780,7 @@ export const PurchaseDetailPage: React.FC = () => {
       {(purchase.status === 'received' || purchase.status === 'completed') && received.length > 0 && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a]">
-            <h2 className="text-xs font-bold text-green-400 uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-sm font-bold text-green-400 uppercase tracking-widest flex items-center gap-2">
               <Package size={13} /> Receive Summary
             </h2>
           </div>
@@ -788,7 +788,7 @@ export const PurchaseDetailPage: React.FC = () => {
             <thead>
               <tr className="bg-[#1d222a]">
                 {['Product', 'Ordered', 'Received', 'Damaged', 'Net Sellable', 'Variance'].map((h) => (
-                  <th key={h} className="px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
+                  <th key={h} className="px-5 py-3 text-[13px] font-bold uppercase tracking-widest text-gray-600">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -799,13 +799,13 @@ export const PurchaseDetailPage: React.FC = () => {
                 const variance = r.received_units - r.ordered_units;
                 return (
                   <tr key={r.id} className="hover:bg-[#1d222a] transition-colors">
-                    <td className="px-5 py-3.5 text-xs font-semibold text-white">{product?.name ?? r.product_id}</td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-gray-400">{r.ordered_units}</td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-white">{r.received_units}</td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-red-400">{r.damaged_units}</td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-green-400">{net}</td>
+                    <td className="px-5 py-3.5 text-sm font-semibold text-white">{product?.name ?? r.product_id}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-gray-400">{r.ordered_units}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-white">{r.received_units}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-red-400">{r.damaged_units}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-green-400">{net}</td>
                     <td className="px-5 py-3.5">
-                      <span className={cn('text-xs font-mono', variance < 0 ? 'text-red-400' : variance > 0 ? 'text-green-400' : 'text-gray-500')}>
+                      <span className={cn('text-sm font-mono', variance < 0 ? 'text-red-400' : variance > 0 ? 'text-green-400' : 'text-gray-500')}>
                         {variance >= 0 ? '+' : ''}{variance}
                       </span>
                     </td>
@@ -821,16 +821,16 @@ export const PurchaseDetailPage: React.FC = () => {
       {(purchase.status === 'received' || purchase.status === 'completed') && cartons.length > 0 && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a]">
-            <h2 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
               <Package size={13} /> Generated Cartons
             </h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Tracking codes for each received carton.</p>
+            <p className="text-[14px] text-gray-500 mt-0.5">Tracking codes for each received carton.</p>
           </div>
           <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-3">
             {cartons.map((c) => (
               <div key={c.id} className="bg-[#1d222a] border border-[#2b313a] rounded-lg p-2 flex flex-col gap-1">
-                <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">{(c.products as any)?.model || 'ITEM'}</p>
-                <p className="text-xs font-mono font-bold text-white">{c.carton_code}</p>
+                <p className="text-[13px] font-bold text-gray-600 uppercase tracking-widest">{(c.products as any)?.model || 'ITEM'}</p>
+                <p className="text-sm font-mono font-bold text-white">{c.carton_code}</p>
                 <div className="flex items-center justify-between mt-1">
                   <span className={cn(
                     "text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-widest",
@@ -850,27 +850,27 @@ export const PurchaseDetailPage: React.FC = () => {
       {purchase.status === 'received' && (
         <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a]">
-            <h2 className="text-xs font-bold text-white uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white uppercase tracking-widest flex items-center gap-2">
               <Calculator size={13} /> Additional Costs
             </h2>
-            <p className="text-[10px] text-gray-500 mt-0.5">Add shipping, clearing, tax and other costs to calculate the final cost price.</p>
+            <p className="text-[14px] text-gray-500 mt-0.5">Add shipping, clearing, tax and other costs to calculate the final cost price.</p>
           </div>
 
           {/* Add cost form */}
           <div className="p-5 border-b border-[#2b313a]">
             <div className="grid grid-cols-[150px_1fr_2fr_auto] gap-3 items-end">
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1">Type</label>
+                <label className="block text-[13px] font-bold uppercase tracking-widest text-gray-600 mb-1">Type</label>
                 <select
                   value={costForm.cost_type}
                   onChange={(e) => setCostForm((p) => ({ ...p, cost_type: e.target.value as any }))}
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40 capitalize"
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40 capitalize"
                 >
                   {COST_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1">Amount (LKR)</label>
+                <label className="block text-[13px] font-bold uppercase tracking-widest text-gray-600 mb-1">Amount (LKR)</label>
                 <input
                   type="number"
                   min="0"
@@ -878,23 +878,23 @@ export const PurchaseDetailPage: React.FC = () => {
                   value={costForm.amount_lkr}
                   onChange={(e) => setCostForm((p) => ({ ...p, amount_lkr: e.target.value }))}
                   placeholder="0.00"
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40 font-mono"
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40 font-mono"
                 />
               </div>
               <div>
-                <label className="block text-[9px] font-bold uppercase tracking-widest text-gray-600 mb-1">Notes</label>
+                <label className="block text-[13px] font-bold uppercase tracking-widest text-gray-600 mb-1">Notes</label>
                 <input
                   type="text"
                   value={costForm.notes}
                   onChange={(e) => setCostForm((p) => ({ ...p, notes: e.target.value }))}
                   placeholder="Optional…"
-                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40"
+                  className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-primary/40"
                 />
               </div>
               <button
                 onClick={handleAddCost}
                 disabled={addingCost}
-                className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {addingCost ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
                 Add
@@ -908,7 +908,7 @@ export const PurchaseDetailPage: React.FC = () => {
               <thead>
                 <tr className="bg-[#1d222a]">
                   {['Type', 'Amount', 'Notes', ''].map((h) => (
-                    <th key={h} className="px-5 py-3 text-[9px] font-bold uppercase tracking-widest text-gray-600 last:text-right">{h}</th>
+                    <th key={h} className="px-5 py-3 text-[13px] font-bold uppercase tracking-widest text-gray-600 last:text-right">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -916,10 +916,10 @@ export const PurchaseDetailPage: React.FC = () => {
                 {costs.map((c) => (
                   <tr key={c.id} className="hover:bg-[#1d222a] transition-colors">
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-semibold text-white capitalize">{c.cost_type}</span>
+                      <span className="text-sm font-semibold text-white capitalize">{c.cost_type}</span>
                     </td>
-                    <td className="px-5 py-3.5 text-xs font-mono text-primary">{fmt(c.amount_lkr)}</td>
-                    <td className="px-5 py-3.5 text-xs text-gray-500">{c.notes || '—'}</td>
+                    <td className="px-5 py-3.5 text-sm font-mono text-primary">{fmt(c.amount_lkr)}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-500">{c.notes || '—'}</td>
                     <td className="px-5 py-3.5 text-right">
                       <button onClick={() => handleDeleteCost(c.id)} className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
                         <Trash2 size={11} />
@@ -934,22 +934,22 @@ export const PurchaseDetailPage: React.FC = () => {
           {/* Cost summary preview */}
           {costs.length > 0 && totalSellable > 0 && (
             <div className="p-5 border-t border-[#2b313a] bg-primary/5 space-y-2">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Cost Preview</h3>
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <h3 className="text-[14px] font-bold uppercase tracking-widest text-gray-500">Cost Preview</h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-[#1d222a] rounded-xl p-3">
-                  <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase Cost (LKR)</p>
+                  <p className="text-[13px] text-gray-600 uppercase tracking-widest">Purchase Cost (LKR)</p>
                   <p className="font-mono font-bold text-white mt-1">{fmt(displayTotal)}</p>
                 </div>
                 <div className="bg-[#1d222a] rounded-xl p-3">
-                  <p className="text-[9px] text-gray-600 uppercase tracking-widest">Additional Costs</p>
+                  <p className="text-[13px] text-gray-600 uppercase tracking-widest">Additional Costs</p>
                   <p className="font-mono font-bold text-amber-400 mt-1">{fmt(totalAddlCosts)}</p>
                 </div>
                 <div className="bg-[#1d222a] rounded-xl p-3">
-                  <p className="text-[9px] text-gray-600 uppercase tracking-widest">Sellable Units</p>
+                  <p className="text-[13px] text-gray-600 uppercase tracking-widest">Sellable Units</p>
                   <p className="font-mono font-bold text-green-400 mt-1">{totalSellable}</p>
                 </div>
                 <div className="bg-primary/10 border border-primary/20 rounded-xl p-3">
-                  <p className="text-[9px] text-primary uppercase tracking-widest">Est. Cost / Unit</p>
+                  <p className="text-[13px] text-primary uppercase tracking-widest">Est. Cost / Unit</p>
                   <p className="font-mono font-bold text-primary mt-1">{fmt(estimatedCPPerUnit)}</p>
                 </div>
               </div>
@@ -962,7 +962,7 @@ export const PurchaseDetailPage: React.FC = () => {
       {purchase.status === 'completed' && (
         <div className="bg-[#171c23] border border-[#f8fafc]/20 rounded-2xl overflow-hidden">
           <div className="px-5 py-3.5 border-b border-[#2b313a] bg-[#f8fafc]/5">
-            <h2 className="text-xs font-bold text-[#f8fafc] uppercase tracking-widest flex items-center gap-2">
+            <h2 className="text-sm font-bold text-[#f8fafc] uppercase tracking-widest flex items-center gap-2">
               <TrendingUp size={13} /> Final Cost Breakdown
             </h2>
           </div>
@@ -970,12 +970,12 @@ export const PurchaseDetailPage: React.FC = () => {
             {costs.length > 0 && (
               <div className="space-y-2">
                 {costs.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between text-xs">
+                  <div key={c.id} className="flex items-center justify-between text-sm">
                     <span className="text-gray-400 capitalize">{c.cost_type}{c.notes ? ` — ${c.notes}` : ''}</span>
                     <span className="font-mono text-gray-300">{fmt(c.amount_lkr)}</span>
                   </div>
                 ))}
-                <div className="border-t border-[#2b313a] pt-2 flex items-center justify-between text-xs">
+                <div className="border-t border-[#2b313a] pt-2 flex items-center justify-between text-sm">
                   <span className="font-bold text-white">Total Additional Costs</span>
                   <span className="font-mono font-bold text-amber-400">{fmt(totalAddlCosts)}</span>
                 </div>
@@ -983,21 +983,21 @@ export const PurchaseDetailPage: React.FC = () => {
             )}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-[#1d222a] rounded-xl p-3">
-                <p className="text-[9px] text-gray-600 uppercase tracking-widest">Purchase LKR</p>
-                <p className="font-mono font-bold text-white text-xs mt-1">{fmt(displayTotal)}</p>
+                <p className="text-[13px] text-gray-600 uppercase tracking-widest">Purchase LKR</p>
+                <p className="font-mono font-bold text-white text-sm mt-1">{fmt(displayTotal)}</p>
               </div>
               <div className="bg-[#1d222a] rounded-xl p-3">
-                <p className="text-[9px] text-gray-600 uppercase tracking-widest">Sellable Units</p>
-                <p className="font-mono font-bold text-green-400 text-xs mt-1">{totalSellable}</p>
+                <p className="text-[13px] text-gray-600 uppercase tracking-widest">Sellable Units</p>
+                <p className="font-mono font-bold text-green-400 text-sm mt-1">{totalSellable}</p>
               </div>
               <div className="bg-primary/10 border border-primary/20 rounded-xl p-3">
-                <p className="text-[9px] text-primary uppercase tracking-widest">Cost / Unit</p>
-                <p className="font-mono font-bold text-primary text-xs mt-1">{fmt(estimatedCPPerUnit)}</p>
+                <p className="text-[13px] text-primary uppercase tracking-widest">Cost / Unit</p>
+                <p className="font-mono font-bold text-primary text-sm mt-1">{fmt(estimatedCPPerUnit)}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
               <CheckCircle2 size={13} className="text-green-400 shrink-0" />
-              <p className="text-xs text-green-400">Purchase completed. Product cost prices have been updated.</p>
+              <p className="text-sm text-green-400">Purchase completed. Product cost prices have been updated.</p>
             </div>
           </div>
         </div>

@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
 import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleReceipt';
 import type { Product } from '../../types';
-import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X } from 'lucide-react';
+import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight } from 'lucide-react';
 
 interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
 interface InvoiceRow {
@@ -22,6 +22,7 @@ interface InvoiceRow {
   payment_status: string;
   created_at: string;
   salesperson_name: string | null;
+  notes: string | null;
   salesperson: { id: string; name: string } | null;
   customers: { name: string } | null;
 }
@@ -34,7 +35,7 @@ interface DetailItem {
   batch_id: string | null;
   products: {
     id: string; name: string; item_code: string; pieces_per_carton: number;
-    wholesale_price: number; retail_price: number; model: string; category: string;
+    wholesale_price: number; retail_price: number; cost_price: number; model: string; category: string;
     created_at: string; updated_at: string;
   } | null;
 }
@@ -90,7 +91,7 @@ export const DailySalesReport: React.FC = () => {
       (() => {
         let q = supabase
           .from('invoices')
-          .select('id, invoice_no, subtotal, discount, total, mode, payment_status, created_at, salesperson_name, salesperson:salespeople(id, name), customers(name)');
+          .select('id, invoice_no, subtotal, discount, total, mode, payment_status, created_at, salesperson_name, notes, salesperson:salespeople(id, name), customers(name)');
         if (from) q = q.gte('created_at', from);
         if (to)   q = q.lte('created_at', to);
         return q.order('created_at', { ascending: false });
@@ -114,7 +115,7 @@ export const DailySalesReport: React.FC = () => {
     const [itemsRes, paymentsRes] = await Promise.all([
       supabase
         .from('invoice_items')
-        .select('cartons, pieces, unit_price, total, batch_id, products(id, name, item_code, pieces_per_carton, wholesale_price, retail_price, model, category, created_at, updated_at)')
+        .select('cartons, pieces, unit_price, total, batch_id, products(id, name, item_code, pieces_per_carton, wholesale_price, retail_price, cost_price, model, category, created_at, updated_at)')
         .eq('invoice_id', inv.id),
       supabase
         .from('payments')
@@ -132,7 +133,7 @@ export const DailySalesReport: React.FC = () => {
     const rd: SaleReceiptData = {
       invoiceNo: detailInvoice.invoice_no,
       cartSnapshot: detailItems
-        .filter(item => item.products !== null)
+        .filter(item => item.products !== null && item.unit_price >= 0)
         .map(item => ({
           product: item.products as Product,
           quantityCartons: item.cartons,
@@ -383,7 +384,7 @@ export const DailySalesReport: React.FC = () => {
       {/* Invoice detail modal */}
       {detailInvoice && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal header */}
             <div className="px-6 py-4 border-b border-[#2b313a] flex items-center justify-between flex-shrink-0">
               <div>
@@ -418,61 +419,91 @@ export const DailySalesReport: React.FC = () => {
               ) : (
                 <>
                   {/* Invoice meta */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Sold By</p>
-                      <p className="text-sm text-white font-semibold mt-0.5">
-                        {detailInvoice.salesperson?.name ?? detailInvoice.salesperson_name ?? '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Mode</p>
-                      <p className="text-sm text-white font-semibold mt-0.5 capitalize">
-                        {detailInvoice.mode ?? '—'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status</p>
-                      <span className={cn('inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase',
-                        detailInvoice.payment_status === 'paid'       ? 'bg-green-900/20 text-green-400' :
-                        detailInvoice.payment_status === 'partial'    ? 'bg-amber-900/20 text-amber-400' :
-                        detailInvoice.payment_status === 'cancelled'  ? 'bg-gray-900/20 text-gray-500'   :
-                                                                         'bg-red-900/20 text-red-400'
-                      )}>{detailInvoice.payment_status}</span>
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Customer', value: detailInvoice.customers?.name ?? 'Walk-in' },
+                      { label: 'Salesperson', value: detailInvoice.salesperson?.name ?? detailInvoice.salesperson_name ?? '—' },
+                      { label: 'Mode', value: detailInvoice.mode ?? '—', capitalize: true },
+                      { label: 'Payment', value: detailPayments[0] ? (METHOD_LABELS[detailPayments[0].method] ?? detailPayments[0].method) + (detailPayments.length > 1 ? ` +${detailPayments.length - 1}` : '') : '—' },
+                    ].map(f => (
+                      <div key={f.label} className="bg-[#1d222a] rounded-xl px-3 py-2.5">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{f.label}</p>
+                        <p className={cn('text-sm text-white font-semibold mt-0.5 truncate', (f as any).capitalize && 'capitalize')}>{f.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Status + exchange banner */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn('px-2.5 py-1 rounded-full text-[11px] font-bold uppercase',
+                      detailInvoice.payment_status === 'paid'       ? 'bg-green-900/20 text-green-400' :
+                      detailInvoice.payment_status === 'partial'    ? 'bg-amber-900/20 text-amber-400' :
+                      detailInvoice.payment_status === 'cancelled'  ? 'bg-gray-900/20 text-gray-500'   :
+                                                                       'bg-red-900/20 text-red-400'
+                    )}>{detailInvoice.payment_status}</span>
+                    {detailInvoice.notes?.startsWith('Exchange for') && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-semibold">
+                        <ArrowLeftRight size={10} />
+                        {detailInvoice.notes}
+                      </div>
+                    )}
                   </div>
 
                   {/* Line items */}
-                  <div className="rounded-xl border border-[#2b313a] overflow-hidden">
-                    <table className="w-full">
+                  <div className="rounded-xl border border-[#2b313a] overflow-hidden overflow-x-auto">
+                    <table className="w-full min-w-[640px]">
                       <thead>
                         <tr className="border-b border-[#2b313a] bg-[#12161d]">
                           <th className="text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Product</th>
-                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Qty</th>
-                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Unit Price</th>
-                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Total</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-2.5">Qty</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-2.5">Unit Price</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-2.5">Discount</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 py-2.5">Subtotal</th>
+                          <th className="text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest px-4 py-2.5">Profit</th>
                         </tr>
                       </thead>
                       <tbody>
                         {detailItems.length === 0 ? (
-                          <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-500 text-xs">No items found</td></tr>
+                          <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500 text-xs">No items found</td></tr>
                         ) : detailItems.map((item, i) => {
+                          const isReturned = item.unit_price < 0;
                           const ppc = item.products?.pieces_per_carton || 1;
                           const totalPieces = item.cartons * ppc + item.pieces;
+                          const grossAmt = Math.abs(item.unit_price) * totalPieces;
+                          const lineDiscount = isReturned ? 0 : Math.max(0, grossAmt - item.total);
+                          const costAmt = (item.products?.cost_price ?? 0) * totalPieces;
+                          const profit = isReturned ? 0 : item.total - costAmt;
                           return (
-                            <tr key={i} className="border-b border-[#2b313a]/60 hover:bg-[#1d222a] transition-colors">
+                            <tr key={i} className={cn('border-b border-[#2b313a]/60 transition-colors', isReturned ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1d222a]')}>
                               <td className="px-4 py-2.5">
-                                <p className="text-sm font-semibold text-white">{item.products?.name ?? '—'}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-white">{item.products?.name ?? '—'}</p>
+                                  {isReturned && <span className="text-[9px] uppercase font-bold text-amber-500 bg-amber-500/15 border border-amber-500/20 px-1.5 py-0.5 rounded">Returned</span>}
+                                </div>
                                 <p className="text-[10px] text-gray-500 font-mono">{item.products?.item_code ?? ''}</p>
                               </td>
-                              <td className="px-4 py-2.5 text-right text-xs text-gray-300 font-mono whitespace-nowrap">
-                                {item.cartons > 0 && <span>{item.cartons} ctn</span>}
-                                {item.cartons > 0 && item.pieces > 0 && <span className="mx-1 text-gray-600">+</span>}
-                                {item.pieces > 0 && <span>{item.pieces} pcs</span>}
+                              <td className="px-3 py-2.5 text-right text-xs font-mono whitespace-nowrap" style={{ color: isReturned ? '#f59e0b' : '#d1d5db' }}>
+                                {item.cartons > 0 && <span>{item.cartons}c</span>}
+                                {item.cartons > 0 && item.pieces > 0 && <span className="mx-0.5 text-gray-600">+</span>}
+                                {item.pieces > 0 && <span>{item.pieces}p</span>}
                                 <span className="ml-1 text-gray-600">({totalPieces})</span>
                               </td>
-                              <td className="px-4 py-2.5 text-right text-xs font-mono text-gray-300">{fmtCurrency(item.unit_price)}</td>
-                              <td className="px-4 py-2.5 text-right text-sm font-bold font-mono text-white">{fmtCurrency(item.total)}</td>
+                              <td className="px-3 py-2.5 text-right text-xs font-mono" style={{ color: isReturned ? '#f59e0b' : '#d1d5db' }}>
+                                {isReturned ? `(${fmtCurrency(Math.abs(item.unit_price))})` : fmtCurrency(item.unit_price)}
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-xs font-mono">
+                                {lineDiscount > 0.01
+                                  ? <span className="text-red-400">−{fmtCurrency(lineDiscount)}</span>
+                                  : <span className="text-gray-600">—</span>}
+                              </td>
+                              <td className="px-3 py-2.5 text-right text-sm font-bold font-mono" style={{ color: isReturned ? '#f59e0b' : '#ffffff' }}>
+                                {isReturned ? `−${fmtCurrency(Math.abs(item.total))}` : fmtCurrency(item.total)}
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-xs font-mono">
+                                {isReturned
+                                  ? <span className="text-gray-600">—</span>
+                                  : <span className={profit >= 0 ? 'text-green-400' : 'text-red-400'}>{fmtCurrency(profit)}</span>}
+                              </td>
                             </tr>
                           );
                         })}
@@ -480,37 +511,52 @@ export const DailySalesReport: React.FC = () => {
                     </table>
                   </div>
 
-                  {/* Totals + Payments side by side */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Summary</p>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-400">Subtotal</span>
-                        <span className="text-gray-300 font-mono">{fmtCurrency(Number(detailInvoice.subtotal))}</span>
-                      </div>
-                      {Number(detailInvoice.discount) > 0 && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-400">Discount</span>
-                          <span className="text-red-400 font-mono">− {fmtCurrency(Number(detailInvoice.discount))}</span>
+                  {/* Summary + Payments */}
+                  {(() => {
+                    const totalProfit = detailItems
+                      .filter(it => it.unit_price >= 0)
+                      .reduce((s, it) => {
+                        const ppc = it.products?.pieces_per_carton || 1;
+                        const qty = it.cartons * ppc + it.pieces;
+                        return s + it.total - (it.products?.cost_price ?? 0) * qty;
+                      }, 0);
+                    return (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Summary</p>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-400">Subtotal</span>
+                            <span className="text-gray-300 font-mono">{fmtCurrency(Number(detailInvoice.subtotal))}</span>
+                          </div>
+                          {Number(detailInvoice.discount) > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-400">Bill Discount</span>
+                              <span className="text-red-400 font-mono">− {fmtCurrency(Number(detailInvoice.discount))}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-sm font-bold border-t border-[#2b313a] pt-2 mt-1">
+                            <span className="text-white">Net Total</span>
+                            <span className="text-white font-mono">{fmtCurrency(Number(detailInvoice.total))}</span>
+                          </div>
+                          <div className="flex justify-between text-xs border-t border-[#2b313a] pt-2">
+                            <span className="text-gray-400">Profit</span>
+                            <span className={cn('font-mono font-semibold', totalProfit >= 0 ? 'text-green-400' : 'text-red-400')}>{fmtCurrency(totalProfit)}</span>
+                          </div>
                         </div>
-                      )}
-                      <div className="flex justify-between text-sm font-bold border-t border-[#2b313a] pt-2 mt-1">
-                        <span className="text-white">Total</span>
-                        <span className="text-white font-mono">{fmtCurrency(Number(detailInvoice.total))}</span>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Payments</p>
-                      {detailPayments.length === 0 ? (
-                        <p className="text-xs text-gray-500">No payments recorded</p>
-                      ) : detailPayments.map((p, i) => (
-                        <div key={i} className="flex justify-between text-xs">
-                          <span className="text-gray-400 capitalize">{METHOD_LABELS[p.method] ?? p.method}</span>
-                          <span className="text-gray-300 font-mono">{fmtCurrency(Number(p.amount))}</span>
+                        <div className="rounded-xl border border-[#2b313a] p-4 space-y-2">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Payments</p>
+                          {detailPayments.length === 0 ? (
+                            <p className="text-xs text-gray-500">No payments recorded</p>
+                          ) : detailPayments.map((p, i) => (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span className="text-gray-400 capitalize">{METHOD_LABELS[p.method] ?? p.method}{p.bank_name ? ` · ${p.bank_name}` : ''}</span>
+                              <span className="text-gray-300 font-mono">{fmtCurrency(Number(p.amount))}</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>

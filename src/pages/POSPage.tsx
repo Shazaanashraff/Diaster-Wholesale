@@ -59,6 +59,7 @@ const TILE_COLORS = [
 ];
 
 const TILE_ICONS = [Code2, MonitorCheck, Gamepad2, Gift, Server, Globe, Code2, MonitorCheck];
+const WALK_IN_CUSTOMER_ID = 'c1000000-0000-0000-0000-000000000001';
 
 export const POSPage: React.FC = () => {
   const navigate = useNavigate();
@@ -509,7 +510,7 @@ export const POSPage: React.FC = () => {
   const splitPaymentValid = isFullCredit || !hasCreditSplit || enteredPaymentAmount > 0;
   const canProcessTransaction =
     cart.length > 0
-    && !!selectedCustomerId
+    && (!hasCreditSplit || !!selectedCustomerId)
     && btnPhase === 'idle'
     && !isBelowCost
     && !needsApproval
@@ -628,7 +629,7 @@ export const POSPage: React.FC = () => {
         // Offline path: single-method only, no loyalty
         const offlineMethod = paymentSplits[0].method === 'credit' ? 'credit' : paymentSplits[0].method;
         const customerName = customers.find(c => c.id === selectedCustomerId)?.name ?? 'Walk-in';
-        await checkoutOffline(cart, selectedCustomerId, customerName,
+        await checkoutOffline(cart, selectedCustomerId || WALK_IN_CUSTOMER_ID, customerName,
           isWholesale, subtotal, discount, total, offlineMethod, total);
         const count = await getOfflinePendingCount();
         setOfflinePendingCount(count);
@@ -650,7 +651,7 @@ export const POSPage: React.FC = () => {
 
       const { invoiceNo, earnedPoints } = await checkout(
         cart,
-        selectedCustomerId,
+        selectedCustomerId || WALK_IN_CUSTOMER_ID,
         isWholesale,
         subtotal,
         discount,
@@ -765,7 +766,7 @@ export const POSPage: React.FC = () => {
                 onClick={() => loadData(true)}
                 disabled={refreshing}
                 title={`Last refreshed: ${lastRefreshed.toLocaleTimeString()}`}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-900/20 border border-emerald-700/30 text-emerald-400 text-[10px] font-bold hover:bg-emerald-900/30 transition-all disabled:opacity-60"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-900/20 border border-emerald-700/30 text-emerald-400 text-[14px] font-bold hover:bg-emerald-900/30 transition-all disabled:opacity-60"
               >
                 <span className={cn('w-1.5 h-1.5 rounded-full bg-emerald-400', refreshing ? 'animate-pulse' : 'opacity-80')} />
                 <RefreshCw size={11} className={cn(refreshing && 'animate-spin')} />
@@ -847,9 +848,9 @@ export const POSPage: React.FC = () => {
                         : 'Inventory not enforced'}
                     </p>
                     <h4>{product.name}</h4>
-                    <p className="text-[11px] text-gray-400">{product.item_code}</p>
+                    <p className="text-[13px] text-gray-400">{product.item_code}</p>
                     <strong>LKR {(isWholesale ? product.wholesale_price : product.retail_price).toFixed(2)}</strong>
-                    <p className="text-[10px] text-gray-500">Qty per carton: {piecesPerCarton}</p>
+                    <p className="text-[14px] text-gray-500">Qty per carton: {piecesPerCarton}</p>
                   </div>
 
                   <div className="pos-qty-group">
@@ -867,7 +868,7 @@ export const POSPage: React.FC = () => {
                             isInventoryEnforced ? remainingPieces : undefined
                           )}
                           onFocus={(e) => e.target.select()}
-                          className="w-16 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                          className="w-16 bg-[#1d222a] border border-[#2b313a] text-[14px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
                           aria-label={`Enter quantity for ${product.name}`}
                         />
                         <button type="button" onClick={() => updateQuantity(product.id, -1)} disabled={qtyUnits === 0}>
@@ -909,7 +910,7 @@ export const POSPage: React.FC = () => {
             >
               <Minus size={12} /> Prev
             </button>
-            <span className="text-[11px] text-gray-500 font-mono">
+            <span className="text-[13px] text-gray-500 font-mono">
               {productPage + 1} / {Math.max(1, totalPages)}
               <span className="text-gray-600 ml-1.5">({categoryProducts.length})</span>
             </span>
@@ -967,7 +968,7 @@ export const POSPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/returns')}
-                className="mt-2 text-[10px] font-bold uppercase tracking-wider text-primary hover:text-white transition-colors"
+                className="mt-2 text-[14px] font-bold uppercase tracking-wider text-primary hover:text-white transition-colors"
               >
                 Open Returns
               </button>
@@ -1164,28 +1165,28 @@ export const POSPage: React.FC = () => {
                       <span>{index + 1}</span>
                       <div>
                         <h4>{item.product.name}</h4>
-                        <p className="text-[10px] text-gray-400">{item.product.item_code}</p>
+                        <p className="text-[14px] text-gray-400">{item.product.item_code}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[9px] text-gray-500 uppercase">Qty</span>
+                          <span className="text-[13px] text-gray-500 uppercase">Qty</span>
                           <input
                             type="number"
                             min="1"
                             value={item.quantityPieces || ''}
                             onChange={(e) => updateCartQuantity(index, e.target.value)}
                             onFocus={(e) => e.target.select()}
-                            className="w-16 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                            className="w-16 bg-[#1d222a] border border-[#2b313a] text-[14px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
                           />
-                          <span className="text-[9px] text-gray-600">units</span>
+                          <span className="text-[13px] text-gray-600">units</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5">
-                          <span className="text-[9px] text-gray-500 uppercase">Sale price</span>
+                          <span className="text-[13px] text-gray-500 uppercase">Sale price</span>
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             value={pricePerPiece}
                             onChange={(e) => updateCartUnitPrice(index, e.target.value)}
-                            className="w-20 bg-[#1d222a] border border-[#2b313a] text-[10px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                            className="w-20 bg-[#1d222a] border border-[#2b313a] text-[14px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
                           />
                         </div>
                         {(() => {
@@ -1196,7 +1197,7 @@ export const POSPage: React.FC = () => {
                           const isBelowSellingItem = effectivePrice < sellingPrice;
                           return (
                             <div className="mt-1 flex items-center gap-1.5">
-                              <span className="text-[9px] text-gray-500 uppercase">Discount</span>
+                              <span className="text-[13px] text-gray-500 uppercase">Discount</span>
                               <input
                                 type="number"
                                 min="0"
@@ -1204,7 +1205,7 @@ export const POSPage: React.FC = () => {
                                 value={item.lineDiscount || ''}
                                 onChange={(e) => updateCartLineDiscount(index, e.target.value)}
                                 placeholder="0"
-                                className={`w-20 bg-[#1d222a] border text-[10px] rounded px-1.5 py-0.5 outline-none font-mono ${
+                                className={`w-20 bg-[#1d222a] border text-[14px] rounded px-1.5 py-0.5 outline-none font-mono ${
                                   isBelowCostItem
                                     ? 'border-red-500/60 text-red-400'
                                     : isBelowSellingItem
@@ -1213,7 +1214,7 @@ export const POSPage: React.FC = () => {
                                 }`}
                               />
                               {(item.lineDiscount ?? 0) > 0 && (
-                                <span className={`text-[9px] font-mono font-bold ${
+                                <span className={`text-[13px] font-mono font-bold ${
                                   isBelowCostItem ? 'text-red-400' : isBelowSellingItem ? 'text-amber-400' : 'text-emerald-400'
                                 }`}>
                                   {isBelowCostItem ? '✕ below cost' : isBelowSellingItem ? '⚠ needs auth' : `= ${effectivePrice.toFixed(0)}`}
@@ -1230,7 +1231,7 @@ export const POSPage: React.FC = () => {
                               newCart[index].batchId = e.target.value || undefined;
                               setCart(newCart);
                             }}
-                            className="bg-[#1d222a] border border-[#2b313a] text-[9px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
+                            className="bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
                           >
                             <option value="">Auto Allocate (Oldest Lot First)</option>
                             {(availableBatches[item.product.id] || []).map(b => (
