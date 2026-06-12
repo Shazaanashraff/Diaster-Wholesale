@@ -86,7 +86,7 @@ const fmt = (n: number) =>
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-async function restoreStock(productId: string, cartons: number, pieces: number, piecesPerCarton: number, reason: string) {
+async function restoreStock(productId: string, cartons: number, pieces: number, piecesPerCarton: number, _reason: string) {
   const totalPieces = cartons * (piecesPerCarton || 1) + pieces;
   if (totalPieces <= 0) return;
   // Use restore_stock_to_batch so stock_batches is updated (same as cancelInvoice).
