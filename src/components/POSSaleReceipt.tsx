@@ -158,8 +158,9 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           const qty = item.quantityCartons * ppc + item.quantityPieces;
           const basePrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
           const rate = Number(item.unitPrice ?? basePrice);
-          const lineDisc = Math.max(0, (basePrice - rate) * qty);
-          const amt = rate * qty; // basePrice*qty - lineDisc
+          const perUnitDisc = item.lineDiscount ?? 0;
+          const lineDisc = perUnitDisc * qty + Math.max(0, (basePrice - rate) * qty);
+          const amt = Math.max(0, rate - perUnitDisc) * qty;
           return (
             <div key={item.product.id} style={{ marginBottom: 5, fontSize: 12 }}>
               <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -170,7 +171,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 26px 50px 60px', gap: '0 2px' }}>
                 <span />
-                <span style={{ textAlign: 'right' }}>{fmt(basePrice)}</span>
+                <span style={{ textAlign: 'right' }}>{fmt(rate)}</span>
                 <span style={{ textAlign: 'right' }}>{qty}</span>
                 <span style={{ textAlign: 'right' }}>{lineDisc > 0 ? fmt(lineDisc) : '-'}</span>
                 <span style={{ textAlign: 'right', fontWeight: 900 }}>{fmt(amt)}</span>
@@ -232,6 +233,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 900, margin: '4px 0', lineHeight: 1.5 }}>
           <div>EXCHANGE WITHIN 3 DAYS ONLY</div>
           <div>BILL MUST BE PRODUCED</div>
+          <div>NO CASH REFUND</div>
         </div>
 
         {divider(true)}

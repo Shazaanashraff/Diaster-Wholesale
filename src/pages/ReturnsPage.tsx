@@ -132,7 +132,7 @@ export const ReturnsPage: React.FC = () => {
   const [replacements, setReplacements] = useState<ReplacementItem[]>([]);
   const [settlementMethod, setSettlementMethod] = useState('cash');
   const [settlementBank, setSettlementBank] = useState('');
-  const [products, setProducts] = useState<Array<{ id: string; name: string; pieces_per_carton: number; wholesale_price: number }>>([]);
+  const [products, setProducts] = useState<Array<{ id: string; name: string; item_code?: string; pieces_per_carton: number; wholesale_price: number }>>([]);
   const [productSearch, setProductSearch] = useState('');
 
   // Submit
@@ -233,7 +233,7 @@ export const ReturnsPage: React.FC = () => {
 
   useEffect(() => {
     if (returnType !== 'Exchange') return;
-    supabase.from('products').select('id, name, pieces_per_carton, wholesale_price')
+    supabase.from('products').select('id, name, item_code, pieces_per_carton, wholesale_price')
       .limit(500)
       .then(({ data }) => setProducts((data ?? []) as any[]));
   }, [returnType]);
@@ -322,7 +322,10 @@ export const ReturnsPage: React.FC = () => {
     : exchangeDiff > 0 ? 'UpgradePayment' : 'CashRefund';
 
   const filteredProducts = productSearch.length > 1
-    ? products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+    ? products.filter(p => {
+        const q = productSearch.toLowerCase();
+        return p.name.toLowerCase().includes(q) || (p.item_code ?? '').toLowerCase().includes(q);
+      })
     : [];
 
   // ─── Submit ───────────────────────────────────────────────────────────────
@@ -527,25 +530,46 @@ export const ReturnsPage: React.FC = () => {
         .eq('return_id', ret.id);
 
       let replacementLoss = 0;
+      const expenseQueue: Array<{ productName: string; amount: number; units: number }> = [];
 
       for (const item of (items ?? []) as any[]) {
         if (resolution === 'Replaced') {
           const { data: prod } = await supabase
-            .from('products').select('pieces_per_carton').eq('id', item.product_id).single();
+            .from('products').select('pieces_per_carton, cost_price, name').eq('id', item.product_id).single();
           const ppc = Number((prod as any)?.pieces_per_carton ?? 1) || 1;
           const units = item.return_cartons * ppc + item.return_pieces;
+          const costPrice = Number((prod as any)?.cost_price ?? 0);
+          const productName = (prod as any)?.name ?? 'Unknown';
           if (units > 0) await deductStock(item.product_id, units);
-          replacementLoss += units * Number(item.unit_price ?? 0);
+          const lineLoss = units * costPrice;
+          replacementLoss += lineLoss;
+          if (lineLoss > 0) expenseQueue.push({ productName, amount: lineLoss, units });
         }
       }
 
-      await supabase.from('sales_returns').update({
+      // Status update first — must not be blocked by expense insert
+      const { error: updateErr } = await supabase.from('sales_returns').update({
         status: 'Completed',
         resolution_type: resolution,
-        settlement_type: resolution === 'Replaced' ? 'DamageReplacement' : 'DamageRepaired',
+        settlement_type: null,
         exchange_difference: resolution === 'Replaced' ? -Math.abs(replacementLoss) : null,
         updated_at: new Date().toISOString(),
       }).eq('id', ret.id);
+      if (updateErr) throw new Error(updateErr.message);
+
+      // Record write-off expenses — failure here is non-fatal (RLS may block, log only)
+      for (const { productName, amount, units } of expenseQueue) {
+        try {
+          await supabase.from('expenses').insert({
+            category: 'Damage Replacement',
+            description: productName,
+            amount,
+            method: 'cash',
+            notes: `Damage replacement for return ${ret.return_number} — ${units} unit(s) of ${productName} given as replacement`,
+            created_by: role,
+          });
+        } catch (_) { /* non-fatal */ }
+      }
 
       showToast(`Return marked as ${resolution}`);
       loadHistory();
@@ -866,7 +890,10 @@ export const ReturnsPage: React.FC = () => {
                         {filteredProducts.map(p => (
                           <button key={p.id} onClick={() => addReplacement(p)}
                             className="w-full text-left px-4 py-2.5 hover:bg-[#22282f] text-sm text-gray-300 flex items-center justify-between transition-colors">
-                            <span>{p.name}</span>
+                            <span className="flex flex-col">
+                              <span>{p.name}</span>
+                              {p.item_code && <span className="text-[10px] font-mono text-gray-500">{p.item_code}</span>}
+                            </span>
                             <span className="text-gray-500 font-mono">{fmt(p.wholesale_price)}</span>
                           </button>
                         ))}
@@ -1056,11 +1083,11 @@ export const ReturnsPage: React.FC = () => {
                   <div className="text-right shrink-0">
                     <p className={cn(
                       'text-sm font-bold font-mono',
-                      ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                      ret.resolution_type === 'Replaced' && ret.exchange_difference != null
                         ? 'text-red-400'
                         : 'text-amber-400'
                     )}>
-                      {ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                      {ret.resolution_type === 'Replaced' && ret.exchange_difference != null
                         ? `Loss ${fmt(Math.abs(ret.exchange_difference))}`
                         : fmt(ret.refund_amount)}
                     </p>
@@ -1084,7 +1111,7 @@ export const ReturnsPage: React.FC = () => {
                         ret.settlement_type
                           ? { label: 'Settlement', value: ret.settlement_type, cls: 'text-blue-400' }
                           : null,
-                        ret.settlement_type === 'DamageReplacement' && ret.exchange_difference != null
+                        ret.resolution_type === 'Replaced' && ret.exchange_difference != null
                           ? { label: 'Replacement Loss', value: fmt(Math.abs(ret.exchange_difference)), cls: 'text-red-400 font-mono' }
                           : null,
                       ].filter(Boolean).map((f: any) => (

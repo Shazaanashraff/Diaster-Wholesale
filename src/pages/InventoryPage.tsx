@@ -215,34 +215,38 @@ export const InventoryPage: React.FC = () => {
   }
 
   const displayInventory = useMemo(() => {
-    const baseByProductId = new Map(inventory.map((row) => [row.product_id, row]));
+    // Build a map of location-specific rows keyed by product_id
+    const locationRows = new Map<string, InventoryByLocationRow>();
+    for (const row of inventoryByLocation) {
+      if (row.location_type === locationFilter) {
+        locationRows.set(row.product_id, row);
+      }
+    }
+    // Use global inventory as the base so 0-qty products still appear
+    return inventory.map((base) => {
+      const row = locationRows.get(base.product_id);
+      const ppc = Number(base.pieces_per_carton ?? 1) || 1;
+      const units = row ? Math.max(0, Number(row.total_units ?? 0)) : 0;
 
-    return inventoryByLocation
-      .filter((row) => row.location_type === locationFilter)
-      .map((row) => {
-        const base = baseByProductId.get(row.product_id);
-        const ppc = Number(row.pieces_per_carton ?? base?.pieces_per_carton ?? 1) || 1;
-        const units = Math.max(0, Number(row.total_units ?? 0));
-
-        return {
-          product_id: row.product_id,
-          item_code: row.item_code ?? base?.item_code ?? '-',
-          name: row.name ?? base?.name ?? 'Unknown Product',
-          model: base?.model ?? '',
-          category: base?.category ?? 'general',
-          wholesale_price: Number(base?.wholesale_price ?? 0),
-          retail_price: Number(base?.retail_price ?? 0),
-          pieces_per_carton: ppc,
-          reorder_level: Number(base?.reorder_level ?? 0),
-          cartons_in: 0,
-          pieces_in: units,
-          cartons_sold: 0,
-          pieces_sold: 0,
-          carton_adj: 0,
-          piece_adj: 0,
-          _location_type: row.location_type as string | undefined,
-        } as ProductStock & { _location_type?: string };
-      });
+      return {
+        product_id: base.product_id,
+        item_code: base.item_code ?? '-',
+        name: base.name ?? 'Unknown Product',
+        model: base.model ?? '',
+        category: base.category ?? 'general',
+        wholesale_price: Number(base.wholesale_price ?? 0),
+        retail_price: Number(base.retail_price ?? 0),
+        pieces_per_carton: ppc,
+        reorder_level: Number(base.reorder_level ?? 0),
+        cartons_in: 0,
+        pieces_in: units,
+        cartons_sold: 0,
+        pieces_sold: 0,
+        carton_adj: 0,
+        piece_adj: 0,
+        _location_type: locationFilter,
+      } as ProductStock & { _location_type?: string };
+    });
   }, [inventory, inventoryByLocation, locationFilter]);
 
   const visibleInventory = useMemo(() => displayInventory
@@ -558,7 +562,7 @@ export const InventoryPage: React.FC = () => {
           </div>
         )}
 
-        <div className="px-3 pb-8">
+        {!isShopOnly && <div className="px-3 pb-8">
           <div className="bg-[#171c23] rounded-2xl border border-[#2b313a] overflow-hidden w-full">
             <div className="px-6 py-4 border-b border-[#2b313a]">
               <h3 className="text-sm font-bold text-white">Stock Ledger</h3>
@@ -621,7 +625,7 @@ export const InventoryPage: React.FC = () => {
               </table>
             </div>
           </div>
-        </div>
+        </div>}
       </section>
 
       {/* ── Stock Adjustment Modal ── */}

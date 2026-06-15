@@ -198,8 +198,8 @@ export const checkout = async (
       product_id: item.product.id,
       cartons: item.quantityCartons,
       pieces: item.quantityPieces,
-      unit_price: effectivePrice,
-      total: effectivePrice * totalPieces,
+      unit_price: basePrice,               // sale price before line discount — allows invoice modal to derive discount
+      total: effectivePrice * totalPieces, // actual amount charged
       batch_id: item.batchId || null,
     };
   });

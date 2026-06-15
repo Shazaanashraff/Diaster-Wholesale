@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, X, Loader2, AlertCircle, CheckCircle2, RefreshCw, ArrowRight } from 'lucide-react';
+import { Plus, Search, X, Loader2, AlertCircle, CheckCircle2, RefreshCw, ArrowRight, ChevronRight } from 'lucide-react';
 import {
-  getStockTransfers, createStockTransfer, completeStockTransfer, cancelStockTransfer,
+  getStockTransfers, getStockTransferById, createStockTransfer, completeStockTransfer, cancelStockTransfer,
 } from '../services/transferService';
+import type { StockTransferItem } from '../types';
 import { getLocations } from '../services/supplierService';
 import { getProducts } from '../services/productService';
 import { getInventory } from '../services/inventoryService'; // Total stock (all locations) — managers see this to plan transfers
@@ -38,6 +39,12 @@ export const StockTransfersPage: React.FC = () => {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [cancelTarget, setCancelTarget] = useState<StockTransfer | null>(null);
   const [completeTarget, setCompleteTarget] = useState<StockTransfer | null>(null);
+
+  // Detail panel
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTransfer, setDetailTransfer] = useState<StockTransfer | null>(null);
+  const [detailItems, setDetailItems] = useState<StockTransferItem[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const [form, setForm] = useState({ from_location_id: '', to_location_id: '', notes: '' });
   const [items, setItems] = useState<TransferItemRow[]>([{ product_id: '', quantity: 0 }]);
@@ -132,8 +139,27 @@ export const StockTransfersPage: React.FC = () => {
     finally { setSaving(false); }
   }
 
+  async function openDetail(t: StockTransfer) {
+    setDetailTransfer(t);
+    setDetailItems([]);
+    setDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const { items } = await getStockTransferById(t.id);
+      setDetailItems(items);
+    } catch (e: any) { showToast(e.message, false); }
+    finally { setDetailLoading(false); }
+  }
+
+  function canApprove(t: StockTransfer) {
+    if (isManager) return true;
+    // Cashier can accept incoming warehouse→shop transfers
+    const to = t.to_location as any;
+    return role === 'pos_operator' && to?.type === 'shop';
+  }
+
   async function handleComplete(t: StockTransfer) {
-    if (!isManager) { showToast('Only Managers can approve transfers', false); return; }
+    if (!canApprove(t)) { showToast('You do not have permission to approve this transfer', false); return; }
     setCompleteTarget(t);
   }
 
@@ -213,7 +239,7 @@ export const StockTransfersPage: React.FC = () => {
               const from = t.from_location as any;
               const to = t.to_location as any;
               return (
-                <tr key={t.id} className="hover:bg-[#1d222a] transition-colors" style={{ animation: 'posFadeIn 200ms ease both', animationDelay: `${i * 20}ms` }}>
+                <tr key={t.id} onClick={() => openDetail(t)} className="hover:bg-[#1d222a] transition-colors cursor-pointer" style={{ animation: 'posFadeIn 200ms ease both', animationDelay: `${i * 20}ms` }}>
                   <td className="px-4 py-3.5 text-sm font-mono font-bold text-white">{t.reference}</td>
                   <td className="px-4 py-3.5">
                     <span className="text-xs text-gray-300">{from?.name ?? '—'}</span>
@@ -229,15 +255,16 @@ export const StockTransfersPage: React.FC = () => {
                   </td>
                   <td className="px-4 py-3.5 text-xs text-gray-400">{t.requested_by}</td>
                   <td className="px-4 py-3.5 text-xs text-gray-500">{new Date(t.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3.5 text-right">
-                    {t.status === 'pending' && (
-                      <div className="flex items-center justify-end gap-1">
-                        {isManager && (
-                          <button onClick={() => handleComplete(t)} className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold rounded-lg hover:bg-green-500/20 transition-colors">Approve</button>
-                        )}
+                  <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {t.status === 'pending' && canApprove(t) && (
+                        <button onClick={() => handleComplete(t)} className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold rounded-lg hover:bg-green-500/20 transition-colors">Approve</button>
+                      )}
+                      {t.status === 'pending' && (isManager || role === 'pos_operator') && (
                         <button onClick={() => setCancelTarget(t)} className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold rounded-lg hover:bg-red-500/20 transition-colors">Cancel</button>
-                      </div>
-                    )}
+                      )}
+                      <ChevronRight size={12} className="text-gray-600 ml-1" />
+                    </div>
                   </td>
                 </tr>
               );
@@ -354,6 +381,101 @@ export const StockTransfersPage: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* Transfer Detail Panel */}
+      {detailOpen && detailTransfer && (
+        <>
+          <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm" onClick={() => setDetailOpen(false)} />
+          <div className="fixed right-0 top-0 h-full z-[110] w-[480px] bg-[#111315] border-l border-[#2b313a] flex flex-col shadow-2xl" style={{ animation: 'posFadeIn 180ms ease' }}>
+            <div className="flex items-center justify-between p-5 border-b border-[#2b313a]">
+              <div>
+                <h2 className="font-bold text-white font-mono">{detailTransfer.reference}</h2>
+                <p className="text-[10px] text-gray-500 mt-0.5">Transfer details</p>
+              </div>
+              <button onClick={() => setDetailOpen(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-[#2b313a] transition-colors"><X size={15} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+              {/* Header info */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">From</p>
+                  <p className="text-xs text-gray-200">{(detailTransfer.from_location as any)?.name ?? '—'}</p>
+                  <span className={cn('text-[9px] font-bold uppercase px-1.5 py-0.5 rounded mt-1 inline-block', (detailTransfer.from_location as any)?.type === 'warehouse' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400')}>{(detailTransfer.from_location as any)?.type}</span>
+                </div>
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">To</p>
+                  <p className="text-xs text-gray-200">{(detailTransfer.to_location as any)?.name ?? '—'}</p>
+                  <span className={cn('text-[9px] font-bold uppercase px-1.5 py-0.5 rounded mt-1 inline-block', (detailTransfer.to_location as any)?.type === 'warehouse' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400')}>{(detailTransfer.to_location as any)?.type}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Status</p>
+                  <span className={cn('text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide', STATUS_CFG[detailTransfer.status].cls)}>{STATUS_CFG[detailTransfer.status].label}</span>
+                </div>
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Requested by</p>
+                  <p className="text-xs text-gray-300">{detailTransfer.requested_by}</p>
+                </div>
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Date</p>
+                  <p className="text-xs text-gray-300">{new Date(detailTransfer.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {detailTransfer.notes && (
+                <div className="bg-[#1d222a] border border-[#2b313a] rounded-xl p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Notes</p>
+                  <p className="text-xs text-gray-300">{detailTransfer.notes}</p>
+                </div>
+              )}
+
+              {/* Items */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Items Transferred</p>
+                <div className="bg-[#171c23] border border-[#2b313a] rounded-xl overflow-hidden">
+                  {detailLoading ? (
+                    <div className="flex items-center justify-center py-8"><Loader2 size={18} className="animate-spin text-primary" /></div>
+                  ) : detailItems.length === 0 ? (
+                    <p className="text-xs text-gray-600 text-center py-6">No items found.</p>
+                  ) : (
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-[#1d222a] border-b border-[#2b313a]">
+                          <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Product</th>
+                          <th className="px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest text-gray-500 text-right">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#2b313a]">
+                        {detailItems.map(item => (
+                          <tr key={item.id}>
+                            <td className="px-4 py-2.5">
+                              <p className="text-xs font-semibold text-white">{(item.products as any)?.name ?? item.product_id}</p>
+                              {(item.products as any)?.item_code && <p className="text-[10px] font-mono text-gray-500">{(item.products as any).item_code}</p>}
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-xs font-mono font-bold text-primary">{fmt(item.quantity)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {detailTransfer.status === 'pending' && (
+              <div className="border-t border-[#2b313a] p-5 flex gap-3">
+                {canApprove(detailTransfer) && (
+                  <button onClick={() => { setDetailOpen(false); handleComplete(detailTransfer); }} className="flex-1 py-2.5 bg-green-500/15 border border-green-500/25 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/25 transition-colors">Approve Transfer</button>
+                )}
+                <button onClick={() => { setDetailOpen(false); setCancelTarget(detailTransfer); }} className="flex-1 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-colors">Cancel Transfer</button>
+              </div>
+            )}
           </div>
         </>
       )}

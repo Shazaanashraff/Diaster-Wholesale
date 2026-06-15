@@ -5,7 +5,7 @@ import type { Expense } from '../types';
 export const EXPENSE_CATEGORIES = [
   'Rent', 'Utilities', 'Salaries', 'Transport', 'Packaging',
   'Maintenance', 'Marketing', 'Office Supplies', 'Bank Charges',
-  'Insurance', 'Other',
+  'Insurance', 'Damage Replacement', 'Other',
 ] as const;
 
 export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];

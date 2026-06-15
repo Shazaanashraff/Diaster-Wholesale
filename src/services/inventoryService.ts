@@ -278,7 +278,6 @@ export async function transferStoreToShop(data: {
 export async function getStockLedger(productId?: string, limit = 200): Promise<StockLedgerEntry[]> {
   type ProductJoin = { name?: string; item_code?: string; pieces_per_carton?: number } | Array<{ name?: string; item_code?: string; pieces_per_carton?: number }>;
   type ShipmentJoin = { reference?: string } | Array<{ reference?: string }>;
-  type InvoiceJoin = { invoice_no?: string; created_at?: string } | Array<{ invoice_no?: string; created_at?: string }>;
   type LocationJoin = { name?: string; type?: string } | Array<{ name?: string; type?: string }>;
   type StockInRow = {
     id: string;
@@ -291,6 +290,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     shipments?: ShipmentJoin;
     locations?: LocationJoin;
   };
+  type InvoiceLocationJoin = { name?: string } | Array<{ name?: string }>;
   type SalesRow = {
     id: string;
     product_id: string;
@@ -298,7 +298,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     pieces: number;
     created_at: string;
     products?: ProductJoin;
-    invoices?: InvoiceJoin;
+    invoices?: { invoice_no?: string; created_at?: string; locations?: InvoiceLocationJoin } | Array<{ invoice_no?: string; created_at?: string; locations?: InvoiceLocationJoin }>;
   };
   type AdjustmentRow = {
     id: string;
@@ -319,7 +319,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
   let salesQuery = supabase
     .from('invoice_items')
-    .select('id, product_id, cartons, pieces, created_at, products(name, item_code, pieces_per_carton), invoices(invoice_no, created_at)')
+    .select('id, product_id, cartons, pieces, created_at, products(name, item_code, pieces_per_carton), invoices(invoice_no, created_at, locations(name))')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -368,6 +368,9 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
   const salesLedger = ((salesRows ?? []) as SalesRow[]).map((row) => {
     const product = Array.isArray(row.products) ? row.products[0] : row.products;
     const invoice = Array.isArray(row.invoices) ? row.invoices[0] : row.invoices;
+    const invoiceLocation = invoice?.locations
+      ? (Array.isArray(invoice.locations) ? invoice.locations[0] : invoice.locations)
+      : null;
     const piecesPerCarton = Number(product?.pieces_per_carton ?? 1) || 1;
     const quantity = -1 * (Number(row.cartons ?? 0) * piecesPerCarton + Number(row.pieces ?? 0));
     return {
@@ -377,7 +380,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
       product_name: product?.name ?? 'Unknown Product',
       quantity,
       action: 'Sale',
-      location: 'shop' as const,
+      location: invoiceLocation?.name ?? 'Shop',
       reference: invoice?.invoice_no ?? '',
       actor: 'pos',
       created_at: invoice?.created_at ?? row.created_at,

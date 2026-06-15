@@ -465,14 +465,18 @@ export const DailySalesReport: React.FC = () => {
                       <tbody>
                         {detailItems.length === 0 ? (
                           <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500 text-xs">No items found</td></tr>
-                        ) : detailItems.map((item, i) => {
+                        ) : (() => {
+                          const _invDisc = Number(detailInvoice.discount ?? 0);
+                          const _lineSum = detailItems.filter(it => it.unit_price >= 0).reduce((s, it) => s + it.total, 0);
+                          return detailItems.map((item, i) => {
                           const isReturned = item.unit_price < 0;
                           const ppc = item.products?.pieces_per_carton || 1;
                           const totalPieces = item.cartons * ppc + item.pieces;
                           const grossAmt = Math.abs(item.unit_price) * totalPieces;
                           const lineDiscount = isReturned ? 0 : Math.max(0, grossAmt - item.total);
                           const costAmt = (item.products?.cost_price ?? 0) * totalPieces;
-                          const profit = isReturned ? 0 : item.total - costAmt;
+                          const proportionalDisc = _lineSum > 0 && !isReturned ? _invDisc * (item.total / _lineSum) : 0;
+                          const profit = isReturned ? 0 : (item.total - proportionalDisc) - costAmt;
                           return (
                             <tr key={i} className={cn('border-b border-[#2b313a]/60 transition-colors', isReturned ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1d222a]')}>
                               <td className="px-4 py-2.5">
@@ -506,19 +510,23 @@ export const DailySalesReport: React.FC = () => {
                               </td>
                             </tr>
                           );
-                        })}
+                        });
+                        })()}
                       </tbody>
                     </table>
                   </div>
 
                   {/* Summary + Payments */}
                   {(() => {
+                    const _invDisc = Number(detailInvoice.discount ?? 0);
+                    const _lineSum = detailItems.filter(it => it.unit_price >= 0).reduce((s, it) => s + it.total, 0);
                     const totalProfit = detailItems
                       .filter(it => it.unit_price >= 0)
                       .reduce((s, it) => {
                         const ppc = it.products?.pieces_per_carton || 1;
                         const qty = it.cartons * ppc + it.pieces;
-                        return s + it.total - (it.products?.cost_price ?? 0) * qty;
+                        const proportionalDisc = _lineSum > 0 ? _invDisc * (it.total / _lineSum) : 0;
+                        return s + (it.total - proportionalDisc) - (it.products?.cost_price ?? 0) * qty;
                       }, 0);
                     return (
                       <div className="grid grid-cols-2 gap-4">

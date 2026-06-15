@@ -510,6 +510,7 @@ export const POSPage: React.FC = () => {
   const splitPaymentValid = isFullCredit || !hasCreditSplit || enteredPaymentAmount > 0;
   const canProcessTransaction =
     cart.length > 0
+    && !!selectedSalesperson
     && (!hasCreditSplit || !!selectedCustomerId)
     && btnPhase === 'idle'
     && !isBelowCost
@@ -539,7 +540,22 @@ export const POSPage: React.FC = () => {
 
   // ── Payment split helpers ──────────────────────────────────────────────────
   function updateSplit(id: string, field: string, val: string) {
-    setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+    setPaymentSplits(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, [field]: val } : s);
+      // When entering amount with exactly 2 splits, auto-fill the other as remainder
+      if (field === 'amount' && updated.length === 2) {
+        const entered = parseFloat(val) || 0;
+        const other = updated.find(s => s.id !== id);
+        if (other && other.method !== 'credit') {
+          const remainder = Math.max(0, total - entered);
+          return updated.map(s => s.id === other.id
+            ? { ...s, amount: remainder > 0 ? remainder.toFixed(2) : '' }
+            : s
+          );
+        }
+      }
+      return updated;
+    });
   }
   function updateSplitMethod(id: string, method: PayMethod) {
     setPaymentSplits(prev => prev.map(s => s.id === id ? { ...s, method, bank_name: '', cheque_number: '', due_date: '' } : s));
@@ -1571,6 +1587,8 @@ export const POSPage: React.FC = () => {
             style={{
               background: btnPhase === 'done' ? '#16a34a' : undefined,
               transition: 'background 0.3s ease',
+              marginTop: 4,
+              boxShadow: '0 -8px 16px #111315',
             }}
           >
             {/* invisible spacer — keeps the button's natural height */}
