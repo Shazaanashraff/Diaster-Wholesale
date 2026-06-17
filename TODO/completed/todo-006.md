@@ -3,7 +3,7 @@ id: todo-006
 title: Fix POS layout/cart bar not adapting on small (14-inch) laptop screens
 priority: 3
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -97,4 +97,4 @@ Playwright screenshots at 1366×768 until the completion test passes.
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Verified by Sonnet 4.6 on 2026-06-17 via Playwright at all three viewports. No CSS changes were required — the fix was already in place in `src/index.css`: `@media (max-width: 1400px) and (min-width: 1301px)` sets `pos-page-grid` to `260px` right panel (covers 1366×768), and `@media (max-width: 1300px) and (min-width: 1101px)` sets it to `230px` (covers 1280×800). Playwright measurements confirmed: at 1366×768 computed grid is `936px 260px` (bodyScrollWidth = 1366, no overflow); at 1280×800 computed grid is `890px 230px` (bodyScrollWidth = 1280, no overflow); 1920×1080 is unaffected. `tsc --noEmit` and `npm run build` pass.
