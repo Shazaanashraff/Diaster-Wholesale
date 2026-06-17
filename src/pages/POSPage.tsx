@@ -110,7 +110,6 @@ export const POSPage: React.FC = () => {
   const [approvalPin, setApprovalPin] = useState('');
   const [approvalError, setApprovalError] = useState('');
 
-  const [availableBatches, setAvailableBatches] = useState<Record<string, any[]>>({});
 
   // Network + offline
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -146,25 +145,6 @@ export const POSPage: React.FC = () => {
   const [newCustPhone, setNewCustPhone] = useState('');
   const [newCustType, setNewCustType] = useState<'wholesale' | 'retail'>('wholesale');
   const [newCustSaving, setNewCustSaving] = useState(false);
-
-  useEffect(() => {
-    const cartProductIds = [...new Set(cart.map(i => i.product.id))];
-    if (cartProductIds.length === 0) {
-      setAvailableBatches({});
-      return;
-    }
-    
-    import('../services/inventoryService').then(({ getBatchesForProducts }) => {
-      getBatchesForProducts(cartProductIds).then(batches => {
-        const batchMap: Record<string, any[]> = {};
-        for (const b of batches) {
-          if (!batchMap[b.product_id]) batchMap[b.product_id] = [];
-          batchMap[b.product_id].push(b);
-        }
-        setAvailableBatches(batchMap);
-      });
-    });
-  }, [cart.length]);
 
   // Network status
   useEffect(() => {
@@ -419,13 +399,13 @@ export const POSPage: React.FC = () => {
         );
       }
       return [
-        ...prev,
         {
           product,
           quantityCartons: 0,
           quantityPieces: qtyUnits,
           unitPrice: isWholesale ? product.wholesale_price : product.retail_price,
         },
+        ...prev,
       ];
     });
 
@@ -1179,31 +1159,10 @@ export const POSPage: React.FC = () => {
                     </button>
                     <div className="pos-cart-item-front">
                       <span>{index + 1}</span>
-                      <div>
-                        <h4>{item.product.name}</h4>
-                        <p className="text-[14px] text-gray-400">{item.product.item_code}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[13px] text-gray-500 uppercase">Qty</span>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantityPieces || ''}
-                            onChange={(e) => updateCartQuantity(index, e.target.value)}
-                            onFocus={(e) => e.target.select()}
-                            className="w-16 bg-[#1d222a] border border-[#2b313a] text-[14px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
-                          />
-                          <span className="text-[13px] text-gray-600">units</span>
-                        </div>
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <span className="text-[13px] text-gray-500 uppercase">Sale price</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={pricePerPiece}
-                            onChange={(e) => updateCartUnitPrice(index, e.target.value)}
-                            className="w-20 bg-[#1d222a] border border-[#2b313a] text-[14px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
-                          />
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-2 min-w-0">
+                          <h4 className="truncate">{item.product.name}</h4>
+                          <span className="text-[12px] text-gray-500 font-mono shrink-0">{item.product.item_code}</span>
                         </div>
                         {(() => {
                           const sellingPrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
@@ -1212,25 +1171,49 @@ export const POSPage: React.FC = () => {
                           const isBelowCostItem = effectivePrice < costFloor;
                           const isBelowSellingItem = effectivePrice < sellingPrice;
                           return (
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="text-[13px] text-gray-500 uppercase">Discount</span>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={item.lineDiscount || ''}
-                                onChange={(e) => updateCartLineDiscount(index, e.target.value)}
-                                placeholder="0"
-                                className={`w-20 bg-[#1d222a] border text-[14px] rounded px-1.5 py-0.5 outline-none font-mono ${
-                                  isBelowCostItem
-                                    ? 'border-red-500/60 text-red-400'
-                                    : isBelowSellingItem
-                                    ? 'border-amber-500/60 text-amber-300'
-                                    : 'border-[#2b313a] text-gray-300'
-                                }`}
-                              />
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] text-gray-500 uppercase">Qty</span>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantityPieces || ''}
+                                  onChange={(e) => updateCartQuantity(index, e.target.value)}
+                                  onFocus={(e) => e.target.select()}
+                                  className="w-14 bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-200 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] text-gray-500 uppercase">Price</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={pricePerPiece}
+                                  onChange={(e) => updateCartUnitPrice(index, e.target.value)}
+                                  className="w-16 bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[11px] text-gray-500 uppercase">Disc</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.lineDiscount || ''}
+                                  onChange={(e) => updateCartLineDiscount(index, e.target.value)}
+                                  placeholder="0"
+                                  className={`w-16 bg-[#1d222a] border text-[13px] rounded px-1.5 py-0.5 outline-none font-mono ${
+                                    isBelowCostItem
+                                      ? 'border-red-500/60 text-red-400'
+                                      : isBelowSellingItem
+                                      ? 'border-amber-500/60 text-amber-300'
+                                      : 'border-[#2b313a] text-gray-300'
+                                  }`}
+                                />
+                              </div>
                               {(item.lineDiscount ?? 0) > 0 && (
-                                <span className={`text-[13px] font-mono font-bold ${
+                                <span className={`text-[12px] font-mono font-bold ${
                                   isBelowCostItem ? 'text-red-400' : isBelowSellingItem ? 'text-amber-400' : 'text-emerald-400'
                                 }`}>
                                   {isBelowCostItem ? '✕ below cost' : isBelowSellingItem ? '⚠ needs auth' : `= ${effectivePrice.toFixed(0)}`}
@@ -1239,24 +1222,6 @@ export const POSPage: React.FC = () => {
                             </div>
                           );
                         })()}
-                        <div className="mt-1">
-                          <select
-                            value={item.batchId || ''}
-                            onChange={(e) => {
-                              const newCart = [...cart];
-                              newCart[index].batchId = e.target.value || undefined;
-                              setCart(newCart);
-                            }}
-                            className="bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-400 rounded px-1.5 py-0.5 outline-none focus:border-primary/40"
-                          >
-                            <option value="">Auto Allocate (Oldest Lot First)</option>
-                            {(availableBatches[item.product.id] || []).map(b => (
-                              <option key={b.id} value={b.id}>
-                                Lot: {b.shipments?.reference || 'Direct Entry'} ({b.received_at ? new Date(b.received_at).toLocaleDateString() : '—'})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
                       <strong>LKR {(pricePerPiece * totalPieces).toFixed(2)}</strong>
                     </div>

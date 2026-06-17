@@ -1713,6 +1713,7 @@
     position: relative;
     overflow: hidden;
     border-radius: 10px;
+    flex-shrink: 0;
   }
 
   .pos-cart-item-front {
