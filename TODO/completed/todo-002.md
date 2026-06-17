@@ -3,7 +3,7 @@ id: todo-002
 title: Do not show earned loyalty points on receipt when no customer is selected
 priority: 1
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -69,4 +69,4 @@ later, a Walk-in receipt never shows points.
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Two-line fix: (1) in `posService.ts` `checkout()` return, changed `earnedPoints` to `customerId ? earnedPoints : 0` so the service never returns positive points for a Walk-in; (2) in `POSPage.tsx` `setLastSaleReceipt` snapshot, added the same guard `selectedCustomerId ? earnedPoints : 0` for defense-in-depth. `POSSaleReceipt.tsx` guard `{earnedPoints > 0 && ...}` already hides the line with 0 — no change needed there. `tsc --noEmit` and `npm run build` both pass.

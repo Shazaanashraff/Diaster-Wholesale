@@ -299,7 +299,7 @@ export const checkout = async (
     }
   }
 
-  return { invoiceId, invoiceNo, earnedPoints };
+  return { invoiceId, invoiceNo, earnedPoints: customerId ? earnedPoints : 0 };
 };
 
 // ─── Offline checkout ─────────────────────────────────────────────────────────

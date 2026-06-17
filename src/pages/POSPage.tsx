@@ -690,7 +690,7 @@ export const POSPage: React.FC = () => {
         redeemedPoints: computeRedemptionValue(safeRedeem),
         total,
         isWholesale,
-        earnedPoints,
+        earnedPoints: selectedCustomerId ? earnedPoints : 0,
         timestamp: new Date(),
       });
 
