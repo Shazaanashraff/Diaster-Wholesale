@@ -3,7 +3,7 @@ id: todo-005
 title: Add "Lunch" and "Dinner" expense categories
 priority: 3
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -70,4 +70,4 @@ operational costs, before `'Other'`, since `'Other'` conventionally stays last).
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Added `'Lunch'` and `'Dinner'` to `EXPENSE_CATEGORIES` in `expenseService.ts` before `'Other'`. Single-file, one-line change. Both ExpensesPage and DayTransactionsPage pick them up automatically. `tsc --noEmit` and `npm run build` pass.

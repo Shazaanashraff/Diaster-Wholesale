@@ -52,7 +52,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { icon: ShoppingCart,    label: 'Procurement',      path: '/purchases',         requires: 'manage_procurement',   section: 'Procurement' },
   { icon: Building2,       label: 'Suppliers',         path: '/suppliers',         requires: ['manage_suppliers', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: CornerUpLeft,    label: 'Supplier Returns',  path: '/supplier-returns',  requires: 'manage_procurement',   section: 'Procurement' },
-  { icon: ArrowLeftRight,  label: 'Stock Transfers',   path: '/stock-transfers',   requires: 'manage_procurement',   section: 'Procurement' },
+  { icon: ArrowLeftRight,  label: 'Stock Transfers',   path: '/stock-transfers',   requires: 'receive_transfers',    section: 'Procurement' },
   { icon: Wallet,          label: 'Day Transactions',  path: '/day-transactions',  requires: ['manage_costs', 'manage_payments'] as Permission[], section: 'Procurement' },
   { icon: Upload,          label: 'Bulk Import',       path: '/import',            requires: 'bulk_import',          section: 'Admin' },
   { icon: UserCog,         label: 'Salespeople',       path: '/salespeople',       requires: 'manage_salespeople',    section: 'Admin' },

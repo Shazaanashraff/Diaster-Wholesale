@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
+import { getCurrentRole } from '../../utils/permissions';
 import { cn } from '../../lib/utils';
 import {
   TrendingUp, TrendingDown, Wallet, CreditCard, Smartphone,
@@ -32,6 +33,7 @@ interface OtherIncRow  { id: string; source_type: string; amount: number; method
 interface MethodIncome { method: string; total: number }
 
 export const DailyFinanceReport: React.FC = () => {
+  const canExportCsv = getCurrentRole() !== 'pos_operator';
   const [period, setPeriod]     = useState<ReportPeriod>('today');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]     = useState('');
@@ -107,7 +109,7 @@ export const DailyFinanceReport: React.FC = () => {
           <button onClick={load} disabled={loading} className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] text-xs text-gray-400 rounded-xl px-3 py-2.5 hover:text-white transition-colors">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
-          <ExportBar filename="Daily_Finance_Report" headers={exportHeaders} rows={exportRows} />
+          <ExportBar filename="Daily_Finance_Report" headers={exportHeaders} rows={exportRows} showCsv={canExportCsv} />
         </div>
       </div>
 

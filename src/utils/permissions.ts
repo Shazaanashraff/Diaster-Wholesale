@@ -18,7 +18,9 @@ export type Permission =
   | 'manage_inventory'
   | 'manage_returns'
   | 'view_sales_report'
-  | 'view_dev_portal';
+  | 'view_dev_portal'
+  | 'create_transfers'
+  | 'receive_transfers';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
@@ -27,6 +29,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
     'manage_inventory', 'manage_returns', 'view_sales_report',
+    'create_transfers', 'receive_transfers',
   ],
   developer: [
     'view_dev_portal',
@@ -37,16 +40,20 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
     'manage_inventory', 'manage_returns', 'view_sales_report',
+    'create_transfers', 'receive_transfers',
   ],
   officer: [
     'manage_products', 'manage_procurement', 'manage_suppliers',
     'view_reports', 'view_inventory', 'manage_inventory', 'bulk_import', 'manage_returns',
+    'create_transfers', 'receive_transfers',
   ],
   pos_operator: [
     'pos', 'manage_returns', 'view_inventory', 'manage_costs', 'view_sales_report',
+    'receive_transfers',
   ],
   warehouse: [
     'view_inventory', 'manage_inventory', 'manage_procurement',
+    'create_transfers', 'receive_transfers',
   ],
 };
 

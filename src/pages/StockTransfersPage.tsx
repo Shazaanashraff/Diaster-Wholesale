@@ -24,8 +24,10 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 interface TransferItemRow { product_id: string; quantity: number; }
 
 export const StockTransfersPage: React.FC = () => {
-  const { role, roleLabel } = usePermissions();
+  const { role, roleLabel, can } = usePermissions();
   const isManager = role === 'admin' || role === 'officer';
+  const canCreate  = can('create_transfers');
+  const canReceive = can('receive_transfers');
 
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -151,11 +153,8 @@ export const StockTransfersPage: React.FC = () => {
     finally { setDetailLoading(false); }
   }
 
-  function canApprove(t: StockTransfer) {
-    if (isManager) return true;
-    // Cashier can accept incoming warehouse→shop transfers
-    const to = t.to_location as any;
-    return role === 'pos_operator' && to?.type === 'shop';
+  function canApprove(_t: StockTransfer) {
+    return canReceive;
   }
 
   async function handleComplete(t: StockTransfer) {
@@ -192,9 +191,11 @@ export const StockTransfersPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={load} className="p-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl hover:text-white transition-all"><RefreshCw size={13} /></button>
+          {canCreate && (
           <button onClick={() => { setFormError(''); setPanelOpen(true); }} className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary/90">
             <Plus size={13} /> New Transfer
           </button>
+          )}
         </div>
       </div>
 
@@ -260,7 +261,7 @@ export const StockTransfersPage: React.FC = () => {
                       {t.status === 'pending' && canApprove(t) && (
                         <button onClick={() => handleComplete(t)} className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-bold rounded-lg hover:bg-green-500/20 transition-colors">Approve</button>
                       )}
-                      {t.status === 'pending' && (isManager || role === 'pos_operator') && (
+                      {t.status === 'pending' && canCreate && (
                         <button onClick={() => setCancelTarget(t)} className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold rounded-lg hover:bg-red-500/20 transition-colors">Cancel</button>
                       )}
                       <ChevronRight size={12} className="text-gray-600 ml-1" />
@@ -473,7 +474,9 @@ export const StockTransfersPage: React.FC = () => {
                 {canApprove(detailTransfer) && (
                   <button onClick={() => { setDetailOpen(false); handleComplete(detailTransfer); }} className="flex-1 py-2.5 bg-green-500/15 border border-green-500/25 text-green-400 rounded-xl text-xs font-bold hover:bg-green-500/25 transition-colors">Approve Transfer</button>
                 )}
+                {canCreate && (
                 <button onClick={() => { setDetailOpen(false); setCancelTarget(detailTransfer); }} className="flex-1 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/20 transition-colors">Cancel Transfer</button>
+                )}
               </div>
             )}
           </div>

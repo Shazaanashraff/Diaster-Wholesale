@@ -71,7 +71,7 @@ const App: React.FC = () => {
           <Route path="/purchases" element={<ProtectedRoute req="manage_procurement"><PurchasesPage /></ProtectedRoute>} />
           <Route path="/purchases/:id" element={<ProtectedRoute req="manage_procurement"><PurchaseDetailPage /></ProtectedRoute>} />
           <Route path="/supplier-returns" element={<ProtectedRoute req="manage_procurement"><SupplierReturnsPage /></ProtectedRoute>} />
-          <Route path="/stock-transfers" element={<ProtectedRoute req="manage_procurement"><StockTransfersPage /></ProtectedRoute>} />
+          <Route path="/stock-transfers" element={<ProtectedRoute req="receive_transfers"><StockTransfersPage /></ProtectedRoute>} />
           <Route path="/day-transactions" element={<ProtectedRoute req={['manage_costs', 'manage_payments']}><DayTransactionsPage /></ProtectedRoute>} />
           <Route path="/expenses" element={<Navigate to="/day-transactions" replace />} />
           <Route path="/cashier" element={<ProtectedRoute req="pos"><CashierPage /></ProtectedRoute>} />

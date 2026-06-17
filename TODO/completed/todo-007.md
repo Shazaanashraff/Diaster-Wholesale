@@ -3,7 +3,7 @@ id: todo-007
 title: Allow Cashier to receive stock transfers (not create); allow Accountant to create
 priority: 2
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -109,4 +109,4 @@ gating, consistent with the rest of the app.
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Added `create_transfers` and `receive_transfers` to the Permission union and ROLE_PERMISSIONS (both for admin/officer/warehouse/accountant; receive_transfers only for pos_operator). Updated App.tsx route and Sidebar.tsx entry to gate on `receive_transfers`. In StockTransfersPage: pulled `can` from `usePermissions`, added `canCreate`/`canReceive` flags, wrapped "New Transfer" button in `{canCreate && ...}`, changed Cancel button guard to `canCreate`, gated detail-panel Cancel button with `canCreate`, simplified `canApprove()` to return `canReceive`. `tsc --noEmit` and `npm run build` pass.

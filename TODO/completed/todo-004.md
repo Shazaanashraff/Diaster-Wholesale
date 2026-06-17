@@ -3,7 +3,7 @@ id: todo-004
 title: Hide Day End report CSV export for POS Operator (cashier); keep for Admin & Accountant
 priority: 2
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -81,4 +81,4 @@ Gating by role (not by route) is robust regardless of where it is embedded.
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Added optional `showCsv?: boolean` prop (default `true`) to `ExportBar` — backward-compatible, all other callers unaffected. In `DailyFinanceReport`, imported `getCurrentRole`, computed `canExportCsv = getCurrentRole() !== 'pos_operator'`, and passed `showCsv={canExportCsv}` to the ExportBar. Print button always shown. `tsc --noEmit` and `npm run build` pass.
