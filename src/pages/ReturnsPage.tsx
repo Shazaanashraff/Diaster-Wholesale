@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { getProducts } from '../services/productService';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import {
@@ -233,9 +234,7 @@ export const ReturnsPage: React.FC = () => {
 
   useEffect(() => {
     if (returnType !== 'Exchange') return;
-    supabase.from('products').select('id, name, item_code, pieces_per_carton, wholesale_price')
-      .limit(500)
-      .then(({ data }) => setProducts((data ?? []) as any[]));
+    getProducts().then(list => setProducts(list as any[]));
   }, [returnType]);
 
   // ─── History ──────────────────────────────────────────────────────────────

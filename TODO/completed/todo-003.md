@@ -3,7 +3,7 @@ id: todo-003
 title: Fix replacement-item search in Sales Returns not showing all active products
 priority: 2
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -85,4 +85,4 @@ raise to `.limit(5000)`).
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Replaced the inline supabase query (which had no active filter and a 500-row limit causing missing products) with `getProducts()` from `productService.ts`, which already applies `.eq('is_active', true).order('name')`. Added import for `getProducts`. `filteredProducts` and `addReplacement` unchanged. `tsc --noEmit` and `npm run build` both pass.
