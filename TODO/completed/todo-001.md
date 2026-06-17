@@ -3,7 +3,7 @@ id: todo-001
 title: Include Other Income in Cashier Summary cash-in-hand total
 priority: 1
 created: 2026-06-17
-status: active
+status: completed
 ---
 
 ## Overview
@@ -83,4 +83,4 @@ amount, and staying consistent with the existing report avoids two different "da
 
 ## Completion Notes
 
-<!-- Sonnet 4.6 fills this after implementation -->
+Implemented by Sonnet 4.6 on 2026-06-17. Added `OtherIncomeRow` interface, `otherIncome` field to `CashierData`, fourth Supabase query in `Promise.all`, `otherIncomeTotal` derived value, updated `netCash` formula to include other income, added "Other Income" KPI card (sky-400, PlusCircle icon) with `md:grid-cols-5` layout, and "Other Income" list section. `tsc --noEmit` and `npm run build` both pass.

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
-import { Wallet, CreditCard, Smartphone, RotateCcw, TrendingDown, RefreshCw, AlertCircle, ChevronRight, Building2 } from 'lucide-react';
+import { Wallet, CreditCard, Smartphone, RotateCcw, TrendingDown, RefreshCw, AlertCircle, ChevronRight, Building2, PlusCircle } from 'lucide-react';
 
 const fmt = (n: number) =>
   'LKR ' + Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -15,18 +15,20 @@ function dayRange(date: string) {
   return { start, end };
 }
 
-interface MethodTotal { method: string; total: number; count: number }
-interface BankTotal   { bank_name: string; total: number; count: number }
-interface PartialInv  { id: string; invoice_no: string; customer_name: string; total: number; created_at: string }
-interface ExpenseRow  { id: string; category: string; description: string; amount: number; method: string; created_at: string }
-interface ReturnRow   { id: string; reference: string; amount: number; paid_at: string }
+interface MethodTotal   { method: string; total: number; count: number }
+interface BankTotal     { bank_name: string; total: number; count: number }
+interface PartialInv    { id: string; invoice_no: string; customer_name: string; total: number; created_at: string }
+interface ExpenseRow    { id: string; category: string; description: string; amount: number; method: string; created_at: string }
+interface ReturnRow     { id: string; reference: string; amount: number; paid_at: string }
+interface OtherIncomeRow { id: string; source_type: string; amount: number; method: string; created_at: string }
 
 interface CashierData {
-  byMethod:  MethodTotal[];
-  byBank:    BankTotal[];
-  partials:  PartialInv[];
-  expenses:  ExpenseRow[];
-  returns:   ReturnRow[];
+  byMethod:    MethodTotal[];
+  byBank:      BankTotal[];
+  partials:    PartialInv[];
+  expenses:    ExpenseRow[];
+  returns:     ReturnRow[];
+  otherIncome: OtherIncomeRow[];
 }
 
 const METHOD_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -50,7 +52,7 @@ export const CashierPage: React.FC = () => {
     try {
       const { start, end } = dayRange(date);
 
-      const [paymentsRes, partialsRes, expensesRes] = await Promise.all([
+      const [paymentsRes, partialsRes, expensesRes, otherIncomeRes] = await Promise.all([
         supabase
           .from('payments')
           .select('id, amount, method, bank_name, reference, paid_at')
@@ -69,11 +71,18 @@ export const CashierPage: React.FC = () => {
           .gte('created_at', start)
           .lte('created_at', end)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('other_income')
+          .select('id, source_type, amount, method, created_at')
+          .gte('created_at', start)
+          .lte('created_at', end)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (paymentsRes.error) throw new Error(paymentsRes.error.message);
       if (partialsRes.error) throw new Error(partialsRes.error.message);
       if (expensesRes.error) throw new Error(expensesRes.error.message);
+      if (otherIncomeRes.error) throw new Error(otherIncomeRes.error.message);
 
       const allPayments = paymentsRes.data ?? [];
 
@@ -117,11 +126,12 @@ export const CashierPage: React.FC = () => {
       }));
 
       setData({
-        byMethod: Array.from(methodMap.values()).sort((a, b) => b.total - a.total),
-        byBank:   Array.from(bankMap.values()).sort((a, b) => b.total - a.total),
+        byMethod:    Array.from(methodMap.values()).sort((a, b) => b.total - a.total),
+        byBank:      Array.from(bankMap.values()).sort((a, b) => b.total - a.total),
         partials,
-        expenses: expensesRes.data as ExpenseRow[],
+        expenses:    expensesRes.data as ExpenseRow[],
         returns,
+        otherIncome: (otherIncomeRes.data ?? []) as OtherIncomeRow[],
       });
     } catch (e: any) {
       setError(e.message);
@@ -132,10 +142,11 @@ export const CashierPage: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  const salesTotal    = data?.byMethod.reduce((s, m) => s + m.total, 0) ?? 0;
-  const returnsTotal  = data?.returns.reduce((s, r) => s + r.amount, 0) ?? 0;
-  const expensesTotal = data?.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
-  const netCash       = salesTotal - returnsTotal - expensesTotal;
+  const salesTotal       = data?.byMethod.reduce((s, m) => s + m.total, 0) ?? 0;
+  const returnsTotal     = data?.returns.reduce((s, r) => s + r.amount, 0) ?? 0;
+  const expensesTotal    = data?.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
+  const otherIncomeTotal = data?.otherIncome.reduce((s, o) => s + Number(o.amount), 0) ?? 0;
+  const netCash          = salesTotal + otherIncomeTotal - returnsTotal - expensesTotal;
 
   return (
     <div className="p-8 space-y-8 min-h-screen">
@@ -172,8 +183,9 @@ export const CashierPage: React.FC = () => {
       )}
 
       {/* KPI Summary Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <KPICard label="Total Sales" value={salesTotal} color="text-green-400" icon={TrendingDown} positive />
+        <KPICard label="Other Income" value={otherIncomeTotal} color="text-sky-400" icon={PlusCircle} positive />
         <KPICard label="Returns" value={returnsTotal} color="text-red-400" icon={RotateCcw} />
         <KPICard label="Expenses" value={expensesTotal} color="text-amber-400" icon={TrendingDown} />
         <KPICard
@@ -265,6 +277,36 @@ export const CashierPage: React.FC = () => {
                     <div className="flex items-center gap-4">
                       <span className="text-[11px] text-gray-500">{fmtTime(r.paid_at)}</span>
                       <span className="text-sm font-bold font-mono text-red-400">{fmt(r.amount)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Other Income */}
+          <section className="bg-accent rounded-3xl border border-border p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Other Income</h2>
+              {otherIncomeTotal > 0 && (
+                <span className="text-xs font-bold font-mono text-sky-400">{fmt(otherIncomeTotal)}</span>
+              )}
+            </div>
+            {data.otherIncome.length === 0 ? (
+              <p className="text-gray-500 text-sm py-4 text-center">No other income for this date.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.otherIncome.map(o => (
+                  <div key={o.id} className="flex items-center justify-between bg-[#12161d] rounded-2xl px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <PlusCircle size={14} className="text-sky-400" />
+                      <span className="text-sm font-semibold text-white capitalize">
+                        {o.source_type.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-[11px] text-gray-500">{fmtTime(o.created_at)}</span>
+                      <span className="text-sm font-bold font-mono text-sky-400">{fmt(o.amount)}</span>
                     </div>
                   </div>
                 ))}
