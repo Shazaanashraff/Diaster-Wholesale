@@ -2101,7 +2101,9 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar {
+  display: block;
   width: 6px;
+  height: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -2111,6 +2113,41 @@
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #2f3742;
   border-radius: 10px;
+}
+
+/* Hide spinners on number inputs that should not accidentally change via scroll */
+input.no-spinner::-webkit-outer-spin-button,
+input.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.no-spinner[type=number] {
+  -moz-appearance: textfield;
+}
+
+/* Override the pos-shell !important hide rule for custom-scrollbar elements */
+.pos-shell .custom-scrollbar::-webkit-scrollbar,
+.app-cosy .custom-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.pos-shell .custom-scrollbar::-webkit-scrollbar-track,
+.app-cosy .custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.pos-shell .custom-scrollbar::-webkit-scrollbar-thumb,
+.app-cosy .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2f3742 !important;
+  border-radius: 10px !important;
+}
+
+.pos-shell .custom-scrollbar,
+.app-cosy .custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #2f3742 transparent;
 }
 
 .report-table {

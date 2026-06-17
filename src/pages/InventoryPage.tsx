@@ -267,7 +267,7 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="pos-page-grid">
-      <section className="pos-main">
+      <section className="pos-main" style={{ gridColumn: '1 / -1' }}>
         <div className="pos-main-head">
           <label className="pos-search">
             <Search size={18} />

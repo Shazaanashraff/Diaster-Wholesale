@@ -13,7 +13,6 @@ import { Modal } from '../components/Modal';
 import { POSSaleReceipt, type SaleReceiptData } from '../components/POSSaleReceipt';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { computeStock } from '../utils/stockUtils';
-import { AnimatedNumber } from '../components/AnimatedNumber';
 import {
   Minus,
   Plus,
@@ -1191,7 +1190,7 @@ export const POSPage: React.FC = () => {
                                   step="0.01"
                                   value={pricePerPiece}
                                   onChange={(e) => updateCartUnitPrice(index, e.target.value)}
-                                  className="w-16 bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
+                                  className="no-spinner w-16 bg-[#1d222a] border border-[#2b313a] text-[13px] text-gray-300 rounded px-1.5 py-0.5 outline-none focus:border-primary/40 font-mono"
                                 />
                               </div>
                               <div className="flex items-center gap-1">
@@ -1203,7 +1202,7 @@ export const POSPage: React.FC = () => {
                                   value={item.lineDiscount || ''}
                                   onChange={(e) => updateCartLineDiscount(index, e.target.value)}
                                   placeholder="0"
-                                  className={`w-16 bg-[#1d222a] border text-[13px] rounded px-1.5 py-0.5 outline-none font-mono ${
+                                  className={`no-spinner w-16 bg-[#1d222a] border text-[13px] rounded px-1.5 py-0.5 outline-none font-mono ${
                                     isBelowCostItem
                                       ? 'border-red-500/60 text-red-400'
                                       : isBelowSellingItem
@@ -1234,7 +1233,7 @@ export const POSPage: React.FC = () => {
           <div className="pos-bill-total">
             <div>
               <span>Subtotal</span>
-              <strong>LKR <AnimatedNumber value={subtotal} /></strong>
+              <strong>LKR {subtotal.toFixed(2)}</strong>
             </div>
             <div style={{ alignItems: 'center' }}>
               <span>Discount</span>
@@ -1246,6 +1245,7 @@ export const POSPage: React.FC = () => {
                   value={discountAmt || ''}
                   onChange={e => handleDiscountChange(e.target.value)}
                   placeholder="0.00"
+                  className="no-spinner"
                   style={{
                     width: 80, background: 'rgba(255,255,255,0.06)',
                     border: '1px solid rgba(255,255,255,0.12)',
@@ -1277,12 +1277,12 @@ export const POSPage: React.FC = () => {
             {safeRedeem > 0 && (
               <div>
                 <span style={{ color: '#a78bfa' }}>Loyalty ({safeRedeem} pts)</span>
-                <strong style={{ color: '#a78bfa' }}>− LKR <AnimatedNumber value={redemptionValue} /></strong>
+                <strong style={{ color: '#a78bfa' }}>− LKR {redemptionValue.toFixed(2)}</strong>
               </div>
             )}
             <div className="total">
               <span>Total</span>
-              <strong>LKR <AnimatedNumber value={total} /></strong>
+              <strong>LKR {total.toFixed(2)}</strong>
             </div>
           </div>
 

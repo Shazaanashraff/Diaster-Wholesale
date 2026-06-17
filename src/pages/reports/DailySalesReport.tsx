@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
 import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleReceipt';
 import type { Product } from '../../types';
-import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight } from 'lucide-react';
+import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search } from 'lucide-react';
 
 interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
 interface InvoiceRow {
@@ -65,6 +65,7 @@ export const DailySalesReport: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [creditInvoices, setCreditInvoices] = useState<InvoiceRow[]>([]);
   const [allInvoices, setAllInvoices] = useState<InvoiceRow[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [cancelTarget, setCancelTarget] = useState<InvoiceRow | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
@@ -205,6 +206,17 @@ export const DailySalesReport: React.FC = () => {
   const returnsTotal = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const netSales = grossSales - returnsTotal;
 
+  const filteredInvoices = searchQuery.trim()
+    ? allInvoices.filter(inv => {
+        const q = searchQuery.toLowerCase();
+        return (
+          inv.invoice_no.toLowerCase().includes(q) ||
+          (inv.customers?.name ?? '').toLowerCase().includes(q) ||
+          (inv.salesperson?.name ?? inv.salesperson_name ?? '').toLowerCase().includes(q)
+        );
+      })
+    : allInvoices;
+
   // Transaction rows for export
   const txRows: TxRow[] = allInvoices.map(inv => {
     return {
@@ -322,8 +334,26 @@ export const DailySalesReport: React.FC = () => {
 
       {/* Invoice Transaction List */}
       <div className="bg-[#171c23] rounded-3xl border border-[#2b313a] overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#2b313a]">
-          <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Invoices</h3>
+        <div className="px-6 py-4 border-b border-[#2b313a] flex items-center justify-between gap-4">
+          <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest shrink-0">Invoices</h3>
+          <div className="relative w-64">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Invoice no., customer, salesperson…"
+              className="w-full bg-accent border border-border rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-gray-500 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <X size={11} />
+              </button>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -337,9 +367,11 @@ export const DailySalesReport: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 text-sm">Loading...</td></tr>
-              ) : allInvoices.length === 0 ? (
-                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 text-sm">No invoices for this period.</td></tr>
-              ) : allInvoices.map(inv => (
+              ) : filteredInvoices.length === 0 ? (
+                <tr><td colSpan={7} className="px-5 py-8 text-center text-gray-500 text-sm">
+                  {searchQuery ? 'No invoices match your search.' : 'No invoices for this period.'}
+                </td></tr>
+              ) : filteredInvoices.map(inv => (
                 <tr key={inv.id} className={cn('border-b border-[#2b313a]/60 hover:bg-[#1d222a] transition-colors', inv.payment_status === 'cancelled' && 'opacity-50')}>
                   <td className="px-5 py-3 text-xs text-gray-500">{fmtDate(inv.created_at)}</td>
                   <td className="px-5 py-3 text-sm font-bold text-white font-mono">{inv.invoice_no}</td>
