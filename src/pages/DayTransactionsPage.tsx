@@ -10,6 +10,8 @@ import type { Expense, OtherIncome, Location } from '../types';
 import type { SupplierWithBalance } from '../services/supplierService';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { DailyFinanceReport } from './reports/DailyFinanceReport';
+import { DateRangePicker } from './reports/shared/DateRangePicker';
+import { type ReportPeriod, getReportDateRange } from '../utils/reportUtils';
 import { cn } from '../lib/utils';
 
 const fmt = (n: number) =>
@@ -30,6 +32,11 @@ type Tab = 'expenses' | 'income' | 'day-end';
 
 export const DayTransactionsPage: React.FC = () => {
   const [tab, setTab] = useState<Tab>('expenses');
+
+  // ── Shared date range (drives all three tabs) ──────────────────────────────
+  const [period,     setPeriod]     = useState<ReportPeriod>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo,   setCustomTo]   = useState('');
 
   // ── Data ──────────────────────────────────────────────────────────────────
   const [expenses,  setExpenses]  = useState<Expense[]>([]);
@@ -54,18 +61,21 @@ export const DayTransactionsPage: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  async function load() {
+  async function load(from?: string, to?: string) {
     setLoading(true);
     try {
       const [ex, inc, locs, sups] = await Promise.all([
-        getExpenses(), getOtherIncome(), getLocations(), getSuppliers(),
+        getExpenses({ from, to }), getOtherIncome({ from, to }), getLocations(), getSuppliers(),
       ]);
       setExpenses(ex); setIncome(inc); setLocations(locs); setSuppliers(sups);
     } catch (e: any) { showToast(e.message, false); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const { from, to } = getReportDateRange(period, customFrom, customTo);
+    load(from, to);
+  }, [period, customFrom, customTo]);
 
   const visibleExpenses = useMemo(() =>
     expenses.filter(e =>
@@ -160,8 +170,16 @@ export const DayTransactionsPage: React.FC = () => {
           <p className="text-xs text-gray-500 mt-0.5">Expenses, income, and daily financial summary</p>
         </div>
         <div className="flex items-center gap-2">
+          <DateRangePicker
+            value={period} onChange={setPeriod}
+            customFrom={customFrom} customTo={customTo}
+            onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }}
+          />
           {(tab === 'expenses' || tab === 'income') && (
-            <button onClick={load} className="p-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl hover:text-white transition-all">
+            <button
+              onClick={() => { const { from, to } = getReportDateRange(period, customFrom, customTo); load(from, to); }}
+              className="p-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl hover:text-white transition-all"
+            >
               <RefreshCw size={13} />
             </button>
           )}
@@ -220,7 +238,15 @@ export const DayTransactionsPage: React.FC = () => {
       </div>
 
       {/* ── Day End Report ── */}
-      {tab === 'day-end' && <DailyFinanceReport />}
+      {tab === 'day-end' && (
+        <DailyFinanceReport
+          period={period}
+          customFrom={customFrom}
+          customTo={customTo}
+          onPeriodChange={setPeriod}
+          onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }}
+        />
+      )}
 
       {/* ── Expenses / Income tables ── */}
       {(tab === 'expenses' || tab === 'income') && (

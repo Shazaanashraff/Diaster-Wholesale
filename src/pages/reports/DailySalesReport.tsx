@@ -506,9 +506,11 @@ export const DailySalesReport: React.FC = () => {
                           const totalPieces = item.cartons * ppc + item.pieces;
                           const grossAmt = Math.abs(item.unit_price) * totalPieces;
                           const lineDiscount = isReturned ? 0 : Math.max(0, grossAmt - item.total);
-                          const costAmt = (item.products?.cost_price ?? 0) * totalPieces;
+                          const baselinePrice = detailInvoice.mode === 'wholesale'
+                            ? (item.products?.wholesale_price ?? 0)
+                            : (item.products?.retail_price ?? 0);
                           const proportionalDisc = _lineSum > 0 && !isReturned ? _invDisc * (item.total / _lineSum) : 0;
-                          const profit = isReturned ? 0 : (item.total - proportionalDisc) - costAmt;
+                          const profit = isReturned ? 0 : (item.total - proportionalDisc) - baselinePrice * totalPieces;
                           return (
                             <tr key={i} className={cn('border-b border-[#2b313a]/60 transition-colors', isReturned ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-[#1d222a]')}>
                               <td className="px-4 py-2.5">
@@ -558,7 +560,10 @@ export const DailySalesReport: React.FC = () => {
                         const ppc = it.products?.pieces_per_carton || 1;
                         const qty = it.cartons * ppc + it.pieces;
                         const proportionalDisc = _lineSum > 0 ? _invDisc * (it.total / _lineSum) : 0;
-                        return s + (it.total - proportionalDisc) - (it.products?.cost_price ?? 0) * qty;
+                        const baselinePrice = detailInvoice.mode === 'wholesale'
+                          ? (it.products?.wholesale_price ?? 0)
+                          : (it.products?.retail_price ?? 0);
+                        return s + (it.total - proportionalDisc) - baselinePrice * qty;
                       }, 0);
                     return (
                       <div className="grid grid-cols-2 gap-4">

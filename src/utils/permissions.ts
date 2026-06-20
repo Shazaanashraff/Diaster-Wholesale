@@ -86,7 +86,7 @@ export const ROLE_PIN_KEYS: Record<Role, string> = {
 };
 
 export const DEFAULT_PINS: Record<Role, string> = {
-  admin:        '1234',
+  admin:        '1949',
   accountant:   '2222',
   officer:      '3333',
   pos_operator: '4444',

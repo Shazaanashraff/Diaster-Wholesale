@@ -59,7 +59,7 @@ export interface ProfitExpensePoint {
 export const getProfitAndLoss = async (from?: string, to?: string) => {
   let invQuery = supabase.from('invoices').select('total, subtotal, discount, payment_status, created_at');
   let expQuery = supabase.from('expenses').select('amount, created_at');
-  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton), product_id, invoice_id, created_at');
+  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton, cost_price), product_id, invoice_id, created_at');
   if (from) {
     invQuery = invQuery.gte('created_at', from);
     expQuery = expQuery.gte('created_at', from);
@@ -77,31 +77,18 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
   const expenses = expRes.data || [];
   const items = itemRes.data || [];
 
-  const productIds = [...new Set(items.map((i) => i.product_id).filter(Boolean))] as string[];
-  const { data: batches = [] } =
-    productIds.length > 0
-      ? await supabase
-          .from('stock_batches')
-          .select('product_id, cost_per_piece')
-          .in('product_id', productIds)
-      : { data: [] as { product_id: string; cost_per_piece: number | null }[] };
-
   const revenue = invoices
     .filter(i => i.payment_status === 'paid' || i.payment_status === 'partial')
     .reduce((sum, i) => sum + Number(i.total), 0);
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
-  const costMap: Record<string, number> = {};
-  batches.forEach(b => {
-    if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece);
-  });
-
   let cogs = 0;
   items.forEach(item => {
-    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 1;
+    const prod = item.products as { pieces_per_carton?: number; cost_price?: number } | null;
+    const ppc = prod?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
-    const unitCost = costMap[item.product_id as string] || 0;
+    const unitCost = prod?.cost_price || 0;
     cogs += unitCost * totalPieces;
   });
 
@@ -115,7 +102,7 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 export const getSalesProfitReport = async (from?: string, to?: string) => {
   let query = supabase
     .from('invoice_items')
-    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton), invoices(invoice_no, payment_status, salesperson_id, salesperson_name, salesperson:salespeople(name))');
+    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton, cost_price), invoices(invoice_no, payment_status, salesperson_id, salesperson_name, salesperson:salespeople(name))');
 
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
@@ -123,21 +110,11 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
   const { data, error } = await query;
   if (error) throw error;
 
-  const productIds = [...new Set((data ?? []).map((i) => i.product_id).filter(Boolean))] as string[];
-  const { data: batches } =
-    productIds.length > 0
-      ? await supabase
-          .from('stock_batches')
-          .select('product_id, cost_per_piece')
-          .in('product_id', productIds)
-      : { data: [] as { product_id: string; cost_per_piece: number | null }[] };
-  const costMap: Record<string, number> = {};
-  batches?.forEach(b => { if (b.cost_per_piece) costMap[b.product_id] = Number(b.cost_per_piece); });
-
   return (data || []).map(item => {
-    const ppc = (item.products as { pieces_per_carton?: number } | null)?.pieces_per_carton || 1;
+    const prod = item.products as { name?: string; pieces_per_carton?: number; cost_price?: number } | null;
+    const ppc = prod?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
-    const unitCost = costMap[item.product_id as string] || 0;
+    const unitCost = prod?.cost_price || 0;
     const totalCost = unitCost * totalPieces;
     const profit = Number(item.total) - totalCost;
     const inv = item.invoices as {
@@ -150,7 +127,7 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
 
     return {
       invoice_no: inv?.invoice_no,
-      product: (item.products as { name?: string } | null)?.name,
+      product: prod?.name,
       salesperson_name: spName ?? inv?.salesperson_name ?? null,
       quantity: totalPieces,
       selling_price: item.unit_price,

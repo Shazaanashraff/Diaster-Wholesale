@@ -237,11 +237,14 @@ export async function recordExchangeRefund(data: {
 
 // ── Other Income ────────────────────────────────────────────────────────────────
 
-export async function getOtherIncome(): Promise<OtherIncome[]> {
-  const { data, error } = await supabase
+export async function getOtherIncome(filters?: { from?: string; to?: string }): Promise<OtherIncome[]> {
+  let q = supabase
     .from('other_income')
     .select('*, suppliers(name)')
     .order('created_at', { ascending: false });
+  if (filters?.from) q = q.gte('created_at', filters.from);
+  if (filters?.to)   q = q.lte('created_at', filters.to);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data ?? []) as OtherIncome[];
 }

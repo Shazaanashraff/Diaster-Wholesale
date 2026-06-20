@@ -32,11 +32,35 @@ interface OtherIncRow  { id: string; source_type: string; amount: number; method
 
 interface MethodIncome { method: string; total: number }
 
-export const DailyFinanceReport: React.FC = () => {
+interface DailyFinanceReportProps {
+  // When provided the component runs in controlled mode — no internal date picker is shown
+  period?: ReportPeriod;
+  customFrom?: string;
+  customTo?: string;
+  onPeriodChange?: (p: ReportPeriod) => void;
+  onCustomChange?: (from: string, to: string) => void;
+}
+
+export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
+  period: propPeriod,
+  customFrom: propFrom,
+  customTo: propTo,
+  onPeriodChange,
+  onCustomChange,
+}) => {
+  const controlled = propPeriod !== undefined;
   const canExportCsv = getCurrentRole() !== 'pos_operator';
-  const [period, setPeriod]     = useState<ReportPeriod>('today');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo]     = useState('');
+  const [internalPeriod, setInternalPeriod] = useState<ReportPeriod>('today');
+  const [internalFrom, setInternalFrom] = useState('');
+  const [internalTo, setInternalTo] = useState('');
+
+  const period     = controlled ? propPeriod!         : internalPeriod;
+  const customFrom = controlled ? (propFrom  ?? '')   : internalFrom;
+  const customTo   = controlled ? (propTo    ?? '')   : internalTo;
+  const setPeriod     = controlled ? (onPeriodChange  ?? (() => {})) : setInternalPeriod;
+  const setCustom     = controlled
+    ? (onCustomChange ?? (() => {}))
+    : (f: string, t: string) => { setInternalFrom(f); setInternalTo(t); };
   const [loading, setLoading]   = useState(true);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
@@ -105,7 +129,9 @@ export const DailyFinanceReport: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Daily Finance Report</h2>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
+          {!controlled && (
+            <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={setCustom} />
+          )}
           <button onClick={load} disabled={loading} className="flex items-center gap-2 bg-[#1d222a] border border-[#2b313a] text-xs text-gray-400 rounded-xl px-3 py-2.5 hover:text-white transition-colors">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
