@@ -284,6 +284,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     product_id: string;
     cartons: number;
     loose_pieces: number;
+    original_units: number | null;
     notes: string;
     received_at: string;
     products?: ProductJoin;
@@ -312,7 +313,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
   let stockBatchQuery = supabase
     .from('stock_batches')
-    .select('id, product_id, cartons, loose_pieces, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference), locations(name, type)')
+    .select('id, product_id, cartons, loose_pieces, original_units, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference), locations(name, type)')
     .order('received_at', { ascending: false })
     .limit(limit);
 
@@ -349,7 +350,11 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     const shipment = Array.isArray(row.shipments) ? row.shipments[0] : row.shipments;
     const locationObj = Array.isArray(row.locations) ? row.locations[0] : row.locations;
     const piecesPerCarton = Number(product?.pieces_per_carton ?? 1) || 1;
-    const quantity = Number(row.cartons ?? 0) * piecesPerCarton + Number(row.loose_pieces ?? 0);
+    // Prefer original_units (immutable at receipt time) so FIFO deductions don't
+    // retroactively change the displayed received quantity in the history.
+    const quantity = row.original_units != null
+      ? Number(row.original_units)
+      : Number(row.cartons ?? 0) * piecesPerCarton + Number(row.loose_pieces ?? 0);
     return {
       id: `stock-${row.id}`,
       product_id: row.product_id,
@@ -357,7 +362,7 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
       product_name: product?.name ?? 'Unknown Product',
       quantity,
       action: 'Stock In',
-      location: locationObj?.name ?? 'Store',
+      location: locationObj?.name ?? 'Shop',
       reference: shipment?.reference ?? row.notes ?? '',
       actor: 'procurement',
       created_at: row.received_at,
@@ -392,16 +397,16 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
     if (reason.startsWith('[CANCEL]')) {
       action = 'Invoice Cancelled';
-      location = locationObj?.name ?? 'Main Shop';
+      location = locationObj?.name ?? 'Shop';
     } else if (reason.startsWith('[TRANSFER-OUT STORE->SHOP]') || /^Transfer out:/i.test(reason)) {
       action = 'Transfer Out';
       location = locationObj?.name ?? 'Main Warehouse';
     } else if (reason.startsWith('[TRANSFER-IN STORE->SHOP]') || /^Transfer in:/i.test(reason)) {
       action = 'Transfer In';
-      location = locationObj?.name ?? 'Main Shop';
+      location = locationObj?.name ?? 'Shop';
     } else if (reason.toLowerCase().includes('return')) {
       action = 'Sale Return';
-      location = locationObj?.name ?? 'Main Shop';
+      location = locationObj?.name ?? 'Shop';
     }
 
     return {

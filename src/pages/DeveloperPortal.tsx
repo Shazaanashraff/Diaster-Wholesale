@@ -988,7 +988,7 @@ function userAggregatesCalc(appRecords: AuditRecord[]) {
       map[userKey] = {
         role: r.role || 'anon',
         user_id: userKey,
-        location: r.location || 'Main Shop',
+        location: r.location || 'Shop',
         calls: 0,
         bytes: 0,
         duration: 0,
@@ -1007,7 +1007,7 @@ function deviceAggregatesCalc(appRecords: AuditRecord[]) {
     if (!map[r.device_id]) {
       map[r.device_id] = {
         device_id: r.device_id,
-        location: r.location || 'Main Shop',
+        location: r.location || 'Shop',
         calls: 0,
         bytes: 0,
         duration: 0,

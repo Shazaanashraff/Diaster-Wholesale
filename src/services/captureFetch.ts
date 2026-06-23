@@ -127,7 +127,7 @@ async function logMetricEvent(
     // Retrieve user and session context
     const role = sessionStorage.getItem('user_role') || 'admin';
     const user_id = sessionStorage.getItem('user_id') || role;
-    const location = sessionStorage.getItem('user_location') || localStorage.getItem('user_location') || 'Main Shop';
+    const location = sessionStorage.getItem('user_location') || localStorage.getItem('user_location') || 'Shop';
 
     const device_id = getOrCreateDeviceId();
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { getProducts } from '../services/productService';
+import { getSalespeople, type Salesperson } from '../services/salespersonService';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import {
@@ -135,6 +136,8 @@ export const ReturnsPage: React.FC = () => {
   const [settlementBank, setSettlementBank] = useState('');
   const [products, setProducts] = useState<Array<{ id: string; name: string; item_code?: string; pieces_per_carton: number; wholesale_price: number }>>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
+  const [selectedSalespersonId, setSelectedSalespersonId] = useState<string>('');
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
@@ -231,6 +234,10 @@ export const ReturnsPage: React.FC = () => {
     const t = setTimeout(searchInvoices, 400);
     return () => clearTimeout(t);
   }, [searchInvoices]);
+
+  useEffect(() => {
+    getSalespeople().then(setSalespeople).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (returnType !== 'Exchange') return;
@@ -374,6 +381,7 @@ export const ReturnsPage: React.FC = () => {
               total: absDiff,
               payment_status: isPaid ? 'paid' : 'unpaid',
               notes: `Exchange for ${selectedInvoice.invoice_no}`,
+              salesperson_id: selectedSalespersonId || null,
             })
             .select('id').single();
 
@@ -475,6 +483,7 @@ export const ReturnsPage: React.FC = () => {
           exchange_difference: returnType === 'Exchange' ? exchangeDiff : null,
           refund_amount: refundAmount,
           returned_by: role.replace('_', ' '),
+          salesperson_id: selectedSalespersonId || null,
           workflow_snapshot: {
             original_invoice_id: selectedInvoice.id,
             returned_items: returnItems,
@@ -516,6 +525,7 @@ export const ReturnsPage: React.FC = () => {
     setStep(1); setSelectedInvoice(null); setReturnItems([]);
     setReplacements([]); setReturnType('Return'); setReason(RETURN_REASONS[0]);
     setSubmitResult(null); setSubmitError(null); setSearchTerm(''); setSearchDate('');
+    setSelectedSalespersonId('');
   }
 
   // ─── Complete ─────────────────────────────────────────────────────────────
@@ -809,6 +819,23 @@ export const ReturnsPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* Salesperson */}
+              {salespeople.length > 0 && (
+                <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-5">
+                  <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-3">Salesperson</p>
+                  <select
+                    value={selectedSalespersonId}
+                    onChange={e => setSelectedSalespersonId(e.target.value)}
+                    className="w-full bg-[#1d222a] border border-[#2b313a] text-gray-300 text-sm rounded-xl px-4 py-2.5 outline-none focus:border-primary/40"
+                  >
+                    <option value="">— None —</option>
+                    {salespeople.map(sp => (
+                      <option key={sp.id} value={sp.id}>{sp.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Items to return */}
               <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
