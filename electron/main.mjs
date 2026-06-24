@@ -17,7 +17,7 @@ const updaterAccessToken =
   process.env.DIASTER_UPDATER_TOKEN ??
   process.env.GH_TOKEN ??
   process.env.GITHUB_TOKEN ??
-  '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';
+  null;
 const updaterAllowPublicFeed = process.env.DIASTER_UPDATER_ALLOW_PUBLIC === 'true';
 
 /** @type {BrowserWindow | null} */
