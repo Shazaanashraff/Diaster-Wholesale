@@ -172,6 +172,123 @@ export const TEST_CASES: Record<string, TestCase[]> = {
     },
   ],
 
+  'products-inventory': [
+    {
+      name: 'records a GRN (container) with carton + loose-piece measurements',
+      what: 'Inserts a sandbox stock_batches row with 5 cartons + 7 loose pieces and asserts the stored cartons, loose_pieces, and original_units (67) match exactly.',
+      type: 'integration',
+    },
+    {
+      name: 'total stock units equal cartons × pieces_per_carton + loose_pieces',
+      what: 'Joins sandbox.stock_batches with sandbox.products and asserts the computed total_units expression matches the expected 67 — confirming the decimal stock arithmetic (NUMERIC, not bigint).',
+      type: 'integration',
+    },
+    {
+      name: 'sold units deduct from remaining stock after invoice is recorded',
+      what: 'Inserts an invoice + invoice_item for 2 cartons, then simulates FIFO deduction by subtracting from the batch; asserts 3 cartons remain with loose_pieces unchanged (remaining = 43 units).',
+      type: 'integration',
+    },
+  ],
+
+  'customers-credit': [
+    {
+      name: 'createCustomer always initialises outstanding_balance to zero',
+      what: 'Calls createCustomer and asserts the returned row has outstanding_balance=0 regardless of what the caller passes — the service hard-codes the zero so new accounts always start clean.',
+      type: 'unit',
+    },
+    {
+      name: 'updateCustomer forwards credit_limit change to the database',
+      what: 'Calls updateCustomer with {credit_limit: 200000} and asserts the returned customer reflects the new limit.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment calls record_payment_atomic with all required fields',
+      what: 'Asserts the record_payment_atomic RPC receives p_customer_id, p_invoice_id, p_amount, and p_method with the exact values passed to recordPayment.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment forwards cheque fields (bank, number, due_date) to RPC',
+      what: 'When method="cheque", the RPC receives p_bank_name, p_cheque_number, and p_due_date forwarded intact from the caller.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment propagates RPC error to caller',
+      what: 'If the record_payment_atomic RPC returns an error, recordPayment re-throws it so the UI can display the exact message.',
+      type: 'unit',
+    },
+  ],
+
+  'refunds-returns': [
+    {
+      name: 'throws "already been returned" when invoice notes contain [RETURNED]',
+      what: 'processInvoiceReturn reads the invoice and throws if notes already include the [RETURNED] tag — preventing a double-return that would inflate stock twice.',
+      type: 'unit',
+    },
+    {
+      name: 'throws "no items to return" when invoice has no line items',
+      what: 'An invoice with an empty invoice_items array causes processInvoiceReturn to throw before touching stock_adjustments or payments.',
+      type: 'unit',
+    },
+    {
+      name: 'creates stock adjustments for every line item on a full return',
+      what: 'After processing a return, stock_adjustments is inserted with one row per invoice item — putting the returned goods back into available stock.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts a negative payment record for a paid invoice (cash refund)',
+      what: 'For a paid invoice with refundMethod="cash", a negative-amount payments row is inserted to reverse the revenue — amount = -invoice.total.',
+      type: 'unit',
+    },
+    {
+      name: 'does NOT insert a payment when refundMethod is no_refund',
+      what: 'When the operator chooses no_refund (e.g. exchange), no payments row is inserted — only stock is restored.',
+      type: 'unit',
+    },
+    {
+      name: 'skips the negative payment for an unpaid invoice regardless of refundMethod',
+      what: 'Returning an unpaid invoice skips the payments insert because there is nothing to refund — stock is still restored.',
+      type: 'unit',
+    },
+    {
+      name: 'credit_note return reduces customer outstanding balance',
+      what: 'With refundMethod="credit_note", processInvoiceReturn selects the customer\'s current outstanding balance then updates it to max(0, outstanding - invoice.total) — the debt is forgiven using NUMERIC(12,2) arithmetic.',
+      type: 'unit',
+    },
+  ],
+
+  'payments-cheques': [
+    {
+      name: 'depositCheque transitions status to "processing"',
+      what: 'depositCheque calls the update_cheque_status RPC with p_new_status="processing", moving the cheque from received to bank-deposit-in-progress.',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque transitions status to "completed"',
+      what: 'completeCheque calls update_cheque_status with p_new_status="completed", marking the cheque as cleared.',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque transitions status to "returned"',
+      what: 'returnCheque calls update_cheque_status with p_new_status="returned", recording a bounced/dishonoured cheque.',
+      type: 'unit',
+    },
+    {
+      name: 'full lifecycle: received → deposited (processing) → cleared (completed)',
+      what: 'Calling depositCheque then completeCheque on the same payment ID issues two RPC calls in the correct order with the correct statuses.',
+      type: 'unit',
+    },
+    {
+      name: 'depositCheque propagates RPC error to caller',
+      what: 'If update_cheque_status returns an error (e.g. cheque already deposited), depositCheque re-throws so the UI can display the message.',
+      type: 'unit',
+    },
+    {
+      name: 'invalid transition: completing a returned cheque propagates DB rejection',
+      what: 'The database enforces valid cheque state transitions; when the RPC returns a constraint error, completeCheque propagates the message rather than swallowing it.',
+      type: 'unit',
+    },
+  ],
+
   sandbox: [
     {
       name: 'sandbox.app_meta.schema_marker is "sandbox"',

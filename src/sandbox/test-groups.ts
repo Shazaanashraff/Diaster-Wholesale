@@ -11,9 +11,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now',
+    unitDesc:
+      '3 integration tests against the sandbox schema: records a GRN container with ' +
+      'carton + loose-piece measurements; asserts total_units = cartons × pieces_per_carton ' +
+      '+ loose_pieces; verifies FIFO deduction reduces remaining batch stock after an invoice ' +
+      'is recorded. Money in LKR as NUMERIC(12,2). Skips without SANDBOX_DB_URL.',
     e2eDesc: null,
   },
   {
@@ -31,25 +35,39 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'refunds-returns',
     label: 'Refunds & Returns',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/returnsService.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now',
+    unitDesc:
+      '6 unit tests for processInvoiceReturn: guards against double-return and empty-item ' +
+      'invoices; asserts stock_adjustments are created for every line item; verifies a ' +
+      'negative payment is inserted for paid invoices (cash/bank_transfer/credit_note) but ' +
+      'skipped for no_refund and unpaid invoices; confirms credit_note updates the customer ' +
+      "outstanding balance (NUMERIC(12,2), clamped to 0). All via mocked Supabase client.",
     e2eDesc: null,
   },
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/chequeService.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now',
+    unitDesc:
+      '6 unit tests for cheque lifecycle: depositCheque → processing, completeCheque → ' +
+      'completed, returnCheque → returned; full lifecycle chain (received → processing → ' +
+      'completed) verified in call order; RPC errors propagate to the caller; invalid ' +
+      'transitions (e.g. completing a returned cheque) propagate the DB rejection message.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/customerCredit.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now',
+    unitDesc:
+      '5 unit tests: createCustomer always sets outstanding_balance to zero regardless of ' +
+      'caller input; updateCustomer forwards credit_limit changes to the DB; recordPayment ' +
+      'calls the record_payment_atomic RPC with all required fields including cheque metadata ' +
+      '(bank, cheque number, due date); RPC errors propagate to the caller. Money in LKR ' +
+      'as NUMERIC(12,2).',
     e2eDesc: null,
   },
   {
