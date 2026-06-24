@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -19,6 +21,50 @@ const updaterAccessToken =
   process.env.GITHUB_TOKEN ??
   null;
 const updaterAllowPublicFeed = process.env.DIASTER_UPDATER_ALLOW_PUBLIC === 'true';
+
+const REPO_ROOT = path.join(__dirname, '..');
+
+/** @type {import('node:child_process').ChildProcess | null} */
+let activeProc = null;
+
+function stripAnsi(line) {
+  return line.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function simplify(raw) {
+  const line = stripAnsi(raw).trimEnd();
+  if (/^\s*[✓√]/.test(line)) return line.trim();
+  if (/^\s*[×✗]/.test(line) || /^\s*FAIL\b/.test(line)) return line.trim();
+  return line;
+}
+
+function runSandboxCommand(cmd, args, webContents) {
+  return new Promise((resolve) => {
+    if (activeProc) {
+      resolve({ ok: false, reason: 'already-running' });
+      return;
+    }
+    const proc = spawn(cmd, args, { cwd: REPO_ROOT, shell: true, env: { ...process.env } });
+    activeProc = proc;
+
+    function pipeLines(stream) {
+      if (!stream) return;
+      readline.createInterface({ input: stream, crlfDelay: Infinity }).on('line', (line) => {
+        if (!webContents.isDestroyed()) webContents.send('sandbox:output', simplify(line));
+      });
+    }
+    pipeLines(proc.stdout);
+    pipeLines(proc.stderr);
+
+    proc.on('close', (code) => {
+      activeProc = null;
+      if (!webContents.isDestroyed()) {
+        webContents.send('sandbox:output', code === 0 ? '✓ done' : `FAIL (exit ${code ?? '?'})`);
+      }
+      resolve({ ok: code === 0, code });
+    });
+  });
+}
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -53,6 +99,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: isDev ? ['--enable-sandbox-runner'] : [],
     },
   });
 
@@ -216,6 +263,46 @@ ipcMain.on('updater:install-now', () => {
     log.info('Manual install requested via IPC. Calling quitAndInstall(false, true)...');
     autoUpdater.quitAndInstall(false, true);
   }
+});
+
+// ── Sandbox runner IPC (dev-only) ─────────────────────────────────────────────
+
+ipcMain.handle('sandbox:run', async (event, type, filter) => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  const wc = event.sender;
+  if (type === 'unit') {
+    if (filter?.files?.length) {
+      return runSandboxCommand('npx', ['vitest', 'run', '--reporter=verbose', ...filter.files], wc);
+    }
+    return runSandboxCommand('npm', ['test'], wc);
+  }
+  if (type === 'e2e' && filter?.spec) {
+    return runSandboxCommand(
+      'npx',
+      ['playwright', 'test', '--reporter=line', `e2e/${filter.spec}.spec.ts`],
+      wc,
+    );
+  }
+  return { ok: false, reason: 'invalid-type' };
+});
+
+ipcMain.handle('sandbox:reset', async (event) => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  return runSandboxCommand('npm', ['run', 'sandbox:reset'], event.sender);
+});
+
+ipcMain.handle('sandbox:cancel', async () => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  if (!activeProc) return { ok: false, reason: 'no-active-process' };
+  const pid = activeProc.pid;
+  if (process.platform === 'win32') {
+    activeProc.kill();
+    if (pid) spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { shell: true });
+  } else {
+    activeProc.kill('SIGTERM');
+  }
+  activeProc = null;
+  return { ok: true };
 });
 
 app.on('window-all-closed', () => {

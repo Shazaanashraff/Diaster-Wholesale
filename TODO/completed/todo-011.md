@@ -3,7 +3,7 @@ id: todo-011
 title: Sandbox feature [4/7] — live runner IPC (window.sandboxRunner) in Electron main + preload
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -96,5 +96,14 @@ reap it and so a second run can be rejected. Strip ANSI before sending so the UI
 - **Create:** `src/types/sandbox-runner.d.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how dev-gate was implemented, Windows cancel verified, packaged-build
-     undefined verified, commit hash. -->
+Dev-gate: main.mjs passes additionalArguments:['--enable-sandbox-runner'] to webPreferences only
+when !app.isPackaged (isDev). preload.js checks process.argv.includes('--enable-sandbox-runner')
+before calling contextBridge.exposeInMainWorld — so window.sandboxRunner is undefined in packaged builds.
+
+All 3 IPC handlers return {ok:false, reason:'unavailable-in-packaged-build'} when app.isPackaged.
+concurrent run rejection: activeProc null check at top of runSandboxCommand.
+Windows cancel: activeProc.kill() + taskkill /pid <pid> /T /F. POSIX: activeProc.kill('SIGTERM').
+sandbox:reset streams npm run sandbox:reset output.
+
+Packaged-build undefined: structurally guaranteed — preload never calls exposeInMainWorld without flag.
+npx tsc --noEmit: clean. npm test: 31 pass, 4 skip.
