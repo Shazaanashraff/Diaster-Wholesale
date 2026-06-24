@@ -29,6 +29,7 @@ export interface Customer {
   type: 'wholesale' | 'retail';
   credit_limit: number;
   outstanding_balance: number;
+  cheque_float: number;
   created_at: string;
   updated_at: string;
 }
@@ -81,11 +82,15 @@ export interface InvoiceItem {
 
 export interface Payment {
   id: string;
-  invoice_id: string;
+  invoice_id: string | null;
   customer_id: string;
   amount: number;
   method: 'cash' | 'bank_transfer' | 'cheque' | 'credit';
   reference: string;
+  bank_name?: string | null;
+  cheque_number?: string | null;
+  due_date?: string | null;
+  cheque_status?: 'pending' | 'processing' | 'completed' | 'returned' | null;
   paid_at: string;
   created_at: string;
 }

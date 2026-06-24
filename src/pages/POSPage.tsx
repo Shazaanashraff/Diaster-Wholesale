@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { SL_BANKS } from '../constants/banks';
 import { useNavigate } from 'react-router-dom';
 import { getPosCustomers, createCustomer } from '../services/customerService';
 import { getRolePin } from '../utils/permissions';
@@ -744,6 +745,7 @@ export const POSPage: React.FC = () => {
             <label className="pos-search">
               <Search size={18} />
                 <input
+                  data-testid="pos-search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search products or item codes..."
@@ -878,6 +880,7 @@ export const POSPage: React.FC = () => {
 
                   <button
                     type="button"
+                    data-testid={`pos-add-${product.id}`}
                     className={cn('pos-add-btn', (!hasAmount || exceedsStock) && 'disabled')}
                     onClick={() => addToCart(product)}
                     disabled={!hasAmount || exceedsStock}
@@ -969,7 +972,7 @@ export const POSPage: React.FC = () => {
               </button>
             </div>
             {cart.length > 0 && (
-              <button type="button" onClick={clearCart} className="pos-clear-btn">
+              <button type="button" data-testid="pos-clear-cart" onClick={clearCart} className="pos-clear-btn">
                 <Trash2 size={14} />
               </button>
             )}
@@ -1128,7 +1131,7 @@ export const POSPage: React.FC = () => {
             </div>
           )}
 
-          <div className="pos-cart-list custom-scrollbar">
+          <div data-testid="pos-cart" className="pos-cart-list custom-scrollbar">
             {cart.length === 0 && <p className="pos-cart-empty">No items yet</p>}
             <AnimatePresence>
               {cart.map((item, index) => {
@@ -1391,7 +1394,7 @@ export const POSPage: React.FC = () => {
             <div className="pos-warning">Below cost floor: LKR {estimatedCostFloor.toFixed(2)}</div>
           )}
 
-          {validationMessage && <div className="pos-error">{validationMessage}</div>}
+          {validationMessage && <div data-testid="pos-error" className="pos-error">{validationMessage}</div>}
           {!splitPaymentValid && (
             <div className="pos-warning" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}>
               Enter the cash, card, online, or cheque amount before putting the balance on credit.
@@ -1401,12 +1404,6 @@ export const POSPage: React.FC = () => {
           {/* ── Payment ──────────────────────────────────────────── */}
           {(() => {
             const outstanding = Math.max(0, total - effectivePaymentAmount);
-            const SL_BANKS = [
-              'BOC – Bank of Ceylon', 'NSB – National Savings Bank', "People's Bank",
-              'HNB – Hatton National Bank', 'Sampath Bank', 'Commercial Bank',
-              'Seylan Bank', 'NDB – National Development Bank', 'DFCC Bank',
-              'Pan Asia Bank', 'Union Bank', 'Amana Bank', 'MCB Bank', 'Other',
-            ];
             const fieldStyle: React.CSSProperties = { background: '#0d1016', border: '1px solid #2b313a', borderRadius: 7, padding: '5px 8px', color: '#f1f5f9', fontSize: 11, outline: 'none', fontFamily: 'monospace', width: '100%' };
 
             return (
@@ -1546,6 +1543,7 @@ export const POSPage: React.FC = () => {
 
           <button
             type="button"
+            data-testid="pos-submit"
             className="pos-submit relative overflow-hidden"
             onClick={processTransaction}
             disabled={!canProcessTransaction}
@@ -1615,7 +1613,7 @@ export const POSPage: React.FC = () => {
         </aside>
 
       <Modal isOpen={isSuccessModalOpen} onClose={resetAfterSuccess} title="Transaction Complete">
-        <div style={{ maxHeight: '80vh', overflowY: 'auto', padding: '8px 0' }}>
+        <div data-testid="pos-success-modal" style={{ maxHeight: '80vh', overflowY: 'auto', padding: '8px 0' }}>
           {lastSaleReceipt ? (
             <POSSaleReceipt data={lastSaleReceipt} onClose={resetAfterSuccess} />
           ) : (

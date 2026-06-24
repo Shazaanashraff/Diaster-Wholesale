@@ -1,0 +1,16 @@
+export const SL_BANKS = [
+  'BOC – Bank of Ceylon',
+  'NSB – National Savings Bank',
+  "People's Bank",
+  'HNB – Hatton National Bank',
+  'Sampath Bank',
+  'Commercial Bank',
+  'Seylan Bank',
+  'NDB – National Development Bank',
+  'DFCC Bank',
+  'Pan Asia Bank',
+  'Union Bank',
+  'Amana Bank',
+  'MCB Bank',
+  'Other',
+] as const;

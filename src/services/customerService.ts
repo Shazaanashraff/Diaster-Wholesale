@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabase';
 import type { Customer, Invoice, Payment } from '../types';
 
-const CUSTOMER_COLUMNS = 'id, name, phone, email, address, type, credit_limit, outstanding_balance, created_at, updated_at';
-const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, paid_at, created_at';
+const CUSTOMER_COLUMNS = 'id, name, phone, email, address, type, credit_limit, outstanding_balance, cheque_float, created_at, updated_at';
+const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, bank_name, cheque_number, due_date, cheque_status, paid_at, created_at';
 
 export const getCustomers = async (): Promise<Customer[]> => {
   const { data, error } = await supabase
@@ -94,72 +94,47 @@ export const getCustomerLedger = async (
 export const recordPayment = async (
   customerId: string,
   invoiceId: string | null,
-  amount: number
+  amount: number,
+  method: 'cash' | 'bank_transfer' | 'cheque' = 'cash',
+  bankName?: string,
+  chequeNumber?: string,
+  dueDate?: string
 ): Promise<void> => {
-  try {
-    // Insert into payments table
-    const { error: insertError } = await supabase
-      .from('payments')
-      .insert([
-        {
-          customer_id: customerId,
-          invoice_id: invoiceId,
-          amount,
-          method: 'cash',
-          paid_at: new Date().toISOString()
-        }
-      ]);
+  const { error } = await supabase.rpc('record_payment_atomic', {
+    p_customer_id:   customerId,
+    p_invoice_id:    invoiceId,
+    p_amount:        amount,
+    p_method:        method,
+    p_bank_name:     bankName     ?? '',
+    p_cheque_number: chequeNumber ?? '',
+    p_due_date:      dueDate      ?? '',
+  });
+  if (error) throw error;
+};
 
-    if (insertError) throw insertError;
+export const depositCheque = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'processing',
+  });
+  if (error) throw error;
+};
 
-    // Fetch current customer outstanding_balance
-    const customer = await getCustomerById(customerId);
+export const completeCheque = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'completed',
+  });
+  if (error) throw error;
+};
 
-    // Calculate newBalance
-    const newBalance = Math.max(0, customer.outstanding_balance - amount);
-
-    // Update customer outstanding_balance
-    const { error: updateCustError } = await supabase
-      .from('customers')
-      .update({ outstanding_balance: newBalance })
-      .eq('id', customerId);
-
-    if (updateCustError) throw updateCustError;
-
-    // Update invoice payment_status if applicable
-    if (invoiceId) {
-      const { data: invoice } = await supabase
-        .from('invoices')
-        .select('total')
-        .eq('id', invoiceId)
-        .single();
-
-      if (invoice) {
-        const { data: allPayments } = await supabase
-          .from('payments')
-          .select('amount')
-          .eq('invoice_id', invoiceId);
-
-        const totalPaid = (allPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-
-        if (totalPaid >= invoice.total) {
-          await supabase
-            .from('invoices')
-            .update({ payment_status: 'paid' })
-            .eq('id', invoiceId);
-        } else if (totalPaid > 0) {
-          await supabase
-            .from('invoices')
-            .update({ payment_status: 'partial' })
-            .eq('id', invoiceId);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error recording payment:', error);
-    throw error;
-  }
-}
+export const returnCheque = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'returned',
+  });
+  if (error) throw error;
+};
 
 export const deleteCustomer = async (id: string): Promise<void> => {
   const { error } = await supabase
