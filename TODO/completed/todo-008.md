@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -97,5 +97,13 @@ so it is structurally impossible for it to touch `public`.
 - **Reference (do not delete):** root `sandbox-setup.sql`, `sandbox-patch.sql` — source of the DDL.
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
-     marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+Migration applied via `mcp__Supabase__apply_migration` on 2026-06-24. All 29 sandbox tables
+created (26 core + salespeople, sales_returns, sales_return_items, loyalty_transactions + app_meta).
+
+Verification:
+- `select schema_marker from sandbox.app_meta` → 'sandbox' ✓
+- `select schema_marker from public.app_meta` → 'public' ✓
+- `select sandbox.reset_all()` → no error ✓
+- Public data intact after reset_all(): 254 customers unchanged ✓
+- 31 tables total in sandbox schema (pg_tables count) ✓
+- All DDL uses IF NOT EXISTS / CREATE OR REPLACE / ON CONFLICT DO UPDATE (idempotent) ✓
