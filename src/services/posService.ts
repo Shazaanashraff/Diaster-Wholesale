@@ -166,27 +166,10 @@ export const checkout = async (
   // Invoice number
   const invoiceNo = `INV-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // 1. Insert invoice
-  const { data: invoiceData, error: invoiceError } = await supabase
-    .from('invoices')
-    .insert({
-      invoice_no: invoiceNo,
-      customer_id: customerId,
-      mode: isWholesale ? 'wholesale' : 'retail',
-      subtotal,
-      discount,
-      total: netTotal,
-      payment_status: paymentStatus,
-      salesperson_id: salespersonId || null,
-    })
-    .select('id')
-    .single();
+  // Build items and payments payloads for the atomic RPC
+  const now = new Date().toISOString();
 
-  if (invoiceError) throw new Error(`Failed to create invoice: ${invoiceError.message}`);
-  const invoiceId = invoiceData.id;
-
-  // 2. Insert invoice items
-  const invoiceItems = cart.map(item => {
+  const itemsPayload = cart.map(item => {
     const basePrice = Number(
       item.unitPrice ?? (isWholesale ? item.product.wholesale_price : item.product.retail_price)
     );
@@ -194,35 +177,44 @@ export const checkout = async (
     const ppc = item.product.pieces_per_carton || 1;
     const totalPieces = item.quantityCartons * ppc + item.quantityPieces;
     return {
-      invoice_id: invoiceId,
       product_id: item.product.id,
       cartons: item.quantityCartons,
       pieces: item.quantityPieces,
-      unit_price: basePrice,               // sale price before line discount — allows invoice modal to derive discount
-      total: effectivePrice * totalPieces, // actual amount charged
-      batch_id: item.batchId || null,
+      unit_price: basePrice,
+      total: effectivePrice * totalPieces,
+      batch_id: item.batchId || '',
     };
   });
 
-  const { error: itemsError } = await supabase.from('invoice_items').insert(invoiceItems);
-  if (itemsError) throw new Error(`Failed to create invoice items: ${itemsError.message}`);
-
-  // 3. Payment rows
-  for (const split of paymentSplits) {
-    if (split.amount <= 0) continue;
-    const { error: payErr } = await supabase.from('payments').insert({
-      invoice_id: invoiceId,
-      customer_id: customerId,
-      amount: split.amount,
-      method: split.method,
+  const paymentsPayload = paymentSplits
+    .filter(s => s.amount > 0)
+    .map(s => ({
+      amount: s.amount,
+      method: s.method,
       reference: invoiceNo,
-      cheque_number: split.cheque_number || null,
-      bank_name: split.bank_name || null,
-      due_date: split.due_date || null,
-      paid_at: new Date().toISOString(),
-    });
-    if (payErr) throw new Error(`Failed to create payment: ${payErr.message}`);
-  }
+      cheque_number: s.cheque_number || '',
+      bank_name: s.bank_name || '',
+      due_date: s.due_date || '',
+      paid_at: now,
+    }));
+
+  // Steps 1–3: insert invoice + items + payments inside a single Postgres transaction.
+  // If any step fails the whole thing rolls back — no orphaned invoice headers.
+  const { data: checkoutData, error: checkoutError } = await supabase.rpc('checkout_sale', {
+    p_invoice_no:     invoiceNo,
+    p_customer_id:    customerId,
+    p_mode:           isWholesale ? 'wholesale' : 'retail',
+    p_subtotal:       subtotal,
+    p_discount:       discount,
+    p_total:          netTotal,
+    p_payment_status: paymentStatus,
+    p_salesperson_id: salespersonId || null,
+    p_items:          itemsPayload,
+    p_payments:       paymentsPayload,
+  });
+
+  if (checkoutError) throw new Error(`Checkout failed: ${checkoutError.message}`);
+  const invoiceId: string = checkoutData as string;
 
   // 4. Update customer outstanding balance
   if (outstandingAmount > 0) {
@@ -289,13 +281,13 @@ export const checkout = async (
         p_batch_id: item.batchId,
         p_units: totalPieces,
       });
-      if (error) console.warn('Batch deduction warning:', error.message);
+      if (error) throw new Error(`Stock deduction failed for ${item.product.name}: ${error.message}`);
     } else {
       const { error } = await supabase.rpc('deduct_stock_fifo', {
         p_product_id: item.product.id,
         p_units: totalPieces,
       });
-      if (error) console.warn('FIFO deduction warning:', error.message);
+      if (error) throw new Error(`Stock deduction failed for ${item.product.name}: ${error.message}`);
     }
   }
 
