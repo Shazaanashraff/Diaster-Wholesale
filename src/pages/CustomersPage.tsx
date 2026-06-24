@@ -25,6 +25,7 @@ export const CustomersPage: React.FC = () => {
     address: '',
     type: 'retail' as 'wholesale' | 'retail',
     credit_limit: 0,
+    cheque_float: 0,
   });
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
@@ -83,6 +84,7 @@ export const CustomersPage: React.FC = () => {
         address: '',
         type: 'retail',
         credit_limit: 0,
+        cheque_float: 0,
       });
       await loadCustomers();
     } finally {
