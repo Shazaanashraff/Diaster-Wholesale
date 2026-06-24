@@ -3,7 +3,7 @@ id: todo-010
 title: Sandbox feature [3/7] — test catalog (Layer 1) + precision-contract test
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -76,5 +76,12 @@ this app (LKR, decimals).
   `src/sandbox/__tests__/test-groups.test.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: group count, TestCases authored per group, the exact failing message from
-     the dummy-file demonstration, commit hash. -->
+12 groups in TEST_GROUPS. TestCases: sales-pos=30 (29 unit + 1 e2e), sandbox=6 (4 integration + 2 unit).
+All other groups have vitestFiles:[] with honest "No automated tests yet" unitDesc.
+
+Dummy-file failure message (exact):
+  Error: These test files are not registered in any TEST_GROUP vitestFiles:
+    • src/sandbox/__tests__/_dummy.test.ts
+  Add them to the correct group in src/sandbox/test-groups.ts.
+
+npm test: 31 passed, 4 skipped (sandbox-isolation skips without SANDBOX_DB_URL). npx tsc --noEmit: clean.
