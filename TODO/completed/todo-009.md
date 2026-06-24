@@ -3,7 +3,7 @@ id: todo-009
 title: Sandbox feature [2/7] — guarded reset script (npm run sandbox:reset), seed, isolation test
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -88,5 +88,14 @@ proof the whole feature is safe — it must be deterministic and skip gracefully
 - **Reference:** root `sandbox-seed.sql`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how reset was run, seed contents summary, isolation test pass/skip + reason,
-     edge cases, commit hash. -->
+Reset script: `scripts/sandbox-reset.mjs` — connects via pg, checks sandbox.app_meta.schema_marker,
+calls sandbox.reset_all(), sets search_path = sandbox, replays seed.sql in one transaction.
+
+Seed: 3 locations, 3 customers (Walk-in Customer included), 1 supplier, 3 products with stock batches,
+1 completed PO, 1 paid invoice with items and payment. All rows use fixed UUIDs.
+
+Isolation test: skips with printed reason if SANDBOX_DB_URL unset (✓ verified — 4 tests skipped in CI).
+When creds are present: snapshots public.products/customers/invoices counts, runs reset+reseed, asserts
+counts unchanged, asserts sandbox marker + seeded product + Walk-in Customer exist.
+
+npm test: 29 passed, 4 skipped. npx tsc --noEmit: clean. Commit: 444a71b.
