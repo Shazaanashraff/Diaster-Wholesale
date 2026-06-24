@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -80,4 +80,15 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+Components: DeveloperPortal.tsx (PortalTab + 'sandbox', dynamic tab array gated on sandboxAvailable),
+SandboxRunnerPanel.tsx (new, ~200 lines).
+
+Status badge: role="status" aria-live="polite"; pulsing dot uses motion-safe:animate-pulse
+(respects prefers-reduced-motion). Pass/fail lines coloured + icon+label (not colour alone).
+Log auto-scroll: isAtBottom ref; user scroll-up releases pin; scroll-down reattaches.
+Reset is behind confirm dialog; cancel button only visible while running.
+Per-module grid: pills hidden when count=0; expanded rows split into Unit/Integration/E2E sections.
+
+Build: `npm run build` ✓ (pre-existing chunk-size warnings, not from our changes).
+npx tsc --noEmit: clean. npm test: 31 pass, 4 skip.
+Manual walkthrough: requires dev Electron — not testable in headless CI.
