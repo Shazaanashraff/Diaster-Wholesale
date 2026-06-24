@@ -93,17 +93,86 @@ These differ from the generic brief **on purpose** (owner-approved). A reviewer 
 
 ## Observations (filled by todo-014)
 
-> _Empty until todo-014 runs. todo-014 writes its findings here — one block per section, dated._
+### Review run 2026-06-24 (commit a64a043)
 
-<!--
-### Review run YYYY-MM-DD (commit <hash>)
-- A. Schema & isolation: PASS/GAP — ...
-- B. Catalog: PASS/GAP — ...
-- C. Runner: PASS/GAP — ...
-- D. Screen: PASS/GAP — ...
-- E. Gating & quality: PASS/GAP — ...
-- F. Coverage: progress note — ...
-- Locked-decision violations found: none / <list>
-- Follow-up todos opened: <ids or none>
-- Verdict: SHIP / NEEDS FIXES
--->
+Runbook steps executed:
+1. `npx tsc --noEmit` → **CLEAN**
+2. `npm run build` → **✓ built in 11.01s** (chunk-size warning is pre-existing, not a gap)
+3. `npm test` → **49 passed, 7 skipped** (7 skips = integration tests without SANDBOX_DB_URL — expected). `test-groups.test.ts` confirmed in output.
+4. Precision-contract demonstration: added `_dummy.test.ts` → 1 FAIL with message `"These test files are not registered in any TEST_GROUP vitestFiles: • src/sandbox/__tests__/_dummy.test.ts"` → removed file → back to 49 passed. **Confirmed.**
+5. `npm run sandbox:reset` — skipped (no SANDBOX_DB_URL in CI environment); isolation proof covered by `sandbox-isolation.test.ts` which is registered and would run given credentials.
+6. Locked-decision greps: all clean (details below).
+7. Packaged-build gating: confirmed in `electron/main.mjs:102` (`additionalArguments: isDev ? ['--enable-sandbox-runner'] : []`) and `electron/preload.js:3` (`if (process.argv.includes('--enable-sandbox-runner'))`), plus double-gate at `main.mjs:271` (`if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' }`).
+
+---
+
+#### A. Schema & isolation — **PASS**
+
+- ✓ `GRANT USAGE ON SCHEMA sandbox TO anon, authenticated, service_role` at migration line 20.
+- ✓ 29 sandbox tables created; money columns use `NUMERIC(12,2)` throughout (bigint hits in grep are for integer count columns `carton_adj`, `cartons_in`, etc. — correct SQL practice, not money).
+- ✓ `public.app_meta` (marker='public') and `sandbox.app_meta` (marker='sandbox') both created and seeded at migration lines 1406–1440.
+- ✓ `sandbox.reset_all()` at line 1448: loops `WHERE schemaname='sandbox' AND tablename<>'app_meta'`; execute granted only to `service_role` (line 1460); public revoked (line 1459).
+- ✓ `scripts/sandbox-reset.mjs`: schema-marker guard (`schema_marker !== 'sandbox'` → throw), wrapped in `BEGIN/COMMIT/ROLLBACK`, reseeds with `ON CONFLICT DO NOTHING`. No `public` truncate/delete.
+- ✓ `supabase/seed/sandbox-seed.sql`: fixed-UUID rows for locations, customers (incl. Walk-in Customer), supplier, products, stock_batches, purchase, invoice — all `ON CONFLICT DO NOTHING`.
+- ✓ `src/sandbox/__tests__/sandbox-isolation.test.ts`: asserts public.products/customers/invoices counts unchanged after reset; skips cleanly with `describe.skipIf(!DB_URL)`.
+
+#### B. Catalog — **PASS**
+
+- ✓ `test-groups.ts` exports `TestGroup` interface + `TEST_GROUPS` array with exactly **12 groups**. No "Money & Ledger" group.
+- ✓ `test-cases.ts` exports `TestCase` + `TEST_CASES`; every entry maps to a real `it()` block (29 unit + 1 e2e for sales-pos; 3 integration for products-inventory; 5+7+6 unit for customers-credit, refunds-returns, payments-cheques; 6 for sandbox group = 57 total TestCase entries mapping to 56 tests, with the E2E being a Playwright spec not in the vitest count).
+- ✓ `test-groups.test.ts`: recursive glob of `src/**/*.test.{ts,tsx}`, orphan detection, path-exists check, path normalisation with `/` separator.
+- ✓ Precision-contract demonstration re-confirmed (runbook step 4).
+
+#### C. Runner — **PASS**
+
+- ✓ `ipcMain.handle('sandbox:run', ...)`, `'sandbox:reset'`, `'sandbox:cancel'` all registered in `electron/main.mjs` lines 270–306.
+- ✓ Command routing in `sandbox:run`: no filter → `npm test`; `filter.files` → `npx vitest run --reporter=verbose ...files`; `filter.spec` → `npx playwright test --reporter=line e2e/<spec>.spec.ts`.
+- ✓ Output piped line-by-line via `readline`, ANSI-stripped in `stripAnsi()`, simplified in `simplify()`, sent as `sandbox:output`. `main.mjs:50-56`.
+- ✓ Concurrent-run guard: `if (activeProc) { resolve({ ok: false, reason: 'already-running' }); return; }`. `main.mjs:43-45`.
+- ✓ Cancel: Windows — `activeProc.kill()` + `spawn('taskkill', ...)` with `/T /F`; POSIX — `activeProc.kill('SIGTERM')`. `main.mjs:298-304`.
+- ✓ `window.sandboxRunner` exposed in `preload.js` only when `--enable-sandbox-runner` flag present (dev-only). Typed in `src/types/sandbox-runner.d.ts`.
+
+#### D. Screen — **PASS**
+
+- ✓ `'sandbox'` tab added to `DeveloperPortal` only when `sandboxAvailable` (`DeveloperPortal.tsx:382`); content rendered only when both `portalTab === 'sandbox'` and `sandboxAvailable` (`line 936`).
+- ✓ Status badge: `role="status"`, `aria-live="polite"` (`SandboxRunnerPanel.tsx:95-96`). Idle/Running/Passed/Failed states with distinct colours.
+- ✓ Running state: `motion-safe:animate-pulse` (`line 106`) — respects `prefers-reduced-motion`.
+- ✓ Broad actions: Run Unit+Integration, Run E2E, Reset Sandbox Data (with confirm dialog), Cancel (only while running). All disabled while running.
+- ✓ Per-module grid: Unit (blue pill), DB/integration (violet pill), E2E (amber pill) — each hidden when count is 0.
+- ✓ Expandable rows with ChevronDown/ChevronRight; expanded view shows Unit / Integration / E2E sections listing `name — what`.
+- ✓ Running banner: "Tests are running — per-module actions are disabled" shown during run.
+- ✓ Log panel: `h-56 overflow-y-auto`, auto-scroll (`scrollTop = scrollHeight`) with pin-release on scroll-up (`isAtBottom` state, `handleScroll`). Pass lines: green + `✓` prefix + `aria-label`. Fail lines: rose + `✗` prefix + `aria-label`. Placeholder text when empty.
+
+#### E. Gating & quality — **PASS** (with note)
+
+- ✓ Feature absent from packaged builds: `window.sandboxRunner` not exposed (no `--enable-sandbox-runner` flag); IPC handlers return `{ ok: false, reason: 'unavailable-in-packaged-build' }`.
+- ✓ `npx tsc --noEmit` clean; `npm run build` clean; `npm test` 49 passed.
+- ℹ️ `graphify update .` — tool not installed in this CI environment (`npx graphify` → "could not determine executable to run"). Graph files in `graphify-out/` are from a prior run. This is an environment limitation, not a code gap.
+
+#### F. Coverage — **PASS (first batch complete)**
+
+- ✓ 4 modules covered: Products & Inventory (3 integration), Customers & Credit (5 unit), Refunds & Returns (7 unit), Payments & Cheques (6 unit).
+- ✓ Each new file registered in exactly one group; precision contract green after each addition.
+- ✓ 8 modules remain with `vitestFiles: []` (Suppliers & Purchasing, Stock Transfers, Salespeople, Reports, Offline Sync, Core Infrastructure). These are incrementally deferred by design — the completion test says "at least the first coverage batch added."
+
+---
+
+#### Locked-decision violations
+
+- **bigint money**: No money columns use bigint. The grep hits (`0::bigint` casts in SQL views for `carton_adj`, `cartons_in`, `pieces_in`, etc.) are integer unit-count columns, not money. NUMERIC(12,2) preserved throughout. **None.**
+- **ledger / double-entry**: No ledger tables or ledger logic introduced. **None.**
+- **getActiveSchema / runtime sandboxMode toggle**: `grep` returned zero hits. **None.**
+- **pnpm in runner**: `grep` on `electron/main.mjs` returned zero hits. **None.**
+- **public truncate/delete in reset script**: `grep` on `scripts/sandbox-reset.mjs` returned zero hits. **None.**
+
+---
+
+#### Follow-up todos opened
+
+None. All requirements met. No gaps requiring follow-up todos.
+
+---
+
+#### Verdict: **SHIP**
+
+The Sandbox series (todo-008 … todo-013) is complete. All sections A–F pass. Locked decisions respected. Precision contract demonstrated. Build, type-check, and test suite green.

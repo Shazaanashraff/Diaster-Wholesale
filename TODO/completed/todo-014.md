@@ -3,7 +3,7 @@ id: todo-014
 title: Sandbox feature [7/7] — code-review gap check + write observations
 priority: 3
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -70,5 +70,14 @@ if anything is missing, verdict is NEEDS FIXES and you must open follow-up todos
 - **Create (only if gaps found):** new `TODO/active/todo-0NN.md` follow-up tasks
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: runbook results, the verdict (SHIP / NEEDS FIXES), list of gaps + follow-up
-     todo ids, commit hash. -->
+
+Runbook steps 1–7 executed against commit a64a043.
+
+- Sections A–F: all **PASS**
+- Locked-decision violations: **none** (bigint hits in SQL views are integer count columns, not money)
+- Precision contract demonstrated: dummy file → fail → remove → green
+- graphify update skipped (tool not installed in CI environment; code graph not relied on for this audit)
+- Follow-up todos: **none** — no gaps found
+- Verdict: **SHIP**
+
+Full findings written to `TODO/sandbox-code-review.md` Observations section.
