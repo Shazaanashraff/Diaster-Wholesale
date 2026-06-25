@@ -13,12 +13,6 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-const updaterAccessToken =
-  process.env.DIASTER_UPDATER_TOKEN ??
-  process.env.GH_TOKEN ??
-  process.env.GITHUB_TOKEN ??
-  null;
-const updaterAllowPublicFeed = process.env.DIASTER_UPDATER_ALLOW_PUBLIC === 'true';
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -83,24 +77,6 @@ async function checkForUpdates(reason = 'manual') {
     return { ok: true };
   } catch (error) {
     const rawMessage = error?.message ?? String(error);
-    const isGitHubFeedAuthError =
-      rawMessage.includes('/releases.atom') && rawMessage.includes('404');
-
-    if (isGitHubFeedAuthError) {
-      updaterDisabledReason =
-        'github-feed-auth-missing: set DIASTER_UPDATER_TOKEN for private GitHub releases';
-      if (updateCheckTimer) {
-        clearInterval(updateCheckTimer);
-        updateCheckTimer = null;
-      }
-      sendUpdaterStatus('error', {
-        message:
-          'Auto-update feed is not accessible. For private GitHub releases, set DIASTER_UPDATER_TOKEN in the app runtime environment.',
-        reason,
-      });
-      return { ok: false, reason: updaterDisabledReason };
-    }
-
     const message = rawMessage;
     sendUpdaterStatus('error', { message, reason });
     return { ok: false, reason: message };
@@ -113,29 +89,15 @@ function configureAutoUpdater() {
     return;
   }
 
-  if (!updaterAccessToken && !updaterAllowPublicFeed) {
-    updaterDisabledReason =
-      'missing-updater-token: set DIASTER_UPDATER_TOKEN (or GH_TOKEN/GITHUB_TOKEN) for private GitHub releases';
-    sendUpdaterStatus('skipped', { reason: updaterDisabledReason });
-    return;
-  }
-
-  if (updaterAccessToken) {
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'Hesara2003',
-      repo: 'Diaster-Wholesale',
-      token: updaterAccessToken,
-      vPrefixedTagName: true,
-    });
-  } else {
-    autoUpdater.setFeedURL({
-      provider: 'github',
-      owner: 'Hesara2003',
-      repo: 'Diaster-Wholesale',
-      vPrefixedTagName: true,
-    });
-  }
+  // Public repo — no token needed. Passing one causes electron-updater to use
+  // releases.atom with auth, which GitHub rejects with 404 if the token is
+  // invalid/expired, permanently disabling the updater.
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner: 'Hesara2003',
+    repo: 'Diaster-Wholesale',
+    vPrefixedTagName: true,
+  });
 
   autoUpdater.logger = log;
   autoUpdater.autoDownload = true;
