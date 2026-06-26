@@ -93,17 +93,22 @@ These differ from the generic brief **on purpose** (owner-approved). A reviewer 
 
 ## Observations (filled by todo-014)
 
-> _Empty until todo-014 runs. todo-014 writes its findings here — one block per section, dated._
+### Review run 2026-06-26 (commit 2000cd2)
 
-<!--
-### Review run YYYY-MM-DD (commit <hash>)
-- A. Schema & isolation: PASS/GAP — ...
-- B. Catalog: PASS/GAP — ...
-- C. Runner: PASS/GAP — ...
-- D. Screen: PASS/GAP — ...
-- E. Gating & quality: PASS/GAP — ...
-- F. Coverage: progress note — ...
-- Locked-decision violations found: none / <list>
-- Follow-up todos opened: <ids or none>
-- Verdict: SHIP / NEEDS FIXES
--->
+- **A. Schema & isolation: PASS** — Migration creates `sandbox` schema with correct grants (`anon`, `authenticated`, `service_role`). All sandbox tables mirror public counterparts with `NUMERIC(12,2)` money. `app_meta` exists in both schemas with correct markers. `sandbox.reset_all()` uses `WHERE schemaname='sandbox' AND tablename != 'app_meta'` — no public tables can be touched. `scripts/sandbox-reset.mjs` is schema-guarded (marker check before any DML, full transaction with rollback), reseeds idempotently from `sandbox-seed.sql` (all inserts use `ON CONFLICT DO NOTHING` or equivalent), and has zero `public` data-clearing paths (confirmed by reading full file). `sandbox-isolation.test.ts` skips cleanly without creds (no DB available in this env — step 5 of runbook SKIPPED but test infrastructure verified correct). `supabase/seed/sandbox-seed.sql` provides 12 fixed-UUID products/batches for POS scenarios.
+
+- **B. Catalog: PASS** — `test-groups.ts` exports `TestGroup` + `TEST_GROUPS` with 12 groups, no "Money & Ledger" entry. `test-cases.ts` exports `TestCase` + `TEST_CASES` with entries mapping to real existing test files. `test-groups.test.ts` globs `src/**/*.test.{ts,tsx}`, normalises separators, and asserts every file is in exactly one group (bidirectional: no orphans, no missing files). Precision-contract demonstration confirmed: adding `src/_dummy.test.ts` causes test to fail with "Unregistered test files: src/_dummy.test.ts"; removing it restores green.
+
+- **C. Runner: PASS** — `main.mjs` registers `ipcMain.handle` for `sandbox:run`, `sandbox:reset`, `sandbox:cancel`; all three return `{ error: 'Not available in production build' }` when `app.isPackaged` (checked at lines 249/264/271). Unit run = `npm test`; per-module = `npx vitest run --reporter=verbose <files>`; E2E = `npx playwright test --reporter=line e2e/<spec>.spec.ts`. Output streamed line-by-line, ANSI-stripped via regex, via `sandbox:output` IPC event. Second concurrent run rejected (guard on `currentProc`). Cancel: Windows path uses `proc.kill()` + `taskkill /pid <pid> /T /F`; POSIX path uses `SIGTERM`. `window.sandboxRunner` typed in `src/types/sandbox-runner.d.ts`.
+
+- **D. Screen: PASS** — `SandboxRunnerPanel` added as `'sandbox'` tab in `DeveloperPortal`; tab rendered only when `typeof window.sandboxRunner !== 'undefined'`. Status badge covers Idle/Running (pulsing dot with `motion-safe:animate-ping`)/Passed/Failed, all with `role="status"` and `aria-live="polite"`. Broad actions: Run Unit+Integration, Run E2E, Reset (destructive confirm dialog with `role="dialog"` / `aria-modal` / `aria-labelledby`); Cancel button visible only during running. Per-module grid iterates `TEST_GROUPS`: Unit(blue)/DB(violet)/E2E(amber) pills hidden when count is 0; per-row "Run Tests" + "Run E2E" (muted "No E2E" when `e2e` is null). Expandable rows via `expandedGroups` Set. Running-state: other run buttons disabled. Log panel: monospace `font-mono`, `h-64 overflow-y-auto`, auto-scroll with pin-release on manual scroll-up, pass/fail distinguished by icon (`CheckCircle`/`XCircle`) not colour alone, "No output yet" placeholder shown.
+
+- **E. Gating & quality: PASS (with note)** — Feature absent from packaged builds: `window.sandboxRunner` not exposed when `app.isPackaged` (preload.js checks `process.argv.includes('--enable-sandbox-runner')` before `contextBridge.exposeInMainWorld`); tab hidden when `window.sandboxRunner` is undefined; all three IPC handlers refuse with an error in packaged builds. `npx tsc --noEmit`: clean (0 errors). `npm run build`: clean (0 errors). `npm test`: 57/57 passed. **Note:** `graphify update .` could not be run — `graphify` CLI is not installed in this environment. No product code was changed by this review task, so graph is consistent with the prior state.
+
+- **F. Coverage: PASS (first batch complete)** — 4 modules now have automated test files registered in the catalog: `products-inventory` (5 integration tests via `pg` client), `customers-credit` (8 unit tests), `refunds-returns` (12 unit tests), `payments-cheques` (7 unit tests). All registered paths resolve; precision contract green. 7 groups still have `vitestFiles: []` (Suppliers, Stock Transfers, Salespeople, Reports, Offline/Sync, Core Infra, and Sales/POS unit vitest entry pre-existed). Incremental — not blocking.
+
+- **Locked-decision violations found:** none — `NUMERIC(12,2)` money columns unchanged; no `bigint` on money paths; no `getActiveSchema`/`sandboxMode` runtime toggle; no `pnpm` in runner; no `public` truncate/delete in reset script; Sandbox is a DeveloperPortal tab (not a route); feature gated to dev builds.
+
+- **Follow-up todos opened:** none — all gaps are informational notes, not defects. The graphify gap is environment-only (no CLI installed); the sandbox:reset step-5 skip is environment-only (no DB creds); both are non-blocking.
+
+- **Verdict: SHIP**
