@@ -18,7 +18,9 @@ import {
   Network,
   Play,
   FileCode,
+  FlaskConical,
 } from 'lucide-react';
+import { SandboxRunnerPanel } from '../components/sandbox/SandboxRunnerPanel';
 import {
   ResponsiveContainer,
   BarChart,
@@ -37,7 +39,7 @@ import { db } from '../services/auditDb';
 import { cn } from '../lib/utils';
 
 type TimeRange = '24h' | '7d' | '30d';
-type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest';
+type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest' | 'sandbox';
 type EgressTab = 'user' | 'device' | 'page' | 'query' | 'meta';
 type QuerySortField = 'calls' | 'bytes' | 'duration';
 
@@ -368,16 +370,17 @@ export const DeveloperPortal: React.FC = () => {
 
       {/* ── PORTAL SUB-NAV TABS ── */}
       <div className="flex items-center gap-1 bg-[#1d222a] border border-[#2b313a] rounded-xl p-1">
-        {(
-          [
-            { id: 'egress', label: 'Egress Bandwidth', icon: Activity },
-            { id: 'offline', label: 'IndexedDB Logs', icon: HardDrive },
-            { id: 'connection', label: 'Database Health', icon: Network },
-            { id: 'storage', label: 'Local Settings', icon: FileCode },
-            { id: 'sysinfo', label: 'System Environment', icon: Cpu },
-            { id: 'loadtest', label: 'Load Generator', icon: Play },
-          ] as const
-        ).map(tab => (
+        {([
+          { id: 'egress' as PortalTab, label: 'Egress Bandwidth', icon: Activity },
+          { id: 'offline' as PortalTab, label: 'IndexedDB Logs', icon: HardDrive },
+          { id: 'connection' as PortalTab, label: 'Database Health', icon: Network },
+          { id: 'storage' as PortalTab, label: 'Local Settings', icon: FileCode },
+          { id: 'sysinfo' as PortalTab, label: 'System Environment', icon: Cpu },
+          { id: 'loadtest' as PortalTab, label: 'Load Generator', icon: Play },
+          ...(typeof (window as any).sandboxRunner !== 'undefined'
+            ? [{ id: 'sandbox' as PortalTab, label: 'Sandbox', icon: FlaskConical }]
+            : []),
+        ]).map(tab => (
           <button
             key={tab.id}
             onClick={() => setPortalTab(tab.id)}
@@ -393,6 +396,9 @@ export const DeveloperPortal: React.FC = () => {
           </button>
         ))}
       </div>
+
+      {/* ── SANDBOX RUNNER TAB ── */}
+      {portalTab === 'sandbox' && <SandboxRunnerPanel />}
 
       {/* ── METRICS EGRESS VIEW ── */}
       {portalTab === 'egress' && (

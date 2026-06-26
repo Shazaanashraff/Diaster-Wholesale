@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -80,4 +80,7 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx` with full feature set: status badge (idle/running/passed/failed) with `role="status"` + `aria-live="polite"`, pulsing dot via `motion-safe:animate-ping`, broad action buttons (Run Unit+Integration, Run E2E, Reset with confirm dialog, Cancel while running), per-module grid with coloured pills (unit=blue, db=violet, e2e=amber) hidden when count is 0, expandable rows listing test cases by type with name+what, running banner while active, auto-scrolling log panel with icon+label line colouring (✓=green CheckCircle, FAIL=red XCircle) and scroll-up releases pin.
+- Modified `src/pages/DeveloperPortal.tsx`: added `FlaskConical` import + `SandboxRunnerPanel` import; added `'sandbox'` to `PortalTab` type; sub-nav array conditionally appends sandbox tab only when `window.sandboxRunner` is defined; sandbox content block renders `<SandboxRunnerPanel/>`.
+- `npx tsc --noEmit` clean; `npm run build` clean; `npm test` 31/31 passed.
+- Manual walkthrough deferred to dev Electron environment (window.sandboxRunner only available in dev build).
