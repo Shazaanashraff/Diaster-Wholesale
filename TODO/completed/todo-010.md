@@ -3,7 +3,7 @@ id: todo-010
 title: Sandbox feature [3/7] — test catalog (Layer 1) + precision-contract test
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -76,5 +76,7 @@ this app (LKR, decimals).
   `src/sandbox/__tests__/test-groups.test.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: group count, TestCases authored per group, the exact failing message from
-     the dummy-file demonstration, commit hash. -->
+- 12 groups in TEST_GROUPS: products-inventory, sales-pos, refunds-returns, payments-cheques, customers-credit, suppliers-purchasing, stock-transfers, salespeople, reports, offline-sync, core-infra, sandbox.
+- TestCases per group: sales-pos=29 (29 unit + 1 e2e), sandbox=6 (4 integration isolation + 2 unit contract). All other groups have 0 cases today.
+- Dummy-file failing message: `Error: Unregistered test files (add to a group in src/sandbox/test-groups.ts):\n  src/sandbox/__tests__/_dummy.test.ts`
+- npm test: 31 passed, 1 skipped; tsc --noEmit: clean.
