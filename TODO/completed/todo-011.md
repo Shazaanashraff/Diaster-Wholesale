@@ -3,7 +3,7 @@ id: todo-011
 title: Sandbox feature [4/7] — live runner IPC (window.sandboxRunner) in Electron main + preload
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -96,5 +96,8 @@ reap it and so a second run can be rejected. Strip ANSI before sending so the UI
 - **Create:** `src/types/sandbox-runner.d.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how dev-gate was implemented, Windows cancel verified, packaged-build
-     undefined verified, commit hash. -->
+- Dev-gate: main.mjs passes `additionalArguments: ['--enable-sandbox-runner']` only when `!app.isPackaged`; preload.js exposes `window.sandboxRunner` only when `process.argv.includes('--enable-sandbox-runner')`. In packaged builds `window.sandboxRunner === undefined`.
+- Windows cancel: `activeProc.kill()` then `spawn('taskkill', ['/pid', pid, '/T', '/F'])` to reap child processes. POSIX: `kill('SIGTERM')`.
+- Output streaming: readline on stdout + stderr, ANSI stripped via regex, `✓`/`FAIL` prefixes normalised, sent via `webContents.send('sandbox:output', line)`.
+- Second-run guard: `if (activeProc) return { ok:false, reason:'already-running' }`.
+- `src/types/sandbox-runner.d.ts` declares `Window.sandboxRunner?: SandboxRunnerApi`. tsc --noEmit: clean. npm test: 31 passed, 1 skipped.

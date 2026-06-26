@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -18,6 +20,72 @@ const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 let mainWindow = null;
 let updateCheckTimer = null;
 let updaterDisabledReason = null;
+
+// ── Sandbox runner state ──────────────────────────────────────────────────────
+/** @type {import('node:child_process').ChildProcess | null} */
+let activeProc = null;
+
+const REPO_ROOT = path.join(__dirname, '..');
+
+/** Strip ANSI escape codes and simplify vitest/playwright output lines. */
+function simplify(line) {
+  const plain = line.replace(/\x1b\[[0-9;]*[mGKHF]/g, '').trimEnd();
+  if (!plain) return null;
+  // vitest: " ✓ some suite > some test" → keep as-is
+  // vitest: " ❯ running..." / " × FAIL" → normalise to FAIL prefix
+  const fail = plain.match(/^\s*(FAIL|×|✗)\s+(.*)/);
+  if (fail) return `FAIL ${fail[2]}`;
+  const pass = plain.match(/^\s*(✓|√)\s+(.*)/);
+  if (pass) return `✓ ${pass[2]}`;
+  return plain;
+}
+
+/**
+ * Spawn a command, stream output to renderer, resolve on close.
+ * @param {string} cmd
+ * @param {string[]} args
+ * @param {Electron.WebContents} webContents
+ * @returns {Promise<{ok:boolean, code:number|null}>}
+ */
+function runCommand(cmd, args, webContents) {
+  if (activeProc) {
+    return Promise.resolve({ ok: false, reason: 'already-running' });
+  }
+
+  return new Promise((resolve) => {
+    activeProc = spawn(cmd, args, { cwd: REPO_ROOT, shell: true });
+
+    function pipeLine(stream) {
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+      rl.on('line', (line) => {
+        const simplified = simplify(line);
+        if (simplified && !webContents.isDestroyed()) {
+          webContents.send('sandbox:output', simplified);
+        }
+      });
+    }
+
+    if (activeProc.stdout) pipeLine(activeProc.stdout);
+    if (activeProc.stderr) pipeLine(activeProc.stderr);
+
+    activeProc.on('close', (code) => {
+      const summary = code === 0 ? '✓ done (exit 0)' : `FAIL (exit ${code})`;
+      if (!webContents.isDestroyed()) {
+        webContents.send('sandbox:output', summary);
+      }
+      activeProc = null;
+      resolve({ ok: code === 0, code });
+    });
+
+    activeProc.on('error', (err) => {
+      if (!webContents.isDestroyed()) {
+        webContents.send('sandbox:output', `FAIL spawn error: ${err.message}`);
+      }
+      activeProc = null;
+      resolve({ ok: false, code: null, reason: err.message });
+    });
+  });
+}
 
 function sendUpdaterStatus(status, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -47,6 +115,8 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Tell the preload to expose window.sandboxRunner — dev builds only.
+      additionalArguments: isDev ? ['--enable-sandbox-runner'] : [],
     },
   });
 
@@ -171,6 +241,48 @@ app.whenReady().then(() => {
 
 ipcMain.handle('updater:check-now', async () => {
   return checkForUpdates('manual');
+});
+
+// ── Sandbox IPC handlers (dev-only) ──────────────────────────────────────────
+
+ipcMain.handle('sandbox:run', async (event, type, filter) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+  const wc = event.sender;
+  if (type === 'e2e') {
+    const spec = `e2e/${filter?.spec ?? 'pos-checkout'}.spec.ts`;
+    return runCommand('npx', ['playwright', 'test', '--reporter=line', spec], wc);
+  }
+  if (filter?.files?.length) {
+    return runCommand('npx', ['vitest', 'run', '--reporter=verbose', ...filter.files], wc);
+  }
+  return runCommand('npm', ['test'], wc);
+});
+
+ipcMain.handle('sandbox:reset', (event) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+  return runCommand('npm', ['run', 'sandbox:reset'], event.sender);
+});
+
+ipcMain.handle('sandbox:cancel', () => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+  if (!activeProc) {
+    return { ok: false, reason: 'no-active-process' };
+  }
+  const pid = activeProc.pid;
+  if (process.platform === 'win32') {
+    activeProc.kill();
+    if (pid) spawn('taskkill', ['/pid', String(pid), '/T', '/F']);
+  } else {
+    activeProc.kill('SIGTERM');
+  }
+  activeProc = null;
+  return { ok: true };
 });
 
 ipcMain.on('updater:install-now', () => {
