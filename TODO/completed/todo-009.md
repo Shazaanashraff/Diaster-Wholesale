@@ -3,7 +3,7 @@ id: todo-009
 title: Sandbox feature [2/7] — guarded reset script (npm run sandbox:reset), seed, isolation test
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -88,5 +88,9 @@ proof the whole feature is safe — it must be deterministic and skip gracefully
 - **Reference:** root `sandbox-seed.sql`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how reset was run, seed contents summary, isolation test pass/skip + reason,
-     edge cases, commit hash. -->
+- `pg@^8.22.0` + `@types/pg@^8.20.0` added as devDependencies (installed with --ignore-scripts to skip electron binary download in CI).
+- `scripts/sandbox-reset.mjs` guards on `sandbox.app_meta.schema_marker = 'sandbox'`, wraps in a transaction, calls `sandbox.reset_all()`, then sets `search_path = sandbox` and replays `supabase/seed/sandbox-seed.sql`.
+- `supabase/seed/sandbox-seed.sql`: 3 suppliers, 2 fixed-UUID locations, 12 products, 7 customers (incl. Walk-in at UUID `c0000000-...`), 2 purchases, 12 stock batches, 3 invoices w/ items + payments, 8 expenses, 2 supplier payments. All INSERTs use `ON CONFLICT (id) DO NOTHING`.
+- `npm run sandbox:reset` requires `SANDBOX_DB_URL` in environment; exits with code 1 and helpful message if unset.
+- `src/sandbox/__tests__/sandbox-isolation.test.ts`: skips with printed reason `SANDBOX_DB_URL not set — skipping live isolation test` when no creds. When live, snapshots public counts, runs reset + seed, asserts public counts unchanged, checks sandbox marker and seeded product/Walk-in.
+- `npm test`: 29 passed, 1 skipped (isolation test — no creds in CI). `npx tsc --noEmit`: clean.
