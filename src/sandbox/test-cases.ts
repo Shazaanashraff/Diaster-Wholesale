@@ -240,6 +240,234 @@ export const TEST_CASES: Record<string, TestCase[]> = {
     },
   ],
 
+  'products-inventory': [
+    {
+      name: 'seed contains 12 products in sandbox schema',
+      what:
+        'After sandbox reset + reseed, exactly 12 products with the fixed b1000000-… UUIDs exist — ' +
+        'confirming the seed script ran completely.',
+      type: 'integration',
+    },
+    {
+      name: 'seed contains 12 stock batches (one per product)',
+      what:
+        'After sandbox reset + reseed, exactly 12 stock_batches rows with the fixed e1000000-… UUIDs ' +
+        'exist — verifying the seed correctly stocked every product.',
+      type: 'integration',
+    },
+    {
+      name: 'Bluetooth Headphones batch has expected carton + loose_pieces count',
+      what:
+        'The seeded batch for "Bluetooth Headphones" has cartons=2 and loose_pieces=4, matching ' +
+        'the seed script — so quantity reads are consistent after reset.',
+      type: 'integration',
+    },
+    {
+      name: 'stock adjustment insert increases aggregate adjustment_pieces',
+      what:
+        'Inserting a positive stock adjustment for a product increases the SUM(adjustment_pieces) ' +
+        'for that product by the inserted amount — the adjustment table is writable from tests.',
+      type: 'integration',
+    },
+    {
+      name: 'negative stock adjustment represents sold / deducted units',
+      what:
+        'Inserting a negative adjustment correctly decreases the running total — confirming that ' +
+        'stock deductions (sales, returns) reduce available inventory through the adjustments table.',
+      type: 'integration',
+    },
+  ],
+
+  'customers-credit': [
+    {
+      name: 'recordPayment — calls record_payment_atomic RPC with correct params for cash',
+      what:
+        'A cash payment calls the record_payment_atomic RPC with p_customer_id, p_invoice_id, ' +
+        'p_amount, p_method="cash", and empty strings for cheque fields.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — passes cheque fields when method is cheque',
+      what:
+        'When method is "cheque", bank_name, cheque_number, and due_date are forwarded to the ' +
+        'RPC so the cheque lifecycle can be tracked from receipt.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — accepts null invoiceId for unallocated credit payments',
+      what:
+        'Passing null as invoiceId records an unallocated credit against the customer ' +
+        'without requiring a specific invoice — useful for advance deposits.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — throws when RPC returns error',
+      what:
+        'When the record_payment_atomic RPC signals an error (e.g. insufficient balance, DB constraint), ' +
+        'the service surfaces it as a thrown error rather than silently failing.',
+      type: 'unit',
+    },
+    {
+      name: 'getCustomerById — returns credit_limit and outstanding_balance',
+      what:
+        'Fetching a customer returns their credit_limit and outstanding_balance — ' +
+        'the two fields that drive credit enforcement at the POS.',
+      type: 'unit',
+    },
+    {
+      name: 'getCustomerById — throws when supabase returns an error',
+      what:
+        'If the customer fetch fails (row not found, permission denied), the error propagates ' +
+        'so the caller can show the right message instead of receiving null data.',
+      type: 'unit',
+    },
+    {
+      name: 'createCustomer — always initialises outstanding_balance to 0',
+      what:
+        'New customers always start with an outstanding_balance of 0, regardless of any balance ' +
+        'in the input — they begin with a clean slate.',
+      type: 'unit',
+    },
+  ],
+
+  'refunds-returns': [
+    {
+      name: 'throws "already been returned" when invoice notes contain [RETURNED]',
+      what:
+        'If the invoice was previously returned (notes include the [RETURNED] tag), the service ' +
+        'blocks a second return rather than creating a duplicate credit.',
+      type: 'unit',
+    },
+    {
+      name: 'throws "no items to return" when invoice_items is empty',
+      what:
+        'An invoice with no line items cannot be returned — the service throws before touching ' +
+        'stock or payments, preventing zero-value return records.',
+      type: 'unit',
+    },
+    {
+      name: 'throws "Invoice not found" when supabase fetch returns error',
+      what:
+        'If the invoice fetch itself fails (not found, network), the service throws immediately ' +
+        'with the underlying DB error message.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts one stock adjustment per line item',
+      what:
+        'For each invoice line item, a positive stock_adjustment is inserted so the returned ' +
+        'goods re-enter inventory — no items are silently skipped.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when stock adjustment insertion fails',
+      what:
+        'A DB error inserting stock adjustments surfaces as a thrown error — the return is blocked ' +
+        'rather than proceeding with mismatched stock levels.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts a negative payment for a paid invoice',
+      what:
+        'When a paid invoice is returned (method ≠ no_refund), a negative payment record is created ' +
+        'so the customer ledger correctly shows the refund.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts a negative payment for a partial invoice',
+      what:
+        'Partial-payment invoices also receive a negative payment on return — ' +
+        'the refunded amount equals the full invoice total regardless of how much was paid.',
+      type: 'unit',
+    },
+    {
+      name: 'skips payment insertion for unpaid invoice with no_refund method',
+      what:
+        'When the invoice was never paid and the return method is no_refund, no payment record ' +
+        'is created — the return is purely a stock restoration.',
+      type: 'unit',
+    },
+    {
+      name: 'skips payment insertion for paid invoice when refund method is no_refund',
+      what:
+        'Even for paid invoices, choosing no_refund suppresses the payment insertion — ' +
+        'useful when goods are exchanged rather than refunded.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when payment insertion fails',
+      what:
+        'A DB error inserting the refund payment surfaces as a thrown error — ' +
+        'the operator is alerted rather than leaving the ledger inconsistent.',
+      type: 'unit',
+    },
+    {
+      name: 'queries and updates customer outstanding_balance for credit_note refund',
+      what:
+        'For credit_note returns, the customer\'s outstanding_balance is reduced by the invoice ' +
+        'total — they accumulate store credit instead of receiving cash.',
+      type: 'unit',
+    },
+    {
+      name: 'updates invoice notes with [RETURNED] tag',
+      what:
+        'The invoice record is stamped with a [RETURNED] tag in its notes, preventing double-returns ' +
+        'and giving the owner an audit trail with the return timestamp.',
+      type: 'unit',
+    },
+  ],
+
+  'payments-cheques': [
+    {
+      name: 'depositCheque — calls update_cheque_status RPC with "processing"',
+      what:
+        'Depositing a cheque transitions it to "processing" via the update_cheque_status RPC, ' +
+        'signalling the cheque has been submitted to the bank.',
+      type: 'unit',
+    },
+    {
+      name: 'depositCheque — throws when RPC rejects the transition',
+      what:
+        'If the RPC signals an invalid transition (e.g. cheque already deposited), ' +
+        'the error propagates so the UI can show the correct message.',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque — calls update_cheque_status RPC with "completed"',
+      what:
+        'Marking a cheque as cleared transitions it to "completed" — the customer\'s debt ' +
+        'for that cheque is formally settled.',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque — throws when RPC rejects the transition',
+      what:
+        'An invalid transition (e.g. cheque was already completed or returned) is surfaced as ' +
+        'an error — no silent state corruption.',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque — calls update_cheque_status RPC with "returned"',
+      what:
+        'Bouncing a cheque transitions it to "returned" — the owner knows to follow up ' +
+        'with the customer for an alternative payment.',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque — throws when RPC rejects the transition',
+      what:
+        'An invalid bounce transition is surfaced as an error rather than silently succeeding.',
+      type: 'unit',
+    },
+    {
+      name: 'three functions send three distinct target statuses',
+      what:
+        'depositCheque, completeCheque, and returnCheque each send a different p_new_status value ' +
+        'to the RPC — "processing", "completed", and "returned" are all distinct and non-overlapping.',
+      type: 'unit',
+    },
+  ],
+
   'sandbox': [
     {
       name: 'sandbox isolation — reset_all() leaves public schema row counts unchanged',

@@ -3,7 +3,7 @@ id: todo-013
 title: Sandbox feature [6/7] — grow test coverage (initial integration + E2E batch)
 priority: 3
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -63,5 +63,9 @@ Keep descriptions honest: one catalog `TestCase` per real `it()`. Reset the sand
 - **Modify:** `src/sandbox/test-groups.ts`, `src/sandbox/test-cases.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: which modules were covered this pass, test counts, any deferred to a later
-     pass, commit hash. -->
+Modules covered this pass: Products & Inventory (integration), Customers & Credit (unit), Refunds & Returns (unit), Payments & Cheques (unit).
+- `src/sandbox/__tests__/products-inventory.test.ts` (5 integration tests, skip without DB creds): seed counts, stock batch counts, batch carton/loose_pieces values, positive and negative adjustment aggregation.
+- `src/services/__tests__/customerService.test.ts` (7 unit tests): recordPayment RPC args (cash, cheque, null invoiceId), throws on RPC error, getCustomerById happy path and error, createCustomer sets outstanding_balance=0.
+- `src/services/__tests__/returnsService.test.ts` (12 unit tests): already-returned guard, no-items guard, fetch-error guard, stock adjustment insertion, payment insertion (paid/partial), no_refund bypass, credit_note balance update, invoice note tagging, stock adjustment failure propagation, payment failure propagation.
+- `src/services/__tests__/chequeLifecycle.test.ts` (7 unit tests): depositCheque→"processing", completeCheque→"completed", returnCheque→"returned", each throws on RPC error, distinct status contract.
+- TEST_GROUPS and TEST_CASES updated for all 4 groups. Precision contract stays green. `npx tsc --noEmit` clean. `npm test` 57/57 passed (2 skipped = integration tests without DB creds).

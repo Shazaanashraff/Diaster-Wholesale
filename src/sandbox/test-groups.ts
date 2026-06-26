@@ -19,9 +19,11 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      'Sandbox integration: seeded products and stock batches exist after reset; ' +
+      'stock adjustments (positive and negative) correctly update aggregate piece counts.',
     e2eDesc: null,
   },
   {
@@ -38,25 +40,34 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'refunds-returns',
     label: 'Refunds & Returns',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/returnsService.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      'processInvoiceReturn guard clauses (already-returned, no-items, fetch-error), ' +
+      'stock adjustment insertion per line item, negative payment creation for paid/partial invoices, ' +
+      'credit-note balance deduction, no_refund bypass, and invoice note tagging.',
     e2eDesc: null,
   },
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/chequeLifecycle.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      'Cheque lifecycle via update_cheque_status RPC: depositCheque → "processing", ' +
+      'completeCheque → "completed", returnCheque → "returned"; each throws on RPC error; ' +
+      'all three send distinct target statuses.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/customerService.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      'recordPayment calls record_payment_atomic RPC with correct params (cash, cheque, null invoiceId); ' +
+      'throws on RPC error; getCustomerById returns credit_limit and outstanding_balance; ' +
+      'createCustomer always initialises outstanding_balance to 0.',
     e2eDesc: null,
   },
   {
