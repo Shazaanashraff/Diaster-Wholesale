@@ -7,8 +7,10 @@ import { getCurrentRole } from '../../utils/permissions';
 import { cn } from '../../lib/utils';
 import {
   TrendingUp, TrendingDown, Wallet, CreditCard, Smartphone,
-  Building2, RefreshCw, DollarSign, PlusCircle,
+  Building2, RefreshCw, DollarSign, PlusCircle, Calculator,
 } from 'lucide-react';
+
+const OPENING_BALANCE_KEY = 'dw_day_opening_balance';
 
 const fmt = (n: number) =>
   'LKR ' + Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -66,6 +68,23 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [otherInc, setOtherInc] = useState<OtherIncRow[]>([]);
 
+  const [openingBalance, setOpeningBalance] = useState<number>(() => {
+    const stored = localStorage.getItem(OPENING_BALANCE_KEY);
+    return stored ? Number(stored) : 15000;
+  });
+  const [openingInput, setOpeningInput] = useState<string>(() => {
+    const stored = localStorage.getItem(OPENING_BALANCE_KEY);
+    return stored ?? '15000';
+  });
+
+  const handleOpeningBlur = () => {
+    const val = parseFloat(openingInput);
+    const safe = isNaN(val) || val < 0 ? 0 : val;
+    setOpeningBalance(safe);
+    setOpeningInput(String(safe));
+    localStorage.setItem(OPENING_BALANCE_KEY, String(safe));
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
@@ -99,6 +118,13 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const totalIncome    = totalSales - totalReturns + totalOtherInc;
   const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const netBalance     = totalIncome - totalExpenses;
+
+  // Cash reconciliation (cash-method only)
+  const salesCash    = salesByMethod.get('cash') ?? 0;
+  const cashOtherInc = otherInc.filter(r => r.method === 'cash').reduce((s, r) => s + Number(r.amount), 0);
+  const cashExpenses = expenses.filter(e => e.method === 'cash').reduce((s, e) => s + Number(e.amount), 0);
+  const finalCash    = openingBalance + salesCash + cashOtherInc - cashExpenses;
+  const resultVsOpening = finalCash - openingBalance;
 
   // Group expenses by category
   const expByCat = new Map<string, number>();
@@ -278,6 +304,82 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
         <span className={cn('text-2xl font-bold font-mono', netBalance >= 0 ? 'text-emerald-400' : 'text-red-400')}>
           {netBalance >= 0 ? '+' : '-'}{fmt(netBalance)}
         </span>
+      </div>
+
+      {/* Cash Reconciliation */}
+      <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-[#2b313a] flex items-center gap-2">
+          <Calculator size={14} className="text-amber-400" />
+          <h3 className="text-sm font-bold text-white">Cash Reconciliation</h3>
+        </div>
+
+        {/* Opening balance input */}
+        <div className="px-6 py-4 border-b border-[#2b313a] flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opening Balance (Petty Cash)</p>
+            <p className="text-[10px] text-gray-600 mt-0.5">Starting cash in drawer</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 font-mono">LKR</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={openingInput}
+              onChange={e => setOpeningInput(e.target.value)}
+              onBlur={handleOpeningBlur}
+              className="w-36 bg-[#1d222a] border border-[#2b313a] text-amber-400 font-mono font-bold text-sm rounded-xl px-3 py-2 text-right focus:outline-none focus:border-amber-500/40"
+            />
+          </div>
+        </div>
+
+        {/* Formula rows */}
+        <div className="px-6 py-4 space-y-2">
+          {[
+            { label: 'Opening Balance',  value: openingBalance,  color: 'text-amber-400',   sign: '' },
+            { label: 'Sales Cash',        value: salesCash,       color: 'text-green-400',   sign: '+' },
+            { label: 'Other Income (Cash)', value: cashOtherInc,  color: 'text-sky-400',     sign: '+' },
+            { label: 'Expenses (Cash)',   value: cashExpenses,    color: 'text-red-400',     sign: '−' },
+          ].map(row => (
+            <div key={row.label} className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">{row.label}</span>
+              <div className="flex items-center gap-2">
+                {row.sign && <span className="text-xs text-gray-600 font-mono w-3 text-center">{row.sign}</span>}
+                <span className={cn('text-xs font-bold font-mono', row.color)}>{fmt(row.value)}</span>
+              </div>
+            </div>
+          ))}
+
+          <div className="border-t border-[#2b313a] pt-3 mt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-white">Final Cash</span>
+              <span className={cn('text-sm font-bold font-mono', finalCash >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                {fmt(finalCash)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-gray-400">Result vs Opening</span>
+                <span className="text-[10px] text-gray-600 ml-2">(Final Cash − Opening)</span>
+              </div>
+              <span className={cn('text-xs font-bold font-mono', resultVsOpening === 0 ? 'text-gray-400' : resultVsOpening > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                {resultVsOpening > 0 ? '+' : ''}{fmt(resultVsOpening)}
+                {resultVsOpening < 0 ? ' (shortage)' : resultVsOpening > 0 ? ' (surplus)' : ' (balanced)'}
+              </span>
+            </div>
+          </div>
+
+          {/* Formula string */}
+          <div className="mt-3 p-3 bg-[#1d222a] border border-[#2b313a] rounded-xl">
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Formula Check</p>
+            <p className="text-[10px] text-gray-500 font-mono">
+              Final Cash = Opening + Sales Cash + Other Income − Expenses
+            </p>
+            <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+              {fmt(openingBalance)} + {fmt(salesCash)} + {fmt(cashOtherInc)} − {fmt(cashExpenses)} = <span className={cn('font-bold', finalCash >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmt(finalCash)}</span>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

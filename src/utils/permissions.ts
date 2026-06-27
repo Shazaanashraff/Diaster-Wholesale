@@ -35,12 +35,11 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'view_dev_portal',
   ],
   accountant: [
-    'manage_products', 'manage_procurement', 'manage_suppliers',
+    'manage_procurement', 'manage_suppliers',
     'manage_costs', 'manage_payments', 'view_reports', 'manage_salespeople', 'pos',
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
-    'manage_inventory', 'manage_returns', 'view_sales_report',
-    'create_transfers', 'receive_transfers',
+    'view_sales_report',
   ],
   officer: [
     'manage_products', 'manage_procurement', 'manage_suppliers',
@@ -68,7 +67,7 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
   admin:        'Full system access & overrides',
-  accountant:   'Full access — same as Admin',
+  accountant:   'Finance & reporting — no products, returns, or stock transfers',
   officer:      'Procurement & product management',
   pos_operator: 'Sales & customer service',
   warehouse:    'Inventory & stock management',

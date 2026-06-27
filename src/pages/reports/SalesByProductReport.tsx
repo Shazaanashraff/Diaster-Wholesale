@@ -17,7 +17,7 @@ export const SalesByProductReport: React.FC = () => {
       
       let query = supabase
         .from('invoice_items')
-        .select('product_id, total, cartons, pieces, products(name, pieces_per_carton)');
+        .select('product_id, total, cartons, pieces, products(name, pieces_per_carton, cost_price)');
 
       if (from) query = query.gte('created_at', from);
       if (to) query = query.lte('created_at', to);
@@ -27,23 +27,36 @@ export const SalesByProductReport: React.FC = () => {
       const map: Record<string, any> = {};
       (items || []).forEach(item => {
         const id = item.product_id;
-        const ppc = (item.products as any)?.pieces_per_carton || 1;
+        const prod = item.products as any;
+        const ppc = prod?.pieces_per_carton || 1;
         const totalPieces = item.cartons * ppc + item.pieces;
-        
+        const unitCost = prod?.cost_price || 0;
+
         if (!map[id]) {
-          map[id] = { name: (item.products as any)?.name || 'Unknown', totalSold: 0, revenue: 0 };
+          map[id] = { name: prod?.name || 'Unknown', totalSold: 0, revenue: 0, totalCost: 0 };
         }
         map[id].totalSold += totalPieces;
         map[id].revenue += Number(item.total);
+        map[id].totalCost += unitCost * totalPieces;
       });
 
-      setData(Object.values(map).sort((a, b) => b.revenue - a.revenue));
+      const rows = Object.values(map).map((r: any) => ({
+        ...r,
+        profit: r.revenue - r.totalCost,
+        profitMargin: r.revenue > 0 ? ((r.revenue - r.totalCost) / r.revenue) * 100 : 0,
+      }));
+
+      setData(rows.sort((a, b) => b.revenue - a.revenue));
     }
     load();
   }, [period, customFrom, customTo]);
 
-  const headers = ['Product', 'Total Pieces Sold', 'Total Revenue'];
-  const rows = data.map(r => [r.name, r.totalSold, fmtCurrency(r.revenue)]);
+  const headers = ['Product', 'Total Pieces Sold', 'Total Revenue', 'Total Cost of Goods', 'Total Profit', 'Profit Margin %'];
+  const rows = data.map(r => [
+    r.name, r.totalSold, fmtCurrency(r.revenue),
+    fmtCurrency(r.totalCost), fmtCurrency(r.profit),
+    `${r.profitMargin.toFixed(1)}%`
+  ]);
 
   return (
     <div className="space-y-6">
@@ -59,7 +72,18 @@ export const SalesByProductReport: React.FC = () => {
         columns={[
           { header: 'Product Name', accessor: 'name' },
           { header: 'Total Pieces Sold', accessor: 'totalSold', className: 'text-center' },
-          { header: 'Total Revenue', accessor: (r) => fmtCurrency(r.revenue), className: 'text-right font-mono text-white' }
+          { header: 'Total Revenue', accessor: (r) => fmtCurrency(r.revenue), className: 'text-right font-mono text-white' },
+          { header: 'Total Cost of Goods', accessor: (r) => fmtCurrency(r.totalCost), className: 'text-right font-mono' },
+          { header: 'Total Profit', accessor: (r) => (
+            <span className={r.profit >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+              {fmtCurrency(r.profit)}
+            </span>
+          ), className: 'text-right' },
+          { header: 'Profit Margin %', accessor: (r) => (
+            <span className={r.profitMargin >= 0 ? 'text-green-400' : 'text-red-400'}>
+              {r.profitMargin.toFixed(1)}%
+            </span>
+          ), className: 'text-right' },
         ]}
         data={data}
         emptyMessage="No product sales found for this period."
