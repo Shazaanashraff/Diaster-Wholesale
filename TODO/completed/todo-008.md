@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -97,5 +97,18 @@ so it is structurally impossible for it to touch `public`.
 - **Reference (do not delete):** root `sandbox-setup.sql`, `sandbox-patch.sql` — source of the DDL.
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
-     marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+
+**Migration applied:** `mcp__Supabase__apply_migration` → project `bqbmveiiyozsmnjvqucm`, name `sandbox_schema_and_meta`. Migration has been applied 5× (confirmed via `list_migrations`) — all idempotent `IF NOT EXISTS` / `CREATE OR REPLACE` / `ON CONFLICT` guards held.
+
+**Sandbox tables:** 31 total — 26 base (from `sandbox-setup.sql`) + salespeople, loyalty_transactions, sales_returns, sales_return_items (from `sandbox-patch.sql`) + app_meta.
+
+**Marker query outputs:**
+- `SELECT schema_marker FROM sandbox.app_meta` → `sandbox`
+- `SELECT schema_marker FROM public.app_meta` → `public`
+
+**reset_all() verification:**
+- `prosecdef = true` (SECURITY DEFINER confirmed)
+- Grantees: `postgres` (superuser, cannot be revoked), `service_role` only — `anon`/`authenticated` explicitly revoked
+- After `SELECT sandbox.reset_all()`: sandbox.customers = 0, sandbox.products = 0, sandbox.app_meta = 1 (preserved), public.customers = 503 (untouched)
+
+**Grant fix applied:** `ALTER DEFAULT PRIVILEGES … GRANT ALL ON FUNCTIONS` initially included `anon`/`authenticated`. Added `REVOKE EXECUTE ON FUNCTION sandbox.reset_all() FROM anon, authenticated` in migration and applied live.
