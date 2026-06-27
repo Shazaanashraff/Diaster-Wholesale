@@ -18,12 +18,21 @@ type ChangelogEntry = {
 const CHANGELOG: ChangelogEntry[] = [
   {
     version: currentVersion,
-    date: 'May 2026',
+    date: 'Jun 2026',
     tag: 'latest',
     highlights: [
-      { icon: Shield,     text: 'Resolved updater bridge race condition for reliable startup' },
-      { icon: Star,       text: 'Dashboard update strip now shows live download progress and restart action' },
-      { icon: Download,   text: 'Updates page now shows top status strip with download percentage' },
+      { icon: Shield,     text: 'Fixed update checker stuck on "Checking…" forever after startup' },
+      { icon: Zap,        text: 'Eliminated concurrent update-check race that caused main process to drop completion events' },
+      { icon: Shield,     text: 'Added 30-second safety timeout so UI always recovers if the check hangs' },
+    ],
+  },
+  {
+    version: '0.1.58',
+    date: 'May 2026',
+    highlights: [
+      { icon: BarChart2,  text: 'Sales-by-product report with cost and profit breakdown' },
+      { icon: Users,      text: 'Cash reconciliation workflow' },
+      { icon: Shield,     text: 'Accountant role restrictions enforced across all modules' },
     ],
   },
   {

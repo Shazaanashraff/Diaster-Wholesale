@@ -18,12 +18,15 @@ const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 let mainWindow = null;
 let updateCheckTimer = null;
 let updaterDisabledReason = null;
+let isCheckingForUpdate = false;
+let lastSentStatus = null;
 
 function sendUpdaterStatus(status, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
 
+  lastSentStatus = { status, ...data };
   mainWindow.webContents.send('updater:status', { status, ...data });
 }
 
@@ -72,6 +75,19 @@ async function checkForUpdates(reason = 'manual') {
     return { ok: false, reason: updaterDisabledReason };
   }
 
+  // If a check or download is already in progress, resync the renderer with the
+  // current state instead of starting a second concurrent call — electron-updater
+  // fires `checking-for-update` for the second call but never fires a completion
+  // event, leaving the UI stuck on "checking" forever.
+  if (isCheckingForUpdate) {
+    log.info(`[updater] checkForUpdates('${reason}') skipped — check already in progress`);
+    if (lastSentStatus) {
+      sendUpdaterStatus(lastSentStatus.status, lastSentStatus);
+    }
+    return { ok: false, reason: 'check-in-progress' };
+  }
+
+  isCheckingForUpdate = true;
   try {
     await autoUpdater.checkForUpdates();
     return { ok: true };
@@ -80,6 +96,8 @@ async function checkForUpdates(reason = 'manual') {
     const message = rawMessage;
     sendUpdaterStatus('error', { message, reason });
     return { ok: false, reason: message };
+  } finally {
+    isCheckingForUpdate = false;
   }
 }
 
@@ -150,8 +168,10 @@ function configureAutoUpdater() {
     sendUpdaterStatus('error', { message: error?.message ?? String(error) });
   });
 
-  checkForUpdates('startup');
-
+  // The renderer auto-triggers a check at startup (after it subscribes to events),
+  // so we do NOT call checkForUpdates here — doing so caused a race where the main
+  // process fired events before the renderer was subscribed, then the renderer's
+  // auto-check ran concurrently and got stuck in the 'checking' state forever.
   updateCheckTimer = setInterval(() => {
     checkForUpdates('interval');
   }, UPDATE_CHECK_INTERVAL_MS);

@@ -43,6 +43,7 @@ const INITIAL_STATE: UpdaterState = {
 let storeState: UpdaterState = INITIAL_STATE;
 const subscribers = new Set<(state: UpdaterState) => void>();
 let isSubscribed = false;
+let checkTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const getUpdater = (): UpdaterApi | null => {
   if (typeof window === 'undefined') return null;
@@ -72,6 +73,12 @@ const updateStore = (next: Partial<UpdaterState>) => {
 };
 
 const applyPayload = (payload: UpdaterPayload) => {
+  // Any incoming status clears the stuck-check safety timeout
+  if (checkTimeoutId !== null) {
+    clearTimeout(checkTimeoutId);
+    checkTimeoutId = null;
+  }
+
   const next: Partial<UpdaterState> = {
     status: payload.status,
   };
@@ -196,6 +203,19 @@ export const useUpdater = () => {
       message: null,
     });
     updater.checkNow();
+
+    // Safety net: if the main process never sends a completion event, unblock the UI
+    if (checkTimeoutId !== null) clearTimeout(checkTimeoutId);
+    checkTimeoutId = setTimeout(() => {
+      checkTimeoutId = null;
+      if (storeState.status === 'checking') {
+        updateStore({
+          status: 'error',
+          message: 'Update check timed out. Please try again.',
+          lastCheckedAt: Date.now(),
+        });
+      }
+    }, 30_000);
   }, []);
 
   const installNow = useCallback(() => {
