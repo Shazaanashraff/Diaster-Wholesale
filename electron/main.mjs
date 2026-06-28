@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -9,6 +11,7 @@ const { autoUpdater } = electronUpdater;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, '..');
 
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -16,6 +19,8 @@ const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
+/** @type {import('node:child_process').ChildProcess | null} */
+let activeProc = null;
 let updateCheckTimer = null;
 let updaterDisabledReason = null;
 let isCheckingForUpdate = false;
@@ -50,6 +55,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: isDev ? ['--enable-sandbox-runner'] : [],
     },
   });
 
@@ -176,6 +182,92 @@ function configureAutoUpdater() {
     checkForUpdates('interval');
   }, UPDATE_CHECK_INTERVAL_MS);
 }
+
+// ── Sandbox runner helpers (dev-only) ────────────────────────────────────────
+
+function stripAnsi(line) {
+  return line.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function simplify(line) {
+  const s = stripAnsi(line).trim();
+  if (!s) return null;
+  if (/[✓✔√]/.test(s)) {
+    const m = s.match(/[✓✔√]\s+(.+)/);
+    return m ? `✓ ${m[1]}` : `✓ ${s}`;
+  }
+  if (/[✗×✕]|^\s*FAIL\b/.test(s)) {
+    const m = s.match(/(?:FAIL|[✗×✕])\s+(.+)/);
+    return m ? `FAIL ${m[1]}` : `FAIL ${s}`;
+  }
+  return s;
+}
+
+function runSandboxCommand(cmd, args, webContents) {
+  if (activeProc) {
+    return Promise.resolve({ ok: false, reason: 'already-running' });
+  }
+  return new Promise((resolve) => {
+    activeProc = spawn(cmd, args, { cwd: repoRoot, shell: true });
+
+    const sendLine = (line) => {
+      const out = simplify(line);
+      if (out && !webContents.isDestroyed()) {
+        webContents.send('sandbox:output', out);
+      }
+    };
+
+    readline.createInterface({ input: activeProc.stdout }).on('line', sendLine);
+    readline.createInterface({ input: activeProc.stderr }).on('line', sendLine);
+
+    activeProc.on('close', (code) => {
+      if (!webContents.isDestroyed()) {
+        webContents.send('sandbox:output', code === 0 ? '✓ done' : `FAIL exit code ${code}`);
+      }
+      activeProc = null;
+      resolve({ ok: true, code });
+    });
+  });
+}
+
+ipcMain.handle('sandbox:run', async (event, type, filter) => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  if (type === 'unit' && filter?.files?.length) {
+    return runSandboxCommand('npx', ['vitest', 'run', '--reporter=verbose', ...filter.files], event.sender);
+  }
+  if (type === 'unit') {
+    return runSandboxCommand('npm', ['test'], event.sender);
+  }
+  if (type === 'e2e' && filter?.spec) {
+    return runSandboxCommand(
+      'npx',
+      ['playwright', 'test', '--reporter=line', `e2e/${filter.spec}.spec.ts`],
+      event.sender,
+    );
+  }
+  return { ok: false, reason: 'unknown-type' };
+});
+
+ipcMain.handle('sandbox:reset', async (event) => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  return runSandboxCommand('npm', ['run', 'sandbox:reset'], event.sender);
+});
+
+ipcMain.handle('sandbox:cancel', async () => {
+  if (app.isPackaged) return { ok: false, reason: 'unavailable-in-packaged-build' };
+  if (!activeProc) return { ok: false, reason: 'no-active-process' };
+  const pid = activeProc.pid;
+  if (process.platform === 'win32') {
+    activeProc.kill();
+    spawn('taskkill', ['/pid', String(pid), '/T', '/F']);
+  } else {
+    activeProc.kill('SIGTERM');
+  }
+  activeProc = null;
+  return { ok: true };
+});
+
+// ── End sandbox runner ───────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.diaster.wholesale');

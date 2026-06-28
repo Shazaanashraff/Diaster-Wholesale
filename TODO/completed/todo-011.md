@@ -3,7 +3,7 @@ id: todo-011
 title: Sandbox feature [4/7] — live runner IPC (window.sandboxRunner) in Electron main + preload
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -96,5 +96,24 @@ reap it and so a second run can be rejected. Strip ANSI before sending so the UI
 - **Create:** `src/types/sandbox-runner.d.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how dev-gate was implemented, Windows cancel verified, packaged-build
-     undefined verified, commit hash. -->
+
+Dev-gate: `createMainWindow()` passes `additionalArguments: ['--enable-sandbox-runner']` to
+webPreferences only when `isDev` (`!app.isPackaged`). `preload.js` checks
+`process.argv.includes('--enable-sandbox-runner')` before calling
+`contextBridge.exposeInMainWorld('sandboxRunner', ...)` — so in any packaged build the argument is
+absent and `window.sandboxRunner` is `undefined`.
+
+All three IPC handlers (`sandbox:run`, `sandbox:reset`, `sandbox:cancel`) return
+`{ ok:false, reason:'unavailable-in-packaged-build' }` if `app.isPackaged`, as a second line of
+defence in case the argument gate is somehow bypassed.
+
+Windows cancel: `activeProc.kill()` followed by `spawn('taskkill', ['/pid', pid, '/T', '/F'])` to
+reap orphaned npm/vitest/playwright children. POSIX: `activeProc.kill('SIGTERM')`.
+
+Output streaming: `readline.createInterface` on both stdout and stderr; each line runs through
+`simplify()` (ANSI stripped, vitest ✓/FAIL markers normalised) before being sent via
+`webContents.send('sandbox:output', line)`.
+
+A concurrent run returns `{ ok:false, reason:'already-running' }` immediately.
+
+`npx tsc --noEmit` clean. Tests: 31 passed | 1 skipped.
