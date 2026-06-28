@@ -93,17 +93,51 @@ These differ from the generic brief **on purpose** (owner-approved). A reviewer 
 
 ## Observations (filled by todo-014)
 
-> _Empty until todo-014 runs. todo-014 writes its findings here — one block per section, dated._
+### Review run 2026-06-28 (commit efab50e, audited range 938dd34…efab50e)
 
-<!--
-### Review run YYYY-MM-DD (commit <hash>)
-- A. Schema & isolation: PASS/GAP — ...
-- B. Catalog: PASS/GAP — ...
-- C. Runner: PASS/GAP — ...
-- D. Screen: PASS/GAP — ...
-- E. Gating & quality: PASS/GAP — ...
-- F. Coverage: progress note — ...
-- Locked-decision violations found: none / <list>
-- Follow-up todos opened: <ids or none>
-- Verdict: SHIP / NEEDS FIXES
--->
+**A. Schema & isolation — PASS**
+- Migration `20260626000000_sandbox_schema_and_meta.sql` creates `schema sandbox`, grants USAGE to `anon, authenticated, service_role`, and mirrors all public tables with `NUMERIC(12,2)` money columns.
+- `app_meta(schema_marker, app_version)` exists in both schemas; `sandbox.app_meta.schema_marker = 'sandbox'` is asserted by `scripts/sandbox-reset.mjs:16`.
+- `sandbox.reset_all()` (migration line 1441) truncates only `WHERE schemaname = 'sandbox' AND tablename <> 'app_meta'` — no public schema touch possible. Execute granted to `service_role` only (REVOKE ALL FROM PUBLIC first).
+- `scripts/sandbox-reset.mjs` opens a transaction, checks `schema_marker = 'sandbox'` before calling `reset_all()`, then re-seeds. No `public` truncate/delete path exists in the script.
+- `sandbox-isolation.test.ts` skips cleanly when `SANDBOX_DB_URL` is absent; when present, asserts public row counts are unchanged after reset.
+- _Bigint note:_ Migrations use `bigint` for internal count variables (`carton_adj`, `v_count`) — these are unit counts, not money columns. All money columns remain `NUMERIC(12,2)`. Not a violation.
+
+**B. Catalog — PASS**
+- `test-groups.ts` exports `TestGroup` + `TEST_GROUPS` with 12 feature groups; no "Money & Ledger" group present.
+- `test-cases.ts` exports `TestCase` + `TEST_CASES`; all entries map to real `it()` calls verified in the test files created this session.
+- `test-groups.test.ts` asserts every `src/**/*.test.{ts,tsx}` is in exactly one group and every listed path resolves on disk.
+- Precision-contract demonstration (runbook step 4): adding `src/dummy-unregistered.test.ts` caused `test-groups.test.ts` to fail with "expected 1 to have length 0"; removing it restored 67 passed / 0 failed.
+
+**C. Runner — PASS**
+- `main.mjs` registers `sandbox:run`, `sandbox:reset`, `sandbox:cancel`; all return `{ ok: false, reason: 'unavailable-in-packaged-build' }` when `app.isPackaged` (lines 234, 252, 257).
+- `sandbox:run` dispatches: full `npm test`, per-module `npx vitest run --reporter=verbose <files>`, E2E `npx playwright test --reporter=line e2e/<spec>.spec.ts` — no `pnpm` anywhere.
+- Concurrent run rejected: `if (activeProc) return { ok: false, reason: 'already-running' }` (line 207–208).
+- Cancel (lines 258–266): Windows `proc.kill()` + `taskkill /pid <pid> /T /F`; POSIX `SIGTERM`.
+- Output streamed line-by-line via `webContents.send('sandbox:output', out)` after ANSI-stripping and simplification.
+- `window.sandboxRunner` exposed in `preload.js` only when `process.argv.includes('--enable-sandbox-runner')`; that arg is only added in `main.mjs` line 58 when `isDev = !app.isPackaged`.
+
+**D. Screen — PASS**
+- `DeveloperPortal.tsx` renders the `sandbox` tab button only when `typeof (window as any).sandboxRunner !== 'undefined'` — hidden in all non-dev builds.
+- `SandboxRunnerPanel.tsx` implements: status badge (`role="status"`, `aria-live="polite"`, `motion-safe:animate-pulse` dot); Run Unit+Integration, Run E2E, Reset (confirm dialog), Cancel (visible only while running).
+- Per-module grid from `TEST_GROUPS` with Unit(blue)/DB(violet)/E2E(amber) pills hidden at 0; expand/collapse rows listing name + what grouped by type.
+- Log panel: `h-52` fixed height, auto-scroll, "Scroll to latest" re-pin button on scroll-up; pass/fail by icon (CheckCircle/XCircle) + colour, not colour alone; "No output yet" placeholder.
+- Uses existing dark-theme design tokens; `motion-safe:` prefix honours `prefers-reduced-motion`.
+
+**E. Gating & quality — PASS**
+- `npx tsc --noEmit`: clean (no output).
+- `npm run build`: succeeds (2932 modules, only pre-existing warnings about chunk size and CSS lint).
+- `npm test`: 67 passed, 4 skipped sandbox integration (SANDBOX_DB_URL not set in this env), 0 failed.
+- Locked-decision grep results: no `getActiveSchema`/runtime toggle; no `pnpm` in runner; no `public` truncate/delete in reset script. `bigint` hits are unit-count locals in migrations, not money columns — not a violation.
+- `graphify update .`: graphify is not installed in this environment (not a project dependency); skipped.
+
+**F. Coverage — PASS (incremental)**
+- First coverage batch complete: `inventory.test.ts` (11 unit + 2 sandbox integration), `customers.test.ts` (11 unit + 2 sandbox integration), `payments.test.ts` (8 unit + 1 sandbox integration), `returns.test.ts` (6 unit) — 36 new unit tests registered in 4 groups.
+- Precision contract green with all 4 files registered.
+- Remaining groups (suppliers-purchasing, stock-transfers, salespeople, reports, offline-sync, core-infra) have placeholder descriptions — acceptable per the incremental design of todo-013.
+
+**Locked-decision violations found:** none
+
+**Follow-up todos opened:** none — no gaps identified
+
+**Verdict: SHIP**

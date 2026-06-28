@@ -3,7 +3,7 @@ id: todo-014
 title: Sandbox feature [7/7] — code-review gap check + write observations
 priority: 3
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -70,5 +70,13 @@ if anything is missing, verdict is NEEDS FIXES and you must open follow-up todos
 - **Create (only if gaps found):** new `TODO/active/todo-0NN.md` follow-up tasks
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: runbook results, the verdict (SHIP / NEEDS FIXES), list of gaps + follow-up
-     todo ids, commit hash. -->
+
+Review run 2026-06-28 (commit efab50e). All 7 runbook steps executed:
+- `npx tsc --noEmit` clean; `npm run build` succeeds; `npm test` 67 passed / 0 failed.
+- Precision-contract demo: dummy file → test fails; removed → green again.
+- `sandbox:reset` skipped (no SANDBOX_DB_URL); sandbox-isolation.test.ts confirmed skip-clean behaviour.
+- Locked-decision greps: no violations (bigint hits are unit-count locals, not money columns).
+- Packaged-build gating confirmed: `--enable-sandbox-runner` arg only passed when `!app.isPackaged`; IPC handlers also refuse when `app.isPackaged`.
+
+All six sections A–F rated PASS. No gaps found. No follow-up todos needed.
+Verdict: **SHIP**. Observations written to `TODO/sandbox-code-review.md`.
