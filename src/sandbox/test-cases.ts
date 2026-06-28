@@ -5,6 +5,74 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'getInventory() — returns empty array when no rows exist',
+      what: 'When Supabase returns an empty result set, getInventory() resolves to [] without error.',
+      type: 'unit',
+    },
+    {
+      name: 'getInventory() — throws the supabase error message on failure',
+      what: 'A Supabase error (e.g. "connection refused") propagates as a thrown error so callers can surface it.',
+      type: 'unit',
+    },
+    {
+      name: 'getAverageCostPerPiece([]) — short-circuits with zero DB calls',
+      what: 'Passing an empty product list returns {} immediately without touching the database.',
+      type: 'unit',
+    },
+    {
+      name: 'getAverageCostPerPiece — weighted average across two batches',
+      what: 'Batch A: 60 pcs @ LKR 100 and Batch B: 40 pcs @ LKR 200 yield a weighted average of LKR 140.',
+      type: 'unit',
+    },
+    {
+      name: 'getAverageCostPerPiece — zero-piece batch returns 0',
+      what: 'A batch with 0 cartons and 0 loose_pieces produces a cost of LKR 0 rather than dividing by zero.',
+      type: 'unit',
+    },
+    {
+      name: 'getAverageCostPerPiece — coerces NUMERIC string to JS number',
+      what: 'Supabase returns NUMERIC(12,2) as a string; the function coerces it so callers always receive a JS number.',
+      type: 'unit',
+    },
+    {
+      name: 'getAverageCostPerPiece — handles products relation as array (Supabase join style)',
+      what: 'When the joined products relation is an array (Supabase foreign-table style), pieces_per_carton is read from index 0.',
+      type: 'unit',
+    },
+    {
+      name: 'insertStockAdjustment() — throws on supabase error',
+      what: 'A constraint violation from Supabase propagates as a thrown error with the original message.',
+      type: 'unit',
+    },
+    {
+      name: 'insertStockAdjustment() — returns inserted row on success',
+      what: 'On success, the returned row contains the server-assigned id and all submitted fields.',
+      type: 'unit',
+    },
+    {
+      name: 'getBatchesForProducts([]) — short-circuits to [] with zero DB calls',
+      what: 'Passing an empty product list returns [] immediately without touching the database.',
+      type: 'unit',
+    },
+    {
+      name: 'getBatchesForProducts() — throws on supabase error',
+      what: 'A database error while fetching batches surfaces as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: 'sandbox seed — 4 stock batches at Main Warehouse',
+      what: 'After seeding, exactly 4 stock_batches rows exist for the Main Warehouse location, confirming seed completeness.',
+      type: 'integration',
+    },
+    {
+      name: 'sandbox seed — Bluetooth Headphones batch: 5 cartons, cost_per_piece = 2800 NUMERIC',
+      what: 'The fixed-UUID headphones batch has exactly 5 cartons and a NUMERIC cost_per_piece of 2800.00.',
+      type: 'integration',
+    },
+  ],
+
   'sales-pos': [
     {
       name: 'computeLoyaltyEarned — floors netTotal / 100',
@@ -155,6 +223,155 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       name: 'pos-checkout E2E flow',
       what: 'Full end-to-end checkout through the POS screen against the live sandbox schema: add items, select customer, submit payment, verify invoice created.',
       type: 'e2e',
+    },
+  ],
+
+  'refunds-returns': [
+    {
+      name: 'processInvoiceReturn — throws when invoice already has [RETURNED] tag',
+      what: 'An invoice whose notes already contain "[RETURNED]" is rejected immediately with "already been returned" — prevents double-returns.',
+      type: 'unit',
+    },
+    {
+      name: 'processInvoiceReturn — throws when invoice has no line items',
+      what: 'An invoice with an empty invoice_items array is rejected with "no items to return" before any stock or payment logic runs.',
+      type: 'unit',
+    },
+    {
+      name: 'processInvoiceReturn — throws when invoice fetch fails',
+      what: 'A Supabase error (e.g. "row not found") during the initial invoice fetch propagates as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: 'processInvoiceReturn — unpaid invoice: inserts stock_adjustments, skips payments',
+      what: 'For an unpaid invoice, stock is restored via a stock_adjustments insert; no payments row is created.',
+      type: 'unit',
+    },
+    {
+      name: 'processInvoiceReturn — paid + no_refund: skips payment row and customer update',
+      what: 'When the refund mode is no_refund, neither a payment refund row nor a customer balance update is written.',
+      type: 'unit',
+    },
+    {
+      name: 'processInvoiceReturn — paid + credit_note: reads and updates customer outstanding_balance',
+      what: 'When the refund mode is credit_note, the customers table is accessed at least once to read and update the outstanding balance.',
+      type: 'unit',
+    },
+  ],
+
+  'payments-cheques': [
+    {
+      name: 'recordPayment — cash: p_bank_name, p_cheque_number, p_due_date default to empty string',
+      what: 'When no cheque fields are supplied, the record_payment_atomic RPC receives empty strings for those parameters rather than undefined.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — cheque: all fields passed to record_payment_atomic RPC',
+      what: 'A cheque payment carries bank_name, cheque_number, and due_date through to the RPC with no fields dropped.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — invoice_id may be null for unallocated payments',
+      what: 'Passing null as invoice_id records an unallocated payment; the RPC receives p_invoice_id=null.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — throws when RPC returns an error',
+      what: 'A database error from record_payment_atomic propagates as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: "depositCheque — moves cheque to 'processing' state",
+      what: 'depositCheque() calls update_cheque_status with p_new_status="processing".',
+      type: 'unit',
+    },
+    {
+      name: "completeCheque — moves cheque to 'completed' state",
+      what: 'completeCheque() calls update_cheque_status with p_new_status="completed".',
+      type: 'unit',
+    },
+    {
+      name: "returnCheque — moves cheque to 'returned' state (bounced)",
+      what: 'returnCheque() calls update_cheque_status with p_new_status="returned".',
+      type: 'unit',
+    },
+    {
+      name: 'cheque transition — throws when RPC rejects invalid transition',
+      what: 'An invalid status transition rejected by the RPC surfaces as a thrown error rather than silently succeeding.',
+      type: 'unit',
+    },
+    {
+      name: 'sandbox seed — INV-S001 has exactly one cash payment',
+      what: 'After seeding, the seeded invoice INV-S001 has exactly one payment row with method="cash" and amount > 0.',
+      type: 'integration',
+    },
+  ],
+
+  'customers-credit': [
+    {
+      name: 'createCustomer — returns the created customer row',
+      what: 'On success, createCustomer() returns the row from Supabase including the server-assigned id.',
+      type: 'unit',
+    },
+    {
+      name: 'createCustomer — throws on supabase error',
+      what: 'A Supabase error (e.g. duplicate key) propagates as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — calls record_payment_atomic RPC with all arguments',
+      what: 'All fields including customer_id, invoice_id, amount, method, bank_name, cheque_number, and due_date are forwarded to the RPC.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — defaults optional cheque fields to empty string',
+      what: 'When cheque fields are omitted, the RPC receives empty strings for p_bank_name, p_cheque_number, and p_due_date.',
+      type: 'unit',
+    },
+    {
+      name: 'recordPayment — throws the RPC error when recording fails',
+      what: 'A database error from record_payment_atomic propagates as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: "depositCheque — calls update_cheque_status with 'processing'",
+      what: 'depositCheque() invokes update_cheque_status with p_new_status="processing".',
+      type: 'unit',
+    },
+    {
+      name: "completeCheque — calls update_cheque_status with 'completed'",
+      what: 'completeCheque() invokes update_cheque_status with p_new_status="completed".',
+      type: 'unit',
+    },
+    {
+      name: "returnCheque — calls update_cheque_status with 'returned'",
+      what: 'returnCheque() invokes update_cheque_status with p_new_status="returned".',
+      type: 'unit',
+    },
+    {
+      name: 'cheque lifecycle — all three transitions throw on RPC error',
+      what: 'depositCheque, completeCheque, and returnCheque all propagate RPC errors rather than silently failing.',
+      type: 'unit',
+    },
+    {
+      name: 'archiveCustomer — resolves without error on success',
+      what: 'archiveCustomer() resolves to undefined when Supabase succeeds.',
+      type: 'unit',
+    },
+    {
+      name: 'archiveCustomer — throws on supabase error',
+      what: 'A Supabase error (e.g. not found) from archiveCustomer() propagates as a thrown error.',
+      type: 'unit',
+    },
+    {
+      name: 'sandbox seed — walk-in customer has credit_limit = 0',
+      what: 'The seeded walk-in customer (fixed UUID c0000000-...-000000000001) has credit_limit=0, confirming no credit account.',
+      type: 'integration',
+    },
+    {
+      name: 'sandbox seed — Nimal Electronics has credit_limit = 500000 (NUMERIC)',
+      what: 'The seeded wholesale customer (c1000000-...-000000000001) has credit_limit=500000 and outstanding_balance=0.',
+      type: 'integration',
     },
   ],
 

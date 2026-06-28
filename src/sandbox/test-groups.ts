@@ -11,9 +11,10 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/inventory.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      '11 unit tests covering getInventory, weighted-average cost (NUMERIC), insertStockAdjustment, and getBatchesForProducts; plus 2 sandbox integration tests verifying the seeded stock batches.',
     e2eDesc: null,
   },
   {
@@ -29,25 +30,28 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'refunds-returns',
     label: 'Refunds & Returns',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/returns.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      '6 unit tests covering processInvoiceReturn: already-returned guard, no-items guard, fetch-error propagation, unpaid invoice skips payment row, no_refund mode skips payment and customer update, credit_note mode reads and updates customer balance.',
     e2eDesc: null,
   },
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/payments.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      '8 unit tests covering recordPayment (cash defaults, cheque fields, null invoice_id, RPC error) and cheque lifecycle transitions (depositCheque → processing, completeCheque → completed, returnCheque → returned, invalid-transition error); plus 1 sandbox integration test verifying INV-S001 has a cash payment.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: [],
+    vitestFiles: ['src/services/__tests__/customers.test.ts'],
     e2e: null,
-    unitDesc: 'No automated tests yet — covered manually for now.',
+    unitDesc:
+      '11 unit tests covering createCustomer (success, error), recordPayment RPC args and defaults, cheque lifecycle (depositCheque, completeCheque, returnCheque, error on invalid transition), and archiveCustomer (success, error); plus 2 sandbox integration tests verifying walk-in customer credit_limit=0 and Nimal Electronics credit_limit=500000.',
     e2eDesc: null,
   },
   {
