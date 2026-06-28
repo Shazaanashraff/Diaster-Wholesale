@@ -3,7 +3,7 @@ id: todo-013
 title: Sandbox feature [6/7] — grow test coverage (initial integration + E2E batch)
 priority: 3
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -63,5 +63,12 @@ Keep descriptions honest: one catalog `TestCase` per real `it()`. Reset the sand
 - **Modify:** `src/sandbox/test-groups.ts`, `src/sandbox/test-cases.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: which modules were covered this pass, test counts, any deferred to a later
-     pass, commit hash. -->
+
+All four modules covered in commit `38f533f` (2026-06-28):
+
+- **Products & Inventory** — `src/services/__tests__/inventory.test.ts`: 11 unit tests (getInventory, getAverageCostPerPiece weighted-average/zero/NUMERIC/array-join, insertStockAdjustment, getBatchesForProducts) + 2 sandbox integration tests (4 batches at Main Warehouse; headphones batch 5 cartons @ LKR 2800 NUMERIC).
+- **Customers & Credit** — `src/services/__tests__/customers.test.ts`: 11 unit tests (createCustomer, recordPayment RPC args + defaults, depositCheque/completeCheque/returnCheque all transitions + error, archiveCustomer) + 2 sandbox integration tests (walk-in credit_limit=0; Nimal Electronics credit_limit=500000).
+- **Payments & Cheques** — `src/services/__tests__/payments.test.ts`: 8 unit tests (cash defaults, cheque fields, null invoice_id, RPC error, three cheque transitions, invalid-transition error) + 1 sandbox integration test (INV-S001 has one cash payment).
+- **Refunds & Returns** — `src/services/__tests__/returns.test.ts`: 6 unit tests (already-returned guard, no-items guard, fetch error, unpaid skips payment, no_refund skips payment+customer, credit_note reads+updates customer).
+
+All 4 files registered in `test-groups.ts`; `test-cases.ts` updated with one `TestCase` per `it()`. `npm test` green (67 passed, 4 skipped sandbox integration). `npx tsc --noEmit` clean. Build passes.
