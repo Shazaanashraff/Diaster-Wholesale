@@ -18,7 +18,9 @@ import {
   Network,
   Play,
   FileCode,
+  FlaskConical,
 } from 'lucide-react';
+import { SandboxRunnerPanel } from '../components/sandbox/SandboxRunnerPanel';
 import {
   ResponsiveContainer,
   BarChart,
@@ -37,7 +39,7 @@ import { db } from '../services/auditDb';
 import { cn } from '../lib/utils';
 
 type TimeRange = '24h' | '7d' | '30d';
-type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest';
+type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest' | 'sandbox';
 type EgressTab = 'user' | 'device' | 'page' | 'query' | 'meta';
 type QuerySortField = 'calls' | 'bytes' | 'duration';
 
@@ -392,6 +394,20 @@ export const DeveloperPortal: React.FC = () => {
             </span>
           </button>
         ))}
+        {typeof (window as any).sandboxRunner !== 'undefined' && (
+          <button
+            onClick={() => setPortalTab('sandbox')}
+            className={cn(
+              "flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all cursor-pointer",
+              portalTab === 'sandbox' ? "bg-[#f8fafc] text-black" : "text-gray-500 hover:text-gray-300"
+            )}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <FlaskConical size={12} />
+              Sandbox
+            </span>
+          </button>
+        )}
       </div>
 
       {/* ── METRICS EGRESS VIEW ── */}
@@ -973,6 +989,9 @@ export const DeveloperPortal: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ── SANDBOX TEST RUNNER TAB (dev builds only) ── */}
+      {portalTab === 'sandbox' && <SandboxRunnerPanel />}
 
     </div>
   );
