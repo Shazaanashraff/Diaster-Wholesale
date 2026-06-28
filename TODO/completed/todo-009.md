@@ -3,7 +3,7 @@ id: todo-009
 title: Sandbox feature [2/7] — guarded reset script (npm run sandbox:reset), seed, isolation test
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -88,5 +88,26 @@ proof the whole feature is safe — it must be deterministic and skip gracefully
 - **Reference:** root `sandbox-seed.sql`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how reset was run, seed contents summary, isolation test pass/skip + reason,
-     edge cases, commit hash. -->
+
+`pg@8.22.0` + `@types/pg@8.20.0` added as devDependencies (installed with `--ignore-scripts` to
+avoid Electron's network-dependent postinstall in the remote sandbox).
+
+`scripts/sandbox-reset.mjs` created exactly per spec: reads `SANDBOX_DB_URL || SUPABASE_DB_URL`,
+guards on `sandbox.app_meta.schema_marker = 'sandbox'`, wraps everything in a transaction, calls
+`sandbox.reset_all()` then replays `supabase/seed/sandbox-seed.sql` under `SET search_path = sandbox`.
+
+`supabase/seed/sandbox-seed.sql` contents:
+- 3 locations (Walk-in Customer, Main Warehouse, Main Shop) — fixed UUIDs, re-seeded after wipe
+- 2 suppliers
+- 4 products (all electronics/accessories, cost_price included)
+- 3 customers incl. Walk-in Customer (fixed UUID c0000000-...)
+- 4 stock batches (all at Main Warehouse location)
+- 1 confirmed invoice INV-S001 (payment_status='paid') with 3 line items + bank_transfer payment
+
+Isolation test (`src/sandbox/__tests__/sandbox-isolation.test.ts`):
+- Skips with reason when `SANDBOX_DB_URL` is unset (confirmed in CI: 1 skip, 29 pass, 0 fail)
+- When creds are available: snapshots `public.customers` count, runs reset+reseed, asserts count unchanged
+- Asserts `sandbox.app_meta.schema_marker === 'sandbox'`
+- Asserts seeded product `b1000000-...-000000000001` exists post-reset
+
+`npm test` output: 29 passed | 1 skipped. `npx tsc --noEmit` clean.
