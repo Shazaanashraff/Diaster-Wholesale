@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -80,4 +80,20 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+Completed 2026-06-28 — commit `1b4f606`.
+
+- `SandboxRunnerPanel.tsx` created at `src/components/sandbox/SandboxRunnerPanel.tsx` (329 lines).
+  Status badge has `role="status"` + `aria-live="polite"`; running dot uses `motion-safe:animate-pulse`
+  (Tailwind's prefers-reduced-motion guard). Broad buttons: Run Unit & Integration (blue), Run E2E
+  (amber), Reset Sandbox Data (rose, behind confirm dialog), Cancel (visible only while running).
+  Per-module grid renders all TEST_GROUPS with expand toggle; pill counts derived from
+  `TEST_CASES[group.id]`; each pill hidden when count is 0. Expanded rows show case descriptions
+  grouped into Unit / Integration / E2E sections. Log panel: monospace `h-52`, auto-scroll pinned
+  to bottom, releases on user scroll-up with a "Scroll to latest" button; pass lines show
+  `CheckCircle` icon (green), fail lines show `XCircle` icon (red) — icon + colour, not colour alone.
+- `DeveloperPortal.tsx` modified: `'sandbox'` added to `PortalTab` union; conditional sandbox tab
+  button appended after the `as const` map (visible only when `window.sandboxRunner` is defined);
+  `<SandboxRunnerPanel />` rendered when `portalTab === 'sandbox'`.
+- `npx tsc --noEmit` clean; `npm run build` clean (only pre-existing warnings).
+- Manual walkthrough deferred to dev-app environment (requires Electron with `--enable-sandbox-runner`).
