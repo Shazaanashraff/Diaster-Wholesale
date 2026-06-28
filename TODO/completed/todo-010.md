@@ -3,7 +3,7 @@ id: todo-010
 title: Sandbox feature [3/7] — test catalog (Layer 1) + precision-contract test
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -76,5 +76,18 @@ this app (LKR, decimals).
   `src/sandbox/__tests__/test-groups.test.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: group count, TestCases authored per group, the exact failing message from
-     the dummy-file demonstration, commit hash. -->
+
+12 groups in TEST_GROUPS. TestCases authored per group:
+- `sales-pos`: 30 entries (29 unit tests matching every it() in posService.test.ts + 1 e2e entry)
+- `sandbox`: 5 entries (3 integration tests from sandbox-isolation.test.ts + 2 unit entries for the precision-contract test's two assertions)
+- All other 10 groups: 0 entries each (not yet implemented)
+
+Precision-contract failure message when `_dummy.test.ts` was added (exact):
+```
+AssertionError: Unregistered test files (add to a group in src/sandbox/test-groups.ts):
+  src/sandbox/__tests__/_dummy.test.ts: expected [ Array(1) ] to have a length of +0 but got 1
+```
+Deleting `_dummy.test.ts` returned to green: 31 passed | 1 skipped | tsc clean.
+
+Files created: `src/sandbox/test-groups.ts`, `src/sandbox/test-cases.ts`,
+`src/sandbox/__tests__/test-groups.test.ts`.
