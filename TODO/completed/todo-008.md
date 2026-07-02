@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -97,5 +97,52 @@ so it is structurally impossible for it to touch `public`.
 - **Reference (do not delete):** root `sandbox-setup.sql`, `sandbox-patch.sql` — source of the DDL.
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
-     marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+
+Migration `supabase/migrations/20260626000000_sandbox_schema_and_meta.sql` created by combining
+`sandbox-setup.sql` + `sandbox-patch.sql`, then cross-checked column-by-column against the
+**live** `public` schema (project `euekgqjxxzyrjfqvrwyo`) via the Supabase Management API
+(direct `psql`/port 5432 egress is blocked in this environment; `https://api.supabase.com/v1/projects/{ref}/database/query`
+was used instead — reachable through the proxy).
+
+- Applied via the Management API 4× in a row with zero errors — confirms idempotency
+  (`if not exists` / `on conflict` / `add column if not exists` throughout).
+- Discovered the `sandbox` schema was **not empty** going in (someone had already run
+  `sandbox-setup.sql` + `sandbox-patch.sql` by hand). Migration was written to be safe against
+  that: every column addition uses `ALTER ... ADD COLUMN IF NOT EXISTS` alongside the
+  `CREATE TABLE IF NOT EXISTS` baseline, so it works identically on a from-scratch project.
+- Found and closed real column-level drift beyond what `sandbox-setup.sql`/`sandbox-patch.sql`
+  covered (verified against live `public.information_schema.columns`, not just migration files,
+  since some `public` columns were added by hand and were never captured in any migration):
+  `customers.cheque_float`, `invoices.salesperson_id` (+ index), `payments.cheque_status`,
+  `stock_batches.original_units` (+ stamping trigger), `stock_adjustments.adjustment_cartons`,
+  `invoices.payment_status` CHECK gaining `'cancelled'`, `supplier_returns.return_value`/`updated_at`,
+  `supplier_return_items.quantity_units`/`quantity_cartons`/`unit_price`, and
+  `supplier_payments.due_date` narrowed from `TIMESTAMPTZ` to `DATE`. Also renamed the sandbox
+  seed location `'Main Shop'` → `'Shop'` to match `public`'s `20260623000001_rename_main_shop_to_shop.sql`.
+- Also ported `sandbox-patch.sql`'s 4 extra tables (`salespeople`, `sales_returns`,
+  `sales_return_items`, `loyalty_transactions`) and their helper functions, since `invoices.salesperson_id`
+  and the loyalty columns on `customers` are meaningless without them — all still additive, no
+  change to the 26-table/app_meta/reset_all scope from LOCKED DECISION #3.
+- Deliberately **excluded** `customers.customer_type` — a column present in live `public` but in
+  no migration file and unreferenced anywhere in `src/`; confirmed dead.
+- Column-shape diff script (`information_schema.columns`, sandbox vs. public) run after the final
+  apply: **zero type/precision mismatches** across all 26 required tables except the intentionally
+  excluded `customer_type`.
+- Verification query results:
+  - `select schema_marker from sandbox.app_meta` → `'sandbox'`
+  - `select schema_marker from public.app_meta` → `'public'`
+  - `sandbox.reset_all()` execute grantees: `{postgres, service_role}` only (`postgres` is the
+    table owner, not a policy grant) — `anon`/`authenticated` explicitly revoked since the schema's
+    `ALTER DEFAULT PRIVILEGES ... GRANT ALL ON FUNCTIONS` would otherwise have granted them execute
+    at `CREATE FUNCTION` time.
+  - Before/after `public.products`/`public.invoices` row counts across a `sandbox.reset_all()`
+    call: unchanged (679 / 400 → 679 / 400), while `sandbox.products` dropped to 0 and reseeded.
+- Did **not** port production RPCs unrelated to the 26-table/app_meta/reset_all scope
+  (`checkout_sale`, `record_payment_atomic`, `update_cheque_status`, dashboard-metrics RPCs,
+  `delete_product_cascade`) or the `shop_stock` view — out of scope per LOCKED DECISION #3;
+  left for a later part of the series if a specific test needs them.
+- `graphify` CLI is not installed in this execution environment — `graphify update .` was skipped.
+- Git branch note: this session's binding git policy pins commits to
+  `claude/youthful-tesla-xmvfqr` (not `main`, and pushing to a different branch requires explicit
+  permission), which overrides this file's generic "push to main" instruction. Commit/push landed
+  on `claude/youthful-tesla-xmvfqr` instead.
