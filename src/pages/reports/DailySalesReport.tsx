@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cancelInvoice } from '../../services/posService';
+import { getSalespeople, type Salesperson } from '../../services/salespersonService';
 import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { ReportKPICard } from './shared/ReportKPICard';
+import { EditInvoiceModal } from './shared/EditInvoiceModal';
 import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
 import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleReceipt';
 import type { Product } from '../../types';
-import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search } from 'lucide-react';
+import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search, Edit2 } from 'lucide-react';
 
-interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
+interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string }
 interface InvoiceRow {
   id: string;
   invoice_no: string;
@@ -41,6 +43,7 @@ interface DetailItem {
 }
 
 const canCancelSales = () => { const r = getCurrentRole(); return r === 'admin' || r === 'accountant'; };
+const isAdmin = () => getCurrentRole() === 'admin';
 
 interface MethodGroup { method: string; total: number; count: number; byBank: { bank: string; total: number; count: number }[] }
 
@@ -71,6 +74,11 @@ export const DailySalesReport: React.FC = () => {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const allowCancel = canCancelSales();
+  const allowEdit   = isAdmin();
+
+  // Edit state
+  const [editInvoice, setEditInvoice] = useState<InvoiceRow | null>(null);
+  const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
 
   // Invoice detail state
   const [detailInvoice, setDetailInvoice] = useState<InvoiceRow | null>(null);
@@ -79,12 +87,14 @@ export const DailySalesReport: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [receiptData, setReceiptData] = useState<SaleReceiptData | null>(null);
 
+  useEffect(() => { getSalespeople().then(setSalespeople).catch(() => {}); }, []);
+
   async function load() {
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [paymentsRes, invoicesRes] = await Promise.all([
       (() => {
-        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference');
+        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type');
         if (from) q = q.gte('paid_at', from);
         if (to)   q = q.lte('paid_at', to);
         return q;
@@ -173,7 +183,7 @@ export const DailySalesReport: React.FC = () => {
   }
 
   // Split into sales receipts and returns
-  const salesPayments  = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-'));
+  const salesPayments  = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement');
   const returnPayments = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
 
   // Group sales by method
@@ -395,6 +405,15 @@ export const DailySalesReport: React.FC = () => {
                       >
                         <Eye size={13} />
                       </button>
+                      {allowEdit && inv.payment_status !== 'cancelled' && (
+                        <button
+                          onClick={() => setEditInvoice(inv)}
+                          className="p-1 rounded text-gray-600 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                          title="Edit invoice"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                      )}
                       {allowCancel && inv.payment_status !== 'cancelled' && (
                         <button
                           onClick={() => { setCancelTarget(inv); setCancelError(null); }}
@@ -622,6 +641,16 @@ export const DailySalesReport: React.FC = () => {
             <POSSaleReceipt data={receiptData} onClose={() => setReceiptData(null)} />
           </div>
         </div>
+      )}
+
+      {/* Edit invoice modal — admin + wholesale only */}
+      {editInvoice && (
+        <EditInvoiceModal
+          invoice={editInvoice}
+          salespeople={salespeople}
+          onClose={() => setEditInvoice(null)}
+          onSaved={() => { setEditInvoice(null); load(); }}
+        />
       )}
 
       {/* Cancel confirm modal */}

@@ -28,9 +28,10 @@ const METHOD_ICONS: Record<string, React.ElementType> = {
   online: Smartphone, bank_transfer: Building2, credit: CreditCard,
 };
 
-interface PaymentRow   { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null }
+interface PaymentRow   { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string }
 interface ExpenseRow   { id: string; category: string; description: string; amount: number; method: string; created_at: string }
 interface OtherIncRow  { id: string; source_type: string; amount: number; method: string; notes: string; created_at: string }
+interface CreditInvoiceRow { id: string; total: number }
 
 interface MethodIncome { method: string; total: number }
 
@@ -67,6 +68,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [otherInc, setOtherInc] = useState<OtherIncRow[]>([]);
+  const [creditInvoices, setCreditInvoices] = useState<CreditInvoiceRow[]>([]);
 
   const [openingBalance, setOpeningBalance] = useState<number>(() => {
     const stored = localStorage.getItem(OPENING_BALANCE_KEY);
@@ -88,20 +90,22 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const load = useCallback(async () => {
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
-    const [pRes, eRes, oRes] = await Promise.all([
-      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
+    const [pRes, eRes, oRes, invRes] = await Promise.all([
+      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
       (() => { let q = supabase.from('expenses').select('id, category, description, amount, method, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
       (() => { let q = supabase.from('other_income').select('id, source_type, amount, method, notes, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
+      (() => { let q = supabase.from('invoices').select('id, total').eq('payment_status', 'unpaid'); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
     ]);
     setPayments((pRes.data ?? []) as PaymentRow[]);
     setExpenses((eRes.data ?? []) as ExpenseRow[]);
     setOtherInc((oRes.data ?? []) as OtherIncRow[]);
+    setCreditInvoices((invRes.data ?? []) as CreditInvoiceRow[]);
     setLoading(false);
   }, [period, customFrom, customTo]);
 
   useEffect(() => { load(); }, [load]);
 
-  const salesPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-'));
+  const salesPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement');
   const returnPayments = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
 
   // Group sales income by method
@@ -110,9 +114,13 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
     const m = p.method ?? 'other';
     salesByMethod.set(m, (salesByMethod.get(m) ?? 0) + Number(p.amount));
   }
+  const creditTotal = creditInvoices.reduce((s, i) => s + Number(i.total), 0);
+  if (creditTotal > 0) salesByMethod.set('credit', creditTotal);
+
   const salesMethodRows: MethodIncome[] = Array.from(salesByMethod.entries()).map(([method, total]) => ({ method, total }));
 
-  const totalSales     = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const paidSalesTotal = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalSales     = paidSalesTotal + creditTotal;
   const totalReturns   = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const totalOtherInc  = otherInc.reduce((s, r) => s + Number(r.amount), 0);
   const totalIncome    = totalSales - totalReturns + totalOtherInc;
@@ -167,7 +175,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPI label="Sales Income" value={totalSales} color="text-green-400" icon={TrendingUp} sub={`${salesPayments.length} receipts`} />
+        <KPI label="Sales Income" value={totalSales} color="text-green-400" icon={TrendingUp} sub={`${salesPayments.length} receipts · ${creditInvoices.length} credit`} />
         <KPI label="Other Income" value={totalOtherInc} color="text-sky-400" icon={PlusCircle} sub={`${otherInc.length} entries`} />
         <KPI label="Total Expenses" value={totalExpenses} color="text-red-400" icon={TrendingDown} sub={`${expenses.length} entries`} />
         <KPI label="Net Balance" value={netBalance} color={netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'} icon={DollarSign} sub="Income − Expenses" />
@@ -298,7 +306,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
         <div>
           <p className="text-sm font-bold text-white">Day End Net Balance</p>
           <p className="text-xs text-gray-500 mt-0.5">
-            Sales {fmt(totalSales)} + Other {fmt(totalOtherInc)} − Returns {fmt(totalReturns)} − Expenses {fmt(totalExpenses)}
+            Sales (incl. credit) {fmt(totalSales)} + Other {fmt(totalOtherInc)} − Returns {fmt(totalReturns)} − Expenses {fmt(totalExpenses)}
           </p>
         </div>
         <span className={cn('text-2xl font-bold font-mono', netBalance >= 0 ? 'text-emerald-400' : 'text-red-400')}>

@@ -53,6 +53,51 @@ export const getInvoices = async () => {
   return data;
 };
 
+export const updateInvoice = async (
+  id: string,
+  fields: { notes?: string; salesperson_id?: string | null; discount?: number; total?: number }
+): Promise<void> => {
+  const { error } = await supabase.from('invoices').update(fields).eq('id', id);
+  if (error) throw error;
+};
+
+export interface EditInvoiceItem {
+  product_id: string;
+  cartons: number;
+  pieces: number;
+  unit_price: number;
+  total: number;
+}
+
+export interface EditInvoicePayment {
+  method: string;
+  amount: number;
+  bank_name?: string;
+  cheque_number?: string;
+  due_date?: string;
+}
+
+export const editInvoiceAtomic = async (payload: {
+  invoiceId: string;
+  salespersonId: string | null;
+  notes: string;
+  discount: number;
+  items: EditInvoiceItem[];
+  payments: EditInvoicePayment[];
+  adjustedBy: string;
+}): Promise<void> => {
+  const { error } = await supabase.rpc('edit_invoice_atomic', {
+    p_invoice_id:     payload.invoiceId,
+    p_salesperson_id: payload.salespersonId,
+    p_notes:          payload.notes,
+    p_discount:       payload.discount,
+    p_items:          payload.items,
+    p_payments:       payload.payments,
+    p_adjusted_by:    payload.adjustedBy,
+  });
+  if (error) throw error;
+};
+
 export const getInvoiceById = async (id: string) => {
   const { data, error } = await supabase
     .from('invoices')

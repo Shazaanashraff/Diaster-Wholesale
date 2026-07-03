@@ -19,7 +19,7 @@ export const ExpenseReport: React.FC = () => {
       
       let query = supabase
         .from('expenses')
-        .select('id, amount, category, description, reference, created_at, location_id')
+        .select('id, amount, category, description, notes, reference, created_at, location_id')
         .order('created_at', { ascending: false });
       if (from) query = query.gte('created_at', from);
       if (to) query = query.lte('created_at', to);
@@ -32,7 +32,7 @@ export const ExpenseReport: React.FC = () => {
 
   const total = data.reduce((sum, e) => sum + Number(e.amount), 0);
   const headers = ['Date', 'Category', 'Description', 'Amount', 'Ref'];
-  const rows = data.map(r => [fmtDate(r.created_at), r.category, r.description, fmtCurrency(r.amount), r.reference]);
+  const rows = data.map(r => [fmtDate(r.created_at), r.category, r.notes || r.description || '', fmtCurrency(r.amount), r.reference]);
 
   return (
     <div className="space-y-6">
@@ -53,7 +53,7 @@ export const ExpenseReport: React.FC = () => {
         columns={[
           { header: 'Date', accessor: (r) => fmtDate(r.created_at) },
           { header: 'Category', accessor: 'category', className: 'capitalize' },
-          { header: 'Description', accessor: 'description' },
+          { header: 'Description', accessor: (r) => r.notes || r.description || '—' },
           { header: 'Amount', accessor: (r) => fmtCurrency(r.amount), className: 'text-right font-mono text-red-400' }
         ]}
         data={data}
