@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Customer, Invoice, Payment } from '../types';
 
 const CUSTOMER_COLUMNS = 'id, name, phone, email, address, type, credit_limit, outstanding_balance, cheque_float, created_at, updated_at';
-const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, bank_name, cheque_number, due_date, cheque_status, paid_at, created_at';
+const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, bank_name, cheque_number, due_date, cheque_status, payment_type, paid_at, created_at';
 
 export const getCustomers = async (): Promise<Customer[]> => {
   const { data, error } = await supabase

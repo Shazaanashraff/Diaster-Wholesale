@@ -135,6 +135,8 @@ CREATE TABLE IF NOT EXISTS payments (
   method        TEXT NOT NULL DEFAULT 'cash'
                   CHECK (method IN ('cash','bank_transfer','cheque','credit')),
   reference     TEXT NOT NULL DEFAULT '',
+  payment_type  TEXT NOT NULL DEFAULT 'sale'
+                  CHECK (payment_type IN ('sale','credit_settlement')),
   paid_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );

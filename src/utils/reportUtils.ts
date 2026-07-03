@@ -119,3 +119,10 @@ export function pct(numerator: number, denominator: number): number {
   if (!denominator) return 0;
   return Math.round((numerator / denominator) * 1000) / 10;
 }
+
+// A cheque only counts toward any total once it has actually cleared —
+// it may bounce or sit in float for weeks otherwise. Non-cheque payments
+// have no cheque_status and always count.
+export function isClearedForReporting(p: { cheque_status?: string | null }): boolean {
+  return p.cheque_status == null || p.cheque_status === 'completed';
+}

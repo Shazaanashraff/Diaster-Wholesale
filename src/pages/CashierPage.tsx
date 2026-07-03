@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/utils';
 import { Wallet, CreditCard, Smartphone, RotateCcw, TrendingDown, RefreshCw, AlertCircle, ChevronRight, Building2, PlusCircle } from 'lucide-react';
+import { isClearedForReporting } from '../utils/reportUtils';
 
 const fmt = (n: number) =>
   'LKR ' + Math.abs(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -23,12 +24,15 @@ interface ReturnRow     { id: string; reference: string; amount: number; paid_at
 interface OtherIncomeRow { id: string; source_type: string; amount: number; method: string; created_at: string }
 
 interface CashierData {
-  byMethod:    MethodTotal[];
-  byBank:      BankTotal[];
-  partials:    PartialInv[];
-  expenses:    ExpenseRow[];
-  returns:     ReturnRow[];
-  otherIncome: OtherIncomeRow[];
+  byMethod:           MethodTotal[];
+  byBank:             BankTotal[];
+  settlementsByMethod: MethodTotal[];
+  partials:           PartialInv[];
+  expenses:           ExpenseRow[];
+  returns:            ReturnRow[];
+  otherIncome:        OtherIncomeRow[];
+  chequesInFloatCount: number;
+  chequesInFloatTotal: number;
 }
 
 const METHOD_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
@@ -55,7 +59,7 @@ export const CashierPage: React.FC = () => {
       const [paymentsRes, partialsRes, expensesRes, otherIncomeRes] = await Promise.all([
         supabase
           .from('payments')
-          .select('id, amount, method, bank_name, reference, paid_at')
+          .select('id, amount, method, bank_name, reference, paid_at, payment_type, cheque_status')
           .gte('paid_at', start)
           .lte('paid_at', end),
         supabase
@@ -86,9 +90,14 @@ export const CashierPage: React.FC = () => {
 
       const allPayments = paymentsRes.data ?? [];
 
-      // Separate returns (negative amount or RETURN- reference) from sales
-      const salesPayments  = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-'));
+      // Separate returns (negative amount or RETURN- reference) from sales/settlements.
+      // Cheques only count once cleared; settlements (money collected against an
+      // existing credit invoice) are never "sales" — they're money already recognized
+      // as revenue when that invoice was originally created.
+      const salesPayments  = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+      const settlementPayments = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
       const returnPayments = allPayments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
+      const chequesInFloat = allPayments.filter(p => p.cheque_status === 'pending' || p.cheque_status === 'processing');
 
       // Aggregate sales by method
       const methodMap = new Map<string, MethodTotal>();
@@ -98,6 +107,16 @@ export const CashierPage: React.FC = () => {
         ex.total += Number(p.amount);
         ex.count += 1;
         methodMap.set(m, ex);
+      }
+
+      // Aggregate settlements (payments received against existing credit) by method
+      const settlementMethodMap = new Map<string, MethodTotal>();
+      for (const p of settlementPayments) {
+        const m = p.method ?? 'other';
+        const ex = settlementMethodMap.get(m) ?? { method: m, total: 0, count: 0 };
+        ex.total += Number(p.amount);
+        ex.count += 1;
+        settlementMethodMap.set(m, ex);
       }
 
       // Aggregate online by bank_name
@@ -126,12 +145,15 @@ export const CashierPage: React.FC = () => {
       }));
 
       setData({
-        byMethod:    Array.from(methodMap.values()).sort((a, b) => b.total - a.total),
-        byBank:      Array.from(bankMap.values()).sort((a, b) => b.total - a.total),
+        byMethod:            Array.from(methodMap.values()).sort((a, b) => b.total - a.total),
+        byBank:              Array.from(bankMap.values()).sort((a, b) => b.total - a.total),
+        settlementsByMethod: Array.from(settlementMethodMap.values()).sort((a, b) => b.total - a.total),
         partials,
         expenses:    expensesRes.data as ExpenseRow[],
         returns,
         otherIncome: (otherIncomeRes.data ?? []) as OtherIncomeRow[],
+        chequesInFloatCount: chequesInFloat.length,
+        chequesInFloatTotal: chequesInFloat.reduce((s, p) => s + Number(p.amount), 0),
       });
     } catch (e: any) {
       setError(e.message);
@@ -143,10 +165,11 @@ export const CashierPage: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const salesTotal       = data?.byMethod.reduce((s, m) => s + m.total, 0) ?? 0;
+  const settlementsTotal = data?.settlementsByMethod.reduce((s, m) => s + m.total, 0) ?? 0;
   const returnsTotal     = data?.returns.reduce((s, r) => s + r.amount, 0) ?? 0;
   const expensesTotal    = data?.expenses.reduce((s, e) => s + e.amount, 0) ?? 0;
   const otherIncomeTotal = data?.otherIncome.reduce((s, o) => s + Number(o.amount), 0) ?? 0;
-  const netCash          = salesTotal + otherIncomeTotal - returnsTotal - expensesTotal;
+  const netCash          = salesTotal + settlementsTotal + otherIncomeTotal - returnsTotal - expensesTotal;
 
   return (
     <div className="p-8 space-y-8 min-h-screen">
@@ -183,8 +206,9 @@ export const CashierPage: React.FC = () => {
       )}
 
       {/* KPI Summary Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <KPICard label="Total Sales" value={salesTotal} color="text-green-400" icon={TrendingDown} positive />
+        <KPICard label="Payments Received" value={settlementsTotal} color="text-teal-400" icon={Wallet} positive />
         <KPICard label="Other Income" value={otherIncomeTotal} color="text-sky-400" icon={PlusCircle} positive />
         <KPICard label="Returns" value={returnsTotal} color="text-red-400" icon={RotateCcw} />
         <KPICard label="Expenses" value={expensesTotal} color="text-amber-400" icon={TrendingDown} />
@@ -196,6 +220,19 @@ export const CashierPage: React.FC = () => {
           positive={netCash >= 0}
         />
       </div>
+
+      {data && data.chequesInFloatCount > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-amber-900/10 border border-amber-700/30 rounded-2xl px-5 py-4">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={16} className="text-amber-400" />
+            <div>
+              <p className="text-sm font-bold text-amber-400">Cheques in Float</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{data.chequesInFloatCount} cheque(s) awaiting clearance — not counted in totals above until completed.</p>
+            </div>
+          </div>
+          <span className="text-lg font-bold font-mono text-amber-400">{fmt(data.chequesInFloatTotal)}</span>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-16 text-gray-500 text-sm">
@@ -230,6 +267,35 @@ export const CashierPage: React.FC = () => {
                 <div className="flex items-center justify-between px-5 py-3 border-t border-border mt-2">
                   <span className="text-sm font-bold text-white">Total</span>
                   <span className="text-sm font-bold font-mono text-white">{fmt(salesTotal)}</span>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Payments Received by Method (credit settlements — not new sales) */}
+          <section className="bg-accent rounded-3xl border border-border p-6 space-y-4">
+            <h2 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Payments Received by Method</h2>
+            {data.settlementsByMethod.length === 0 ? (
+              <p className="text-gray-500 text-sm py-4 text-center">No payments received against credit for this date.</p>
+            ) : (
+              <div className="space-y-2">
+                {data.settlementsByMethod.map(m => {
+                  const meta = METHOD_META[m.method] ?? { label: m.method, icon: Wallet, color: 'text-gray-400' };
+                  const Icon = meta.icon;
+                  return (
+                    <div key={m.method} className="flex items-center justify-between bg-[#12161d] rounded-2xl px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <Icon size={16} className={meta.color} />
+                        <span className="text-sm font-semibold text-white">{meta.label}</span>
+                        <span className="text-[11px] text-gray-500 font-mono">{m.count} txn{m.count !== 1 ? 's' : ''}</span>
+                      </div>
+                      <span className={cn('text-sm font-bold font-mono', meta.color)}>{fmt(m.total)}</span>
+                    </div>
+                  );
+                })}
+                <div className="flex items-center justify-between px-5 py-3 border-t border-border mt-2">
+                  <span className="text-sm font-bold text-white">Total</span>
+                  <span className="text-sm font-bold font-mono text-white">{fmt(settlementsTotal)}</span>
                 </div>
               </div>
             )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { cancelInvoice } from '../../services/posService';
 import { getSalespeople, type Salesperson } from '../../services/salespersonService';
-import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate, isClearedForReporting } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { ReportKPICard } from './shared/ReportKPICard';
@@ -13,7 +13,7 @@ import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleRe
 import type { Product } from '../../types';
 import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search, Edit2 } from 'lucide-react';
 
-interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string }
+interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
 interface InvoiceRow {
   id: string;
   invoice_no: string;
@@ -94,7 +94,7 @@ export const DailySalesReport: React.FC = () => {
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [paymentsRes, invoicesRes] = await Promise.all([
       (() => {
-        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type');
+        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type, cheque_status');
         if (from) q = q.gte('paid_at', from);
         if (to)   q = q.lte('paid_at', to);
         return q;
@@ -182,9 +182,10 @@ export const DailySalesReport: React.FC = () => {
     }
   }
 
-  // Split into sales receipts and returns
-  const salesPayments  = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement');
-  const returnPayments = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
+  // Split into sales receipts, settlements, and returns
+  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+  const settlementPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
+  const returnPayments     = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
 
   // Group sales by method
   const methodMap = new Map<string, MethodGroup>();
@@ -215,6 +216,7 @@ export const DailySalesReport: React.FC = () => {
   const grossSales = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
   const returnsTotal = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const netSales = grossSales - returnsTotal;
+  const settlementsTotal = settlementPayments.reduce((s, p) => s + Number(p.amount), 0);
 
   const filteredInvoices = searchQuery.trim()
     ? allInvoices.filter(inv => {
@@ -257,11 +259,12 @@ export const DailySalesReport: React.FC = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <ReportKPICard label="Gross Sales" value={grossSales} prefix="LKR " icon={TrendingUp} color="bg-green-600" />
         <ReportKPICard label="Returns" value={returnsTotal} prefix="LKR " icon={RotateCcw} color="bg-red-600" />
         <ReportKPICard label="Net Sales" value={netSales} prefix="LKR " icon={TrendingUp} color="bg-blue-600" />
         <ReportKPICard label="Credit (Unpaid)" value={creditTotal} prefix="LKR " icon={CreditCard} color="bg-amber-600" />
+        <ReportKPICard label="Payments Received" value={settlementsTotal} prefix="LKR " icon={Wallet} color="bg-teal-600" />
       </div>
 
       {/* Payment Method Breakdown */}

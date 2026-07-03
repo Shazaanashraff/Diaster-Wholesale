@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate, isClearedForReporting } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { getCurrentRole } from '../../utils/permissions';
@@ -28,7 +28,7 @@ const METHOD_ICONS: Record<string, React.ElementType> = {
   online: Smartphone, bank_transfer: Building2, credit: CreditCard,
 };
 
-interface PaymentRow   { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string }
+interface PaymentRow   { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
 interface ExpenseRow   { id: string; category: string; description: string; amount: number; method: string; created_at: string }
 interface OtherIncRow  { id: string; source_type: string; amount: number; method: string; notes: string; created_at: string }
 interface CreditInvoiceRow { id: string; total: number }
@@ -91,7 +91,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [pRes, eRes, oRes, invRes] = await Promise.all([
-      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
+      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type, cheque_status'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
       (() => { let q = supabase.from('expenses').select('id, category, description, amount, method, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
       (() => { let q = supabase.from('other_income').select('id, source_type, amount, method, notes, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
       (() => { let q = supabase.from('invoices').select('id, total').eq('payment_status', 'unpaid'); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
@@ -105,8 +105,10 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
 
   useEffect(() => { load(); }, [load]);
 
-  const salesPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement');
-  const returnPayments = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
+  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+  const settlementPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
+  const returnPayments     = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
+  const chequesInFloat     = payments.filter(p => p.cheque_status === 'pending' || p.cheque_status === 'processing');
 
   // Group sales income by method
   const salesByMethod = new Map<string, number>();
@@ -119,19 +121,22 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
 
   const salesMethodRows: MethodIncome[] = Array.from(salesByMethod.entries()).map(([method, total]) => ({ method, total }));
 
-  const paidSalesTotal = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
-  const totalSales     = paidSalesTotal + creditTotal;
-  const totalReturns   = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
-  const totalOtherInc  = otherInc.reduce((s, r) => s + Number(r.amount), 0);
-  const totalIncome    = totalSales - totalReturns + totalOtherInc;
-  const totalExpenses  = expenses.reduce((s, e) => s + Number(e.amount), 0);
-  const netBalance     = totalIncome - totalExpenses;
+  const paidSalesTotal   = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalSales       = paidSalesTotal + creditTotal;
+  const totalSettlements = settlementPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const totalReturns     = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
+  const totalOtherInc    = otherInc.reduce((s, r) => s + Number(r.amount), 0);
+  const totalIncome      = totalSales - totalReturns + totalOtherInc;
+  const totalExpenses    = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const netBalance       = totalIncome - totalExpenses;
+  const chequesInFloatTotal = chequesInFloat.reduce((s, p) => s + Number(p.amount), 0);
 
   // Cash reconciliation (cash-method only)
-  const salesCash    = salesByMethod.get('cash') ?? 0;
-  const cashOtherInc = otherInc.filter(r => r.method === 'cash').reduce((s, r) => s + Number(r.amount), 0);
-  const cashExpenses = expenses.filter(e => e.method === 'cash').reduce((s, e) => s + Number(e.amount), 0);
-  const finalCash    = openingBalance + salesCash + cashOtherInc - cashExpenses;
+  const salesCash       = salesByMethod.get('cash') ?? 0;
+  const settlementCash  = settlementPayments.filter(p => p.method === 'cash').reduce((s, p) => s + Number(p.amount), 0);
+  const cashOtherInc    = otherInc.filter(r => r.method === 'cash').reduce((s, r) => s + Number(r.amount), 0);
+  const cashExpenses    = expenses.filter(e => e.method === 'cash').reduce((s, e) => s + Number(e.amount), 0);
+  const finalCash       = openingBalance + salesCash + settlementCash + cashOtherInc - cashExpenses;
   const resultVsOpening = finalCash - openingBalance;
 
   // Group expenses by category
@@ -142,6 +147,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const exportHeaders = ['Date', 'Type', 'Description', 'Method', 'Amount'];
   const exportRows: (string | number)[][] = [
     ...salesPayments.map(p => [fmtDate(p.paid_at), 'Sales Receipt', METHOD_LABELS[p.method] ?? p.method, p.bank_name ?? '', fmtCurrency(Number(p.amount))]),
+    ...settlementPayments.map(p => [fmtDate(p.paid_at), 'Payment Received', METHOD_LABELS[p.method] ?? p.method, p.bank_name ?? '', fmtCurrency(Number(p.amount))]),
     ...otherInc.map(r => [fmtDate(r.created_at), 'Other Income', r.notes, r.method, fmtCurrency(Number(r.amount))]),
     ...expenses.map(e => [fmtDate(e.created_at), 'Expense', e.description, e.method, `-${fmtCurrency(Number(e.amount))}`]),
   ];
@@ -174,12 +180,23 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPI label="Sales Income" value={totalSales} color="text-green-400" icon={TrendingUp} sub={`${salesPayments.length} receipts · ${creditInvoices.length} credit`} />
+        <KPI label="Payments Received" value={totalSettlements} color="text-teal-400" icon={Wallet} sub="Collections on credit — not sales" />
         <KPI label="Other Income" value={totalOtherInc} color="text-sky-400" icon={PlusCircle} sub={`${otherInc.length} entries`} />
         <KPI label="Total Expenses" value={totalExpenses} color="text-red-400" icon={TrendingDown} sub={`${expenses.length} entries`} />
         <KPI label="Net Balance" value={netBalance} color={netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'} icon={DollarSign} sub="Income − Expenses" />
       </div>
+
+      {chequesInFloat.length > 0 && (
+        <div className="rounded-2xl border border-amber-700/30 bg-amber-900/10 p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-amber-400">Cheques in Float</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{chequesInFloat.length} cheque(s) awaiting clearance — not yet cleared, excluded from all totals above.</p>
+          </div>
+          <span className="text-lg font-bold font-mono text-amber-400">{fmt(chequesInFloatTotal)}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Income — Sales by Method */}
@@ -346,6 +363,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
           {[
             { label: 'Opening Balance',  value: openingBalance,  color: 'text-amber-400',   sign: '' },
             { label: 'Sales Cash',        value: salesCash,       color: 'text-green-400',   sign: '+' },
+            { label: 'Payments Received (Cash)', value: settlementCash, color: 'text-teal-400', sign: '+' },
             { label: 'Other Income (Cash)', value: cashOtherInc,  color: 'text-sky-400',     sign: '+' },
             { label: 'Expenses (Cash)',   value: cashExpenses,    color: 'text-red-400',     sign: '−' },
           ].map(row => (
@@ -381,10 +399,10 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
           <div className="mt-3 p-3 bg-[#1d222a] border border-[#2b313a] rounded-xl">
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Formula Check</p>
             <p className="text-[10px] text-gray-500 font-mono">
-              Final Cash = Opening + Sales Cash + Other Income − Expenses
+              Final Cash = Opening + Sales Cash + Payments Received (Cash) + Other Income − Expenses
             </p>
             <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-              {fmt(openingBalance)} + {fmt(salesCash)} + {fmt(cashOtherInc)} − {fmt(cashExpenses)} = <span className={cn('font-bold', finalCash >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmt(finalCash)}</span>
+              {fmt(openingBalance)} + {fmt(salesCash)} + {fmt(settlementCash)} + {fmt(cashOtherInc)} − {fmt(cashExpenses)} = <span className={cn('font-bold', finalCash >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmt(finalCash)}</span>
             </p>
           </div>
         </div>

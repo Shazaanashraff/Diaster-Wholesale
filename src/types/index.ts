@@ -91,6 +91,7 @@ export interface Payment {
   cheque_number?: string | null;
   due_date?: string | null;
   cheque_status?: 'pending' | 'processing' | 'completed' | 'returned' | null;
+  payment_type: 'sale' | 'credit_settlement';
   paid_at: string;
   created_at: string;
 }
