@@ -5,7 +5,7 @@ import type { Salesperson } from '../../../services/salespersonService';
 import { cn } from '../../../lib/utils';
 import {
   X, Plus, Trash2, AlertCircle, AlertTriangle, Lock,
-  Search, Loader2, ChevronDown,
+  Search, Loader2,
 } from 'lucide-react';
 
 const fmt = (n: number) =>
@@ -118,7 +118,7 @@ export const EditInvoiceModal: React.FC<Props> = ({ invoice, salespeople, onClos
   const [searchLoading, setSearchLoading]     = useState(false);
   const [showSearchDrop, setShowSearchDrop]   = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-  const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── Load current invoice items & payments on mount ──────────────────────
   useEffect(() => {
@@ -553,7 +553,7 @@ export const EditInvoiceModal: React.FC<Props> = ({ invoice, salespeople, onClos
                 {editPayments.map((p, i) => (
                   <div key={i} className={cn('flex items-start gap-2 p-3 rounded-xl border', p.locked ? 'bg-[#12161d] border-[#2b313a]/50 opacity-70' : 'bg-[#1d222a] border-[#2b313a]')}>
                     {p.locked && (
-                      <Lock size={12} className="text-gray-600 mt-2 shrink-0" title="Settled cheque — cannot edit" />
+                      <Lock size={12} className="text-gray-600 mt-2 shrink-0" aria-label="Settled cheque — cannot edit" />
                     )}
                     <div className="flex-1 grid grid-cols-2 gap-2">
                       {/* Method */}
