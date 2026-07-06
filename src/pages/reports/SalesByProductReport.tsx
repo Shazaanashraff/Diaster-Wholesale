@@ -17,7 +17,7 @@ export const SalesByProductReport: React.FC = () => {
       
       let query = supabase
         .from('invoice_items')
-        .select('product_id, total, cartons, pieces, products(name, pieces_per_carton, cost_price)');
+        .select('product_id, total, cartons, pieces, products(name, pieces_per_carton, cost_price), invoices(payment_status, subtotal, discount)');
 
       if (from) query = query.gte('created_at', from);
       if (to) query = query.lte('created_at', to);
@@ -26,17 +26,24 @@ export const SalesByProductReport: React.FC = () => {
 
       const map: Record<string, any> = {};
       (items || []).forEach(item => {
+        const inv = item.invoices as any;
+        if (!inv || inv.payment_status === 'cancelled') return;
+
         const id = item.product_id;
         const prod = item.products as any;
         const ppc = prod?.pieces_per_carton || 1;
         const totalPieces = item.cartons * ppc + item.pieces;
         const unitCost = prod?.cost_price || 0;
 
+        // Allocate the bill-level discount proportionally across line items
+        const discountRatio = inv.subtotal > 0 ? Number(inv.discount) / Number(inv.subtotal) : 0;
+        const netRevenue = Number(item.total) * (1 - discountRatio);
+
         if (!map[id]) {
           map[id] = { name: prod?.name || 'Unknown', totalSold: 0, revenue: 0, totalCost: 0 };
         }
         map[id].totalSold += totalPieces;
-        map[id].revenue += Number(item.total);
+        map[id].revenue += netRevenue;
         map[id].totalCost += unitCost * totalPieces;
       });
 

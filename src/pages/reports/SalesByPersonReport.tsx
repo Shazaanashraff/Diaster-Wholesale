@@ -76,7 +76,7 @@ export const SalesByPersonReport: React.FC = () => {
 
     for (const item of items) {
       const inv = item.invoices;
-      if (!inv) continue;
+      if (!inv || inv.payment_status === 'cancelled') continue;
 
       const prod = item.products;
       const ppc = prod?.pieces_per_carton || 1;

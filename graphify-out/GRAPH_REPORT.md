@@ -1,7 +1,7 @@
-# Graph Report - Diaster-Wholesale  (2026-07-03)
+# Graph Report - Diaster-Wholesale  (2026-07-06)
 
 ## Corpus Check
-- 106 files · ~4,479,311 words
+- 106 files · ~4,479,460 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary

@@ -59,7 +59,7 @@ export interface ProfitExpensePoint {
 export const getProfitAndLoss = async (from?: string, to?: string) => {
   let invQuery = supabase.from('invoices').select('total, subtotal, discount, payment_status, created_at');
   let expQuery = supabase.from('expenses').select('amount, created_at');
-  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton, cost_price), product_id, invoice_id, created_at');
+  let itemQuery = supabase.from('invoice_items').select('total, cartons, pieces, products(pieces_per_carton, cost_price), product_id, invoice_id, created_at, invoices(payment_status)');
   if (from) {
     invQuery = invQuery.gte('created_at', from);
     expQuery = expQuery.gte('created_at', from);
@@ -85,6 +85,8 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 
   let cogs = 0;
   items.forEach(item => {
+    const inv = item.invoices as { payment_status?: string } | null;
+    if (inv?.payment_status === 'cancelled') return;
     const prod = item.products as { pieces_per_carton?: number; cost_price?: number } | null;
     const ppc = prod?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
@@ -110,7 +112,9 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data || []).map(item => {
+  return (data || [])
+    .filter(item => (item.invoices as { payment_status?: string } | null)?.payment_status !== 'cancelled')
+    .map(item => {
     const prod = item.products as { name?: string; pieces_per_carton?: number; cost_price?: number } | null;
     const ppc = prod?.pieces_per_carton || 1;
     const totalPieces = item.cartons * ppc + item.pieces;
@@ -190,7 +194,7 @@ export const getLowStockReport = async (threshold = 10) => {
 
 /** 3.1 Daily Sales Report */
 export const getDailySalesReport = async (from?: string, to?: string) => {
-  let query = supabase.from('invoices').select('total, payment_status, created_at');
+  let query = supabase.from('invoices').select('total, payment_status, created_at').neq('payment_status', 'cancelled');
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
 
@@ -219,6 +223,7 @@ export const getRecentSales = async (): Promise<RecentSale[]> => {
   const { data, error } = await supabase
     .from('invoices')
     .select('invoice_no, total, payment_status, created_at, customers(name), invoice_items(total, products(name))')
+    .neq('payment_status', 'cancelled')
     .order('created_at', { ascending: false })
     .limit(8);
 

@@ -62,7 +62,7 @@ export const InvoiceReport: React.FC = () => {
     r.mode ?? '—', r.payment_status, fmtCurrency(r.subtotal), fmtCurrency(r.discount), fmtCurrency(r.total),
   ]);
 
-  const grandTotal = filtered.reduce((s, r) => s + Number(r.total), 0);
+  const grandTotal = filtered.filter(r => r.payment_status !== 'cancelled').reduce((s, r) => s + Number(r.total), 0);
 
   return (
     <div className="space-y-6">

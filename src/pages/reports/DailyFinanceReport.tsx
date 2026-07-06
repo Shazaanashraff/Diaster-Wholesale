@@ -122,11 +122,12 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
   const salesMethodRows: MethodIncome[] = Array.from(salesByMethod.entries()).map(([method, total]) => ({ method, total }));
 
   const paidSalesTotal   = salesPayments.reduce((s, p) => s + Number(p.amount), 0);
-  const totalSales       = paidSalesTotal + creditTotal;
+  const totalSales       = paidSalesTotal + creditTotal; // includes uncollected credit — informational only, excluded from income below
   const totalSettlements = settlementPayments.reduce((s, p) => s + Number(p.amount), 0);
   const totalReturns     = returnPayments.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const totalOtherInc    = otherInc.reduce((s, r) => s + Number(r.amount), 0);
-  const totalIncome      = totalSales - totalReturns + totalOtherInc;
+  // Cash/collection basis: credit sales don't count as income until actually collected (totalSettlements).
+  const totalIncome      = paidSalesTotal - totalReturns + totalOtherInc + totalSettlements;
   const totalExpenses    = expenses.reduce((s, e) => s + Number(e.amount), 0);
   const netBalance       = totalIncome - totalExpenses;
   const chequesInFloatTotal = chequesInFloat.reduce((s, p) => s + Number(p.amount), 0);
@@ -181,8 +182,8 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KPI label="Sales Income" value={totalSales} color="text-green-400" icon={TrendingUp} sub={`${salesPayments.length} receipts · ${creditInvoices.length} credit`} />
-        <KPI label="Payments Received" value={totalSettlements} color="text-teal-400" icon={Wallet} sub="Collections on credit — not sales" />
+        <KPI label="Sales Income" value={paidSalesTotal} color="text-green-400" icon={TrendingUp} sub={`${salesPayments.length} receipts · ${creditInvoices.length} credit (uncollected)`} />
+        <KPI label="Payments Received" value={totalSettlements} color="text-teal-400" icon={Wallet} sub="Credit collected today — counted as income" />
         <KPI label="Other Income" value={totalOtherInc} color="text-sky-400" icon={PlusCircle} sub={`${otherInc.length} entries`} />
         <KPI label="Total Expenses" value={totalExpenses} color="text-red-400" icon={TrendingDown} sub={`${expenses.length} entries`} />
         <KPI label="Net Balance" value={netBalance} color={netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'} icon={DollarSign} sub="Income − Expenses" />
@@ -202,7 +203,10 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
         {/* Income — Sales by Method */}
         <div className="bg-[#171c23] rounded-3xl border border-[#2b313a] overflow-hidden">
           <div className="px-6 py-4 border-b border-[#2b313a] flex items-center justify-between">
-            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Sales Income by Method</h3>
+            <div>
+              <h3 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Sales Income by Method</h3>
+              <p className="text-[10px] text-gray-600 mt-0.5">Credit row is uncollected — not counted in Net Balance until paid</p>
+            </div>
             <span className="text-sm font-bold font-mono text-green-400">{fmt(totalSales)}</span>
           </div>
           <table className="w-full">
@@ -323,7 +327,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
         <div>
           <p className="text-sm font-bold text-white">Day End Net Balance</p>
           <p className="text-xs text-gray-500 mt-0.5">
-            Sales (incl. credit) {fmt(totalSales)} + Other {fmt(totalOtherInc)} − Returns {fmt(totalReturns)} − Expenses {fmt(totalExpenses)}
+            Sales (collected) {fmt(paidSalesTotal)} + Credit Collected {fmt(totalSettlements)} + Other {fmt(totalOtherInc)} − Returns {fmt(totalReturns)} − Expenses {fmt(totalExpenses)}
           </p>
         </div>
         <span className={cn('text-2xl font-bold font-mono', netBalance >= 0 ? 'text-emerald-400' : 'text-red-400')}>

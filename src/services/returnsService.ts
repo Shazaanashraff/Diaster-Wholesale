@@ -109,6 +109,7 @@ export async function searchReturnableInvoices(searchTerm: string): Promise<Retu
         products(name, item_code, pieces_per_carton)
       )
     `)
+    .neq('payment_status', 'cancelled')
     .order('created_at', { ascending: false })
     .limit(60);
 

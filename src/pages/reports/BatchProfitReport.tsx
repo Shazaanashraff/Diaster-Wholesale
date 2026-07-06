@@ -28,9 +28,10 @@ export const BatchProfitReport: React.FC = () => {
       if (to)   shipmentsQ = shipmentsQ.lte('arrived_at', to);
       const { data: shipments } = await shipmentsQ;
 
-      const { data: items } = await supabase
+      const { data: rawItems } = await supabase
         .from('invoice_items')
-        .select('product_id, total, cartons, pieces, products(pieces_per_carton)');
+        .select('product_id, total, cartons, pieces, products(pieces_per_carton), invoices(payment_status)');
+      const items = (rawItems || []).filter(i => (i.invoices as any)?.payment_status !== 'cancelled');
 
       // This is a complex calculation since invoice items aren't directly linked to batches
       // We'll approximate profit per shipment by aggregating costs and comparing to total product revenue
