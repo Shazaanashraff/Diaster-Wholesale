@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -99,3 +99,49 @@ so it is structurally impossible for it to touch `public`.
 ## Completion Notes
 <!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
      marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+
+### 2026-07-06 — BLOCKED, needs human review
+
+Stopped before writing/applying anything. The only Supabase project reachable via the
+connected MCP server (`bqbmveiiyozsmnjvqucm`, name `hoardlavishpos@gmail.com's Project`,
+org `ddsdbrahilrnmofnhumq`) does **not** look like this app's database:
+
+- `public.products` there has columns `brand, price, min_stock_level, color, size, barcode,
+  barcode2` — none of `item_code, wholesale_price, retail_price, pieces_per_carton,
+  reorder_level, margin_pct, msp` that every migration in `supabase/migrations/` and
+  `sandbox-setup.sql` assume.
+- `public.customers` has `total_spent` instead of `credit_limit/outstanding_balance/
+  credit_balance`.
+- `public.stock_transfers` is a single denormalized table with a `jsonb items` column and
+  `branch_id`/`payment_method` enum fields, not the normalized `stock_transfers` +
+  `stock_transfer_items` + `locations` design this codebase's migrations build.
+- `public.expenses` has `branch_id/branch_name/payment_method` (enum), not
+  `location_id/reference/method/created_by`.
+
+This is a different app's schema, not Diaster-Wholesale's `public`. So the completion test's
+"shapes byte-identical to their public counterparts" requirement cannot be verified — there is
+nothing correct to be byte-identical *to* in this project.
+
+**More concerning:** `mcp__Supabase__list_migrations` on this same project already shows 12
+prior migrations named `sandbox_schema_and_meta` / `sandbox_schema_and_meta_reapply_check` /
+`sandbox_schema_and_meta_full_reapply`, dated 2026-06-24 through 2026-07-05 — i.e. previous
+daily runs of this exact routine have been repeatedly applying the Diaster-Wholesale sandbox
+migration into this **foreign** project's `sandbox` schema (confirmed: `sandbox.products` /
+`sandbox.customers` / `sandbox.stock_transfers` there do match this codebase's intended
+sandbox shape). That schema does not belong there and should probably be cleaned up, but I
+did not touch it — deleting schema objects in someone else's live project without explicit
+confirmation is not a call to make automatically.
+
+**What needs a human decision:**
+1. Is `bqbmveiiyozsmnjvqucm` actually supposed to be this app's Supabase project (e.g. under a
+   legacy name), or is the MCP connection simply pointed at the wrong project?
+2. If it's the wrong project: reconnect the Supabase MCP integration to the correct
+   Diaster-Wholesale project before this TODO can be attempted again.
+3. If it's actually correct and `public` really is meant to look like this: the migration
+   history and `sandbox-setup.sql` in this repo are the ones out of date, and this task's
+   premise needs revisiting first.
+4. Either way, someone should decide what to do about the `sandbox` schema already sitting in
+   `bqbmveiiyozsmnjvqucm` from the prior mistaken runs.
+
+No files were changed and no SQL was applied to the database this run beyond read-only
+`information_schema` queries.
