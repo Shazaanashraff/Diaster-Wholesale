@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -99,3 +99,65 @@ so it is structurally impossible for it to touch `public`.
 ## Completion Notes
 <!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
      marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+
+### Automated run — 2026-07-07 — NEEDS REVIEW
+
+**Done:**
+- Created `supabase/migrations/20260626000000_sandbox_schema_and_meta.sql`, porting all 26
+  tables from root `sandbox-setup.sql` verbatim (sandbox-qualified, idempotent via
+  `IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP ... IF EXISTS`), plus its supporting
+  functions/triggers/views/seed data. Money columns cross-checked against
+  `supabase/migrations/*.sql` history and confirmed `NUMERIC(12,2)` throughout, matching
+  `public`. Fixed one latent idempotency bug from the source script: the `Walk-in Customer`
+  seed insert used a bare `ON CONFLICT DO NOTHING` with no unique constraint on
+  `customers.name` to key off, which would have inserted a duplicate row on every re-run —
+  replaced with a `WHERE NOT EXISTS` guard.
+- Added `app_meta(id, schema_marker, app_version, updated_at)` to both `public` and `sandbox`,
+  seeded with `app_version = '0.1.54'` per spec, `ON CONFLICT (id) DO UPDATE`.
+- Added `sandbox.reset_all()` exactly as specified: `SECURITY DEFINER`, loops over
+  `pg_tables where schemaname = 'sandbox' and tablename <> 'app_meta'`, execute granted to
+  `service_role` only.
+
+**BLOCKED — not applied to any live database, needs a human to resolve first:**
+
+While checking the live Supabase project reachable through this session's Supabase MCP
+connection (project `bqbmveiiyozsmnjvqucm`, "hoardlavishpos@gmail.com's Project", the *only*
+project visible via `list_projects`), I found its `public` schema does **not** match this
+codebase at all:
+
+- `public` has only 20 tables, with columns like `barcode`, `brand`, `color`, `image_url`,
+  `min_stock_level`, `price`, `size` — this looks like an unrelated generic retail/POS app,
+  not Diaster Wholesale (whose `public` schema, per `supabase/migrations/*.sql`, should have
+  `item_code`, `wholesale_price`, `retail_price`, `pieces_per_carton`, `margin_pct`, `msp`,
+  `cost_price`, cartons/purchases/salespeople/loyalty tables, etc.).
+- Yet that same project's `sandbox` schema **already contains 36 Diaster-shaped tables**,
+  including an `app_meta` row *already seeded* with `schema_marker`/`app_version = '0.1.54'`
+  — identical to this task's spec — and a working `sandbox.reset_all()` function already
+  present. This strongly suggests a prior session ran `sandbox-setup.sql` +
+  `sandbox-patch.sql` (and this exact app_meta seed) against this project without confirming
+  it was the correct one, i.e. Diaster's sandbox schema may have been built inside an
+  unrelated third party's Supabase account.
+
+Given this, I could not safely complete the Completion Test's live-database checks (apply
+migration to "the Supabase project", verify twice-idempotent, query `schema_marker`, verify
+`reset_all()` is non-destructive to `public`) — running against a project I can't confirm is
+the right one risks compounding an existing mistake. I only ran read-only
+`information_schema` queries to investigate; no DDL/DML was executed live.
+
+**Needs a human to:**
+1. Confirm which Supabase project is actually Diaster Wholesale's backend (check the real
+   `VITE_SUPABASE_URL` in the deployed `.env`, not the checked-in `.env.sandbox.example`
+   placeholder).
+2. If `bqbmveiiyozsmnjvqucm` is wrong, reconnect the Supabase MCP integration to the correct
+   project, and separately decide whether the sandbox schema mistakenly built inside the
+   wrong project needs cleanup.
+3. If `bqbmveiiyozsmnjvqucm` is actually correct despite appearances, explain why `public`
+   looks like a different app — worth understanding before anything else in this series runs
+   against it.
+
+Once the correct project is confirmed, apply
+`supabase/migrations/20260626000000_sandbox_schema_and_meta.sql` and re-run the Completion
+Test.
+
+Also note: the `graphify` CLI is not installed in this execution environment, so
+`graphify update .` could not be run.
