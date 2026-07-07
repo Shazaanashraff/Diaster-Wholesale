@@ -28,10 +28,10 @@ const METHOD_ICONS: Record<string, React.ElementType> = {
   online: Smartphone, bank_transfer: Building2, credit: CreditCard,
 };
 
-interface PaymentRow   { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
+interface PaymentRow   { invoice_id: string | null; method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
 interface ExpenseRow   { id: string; category: string; description: string; amount: number; method: string; created_at: string }
 interface OtherIncRow  { id: string; source_type: string; amount: number; method: string; notes: string; created_at: string }
-interface CreditInvoiceRow { id: string; total: number }
+interface CreditInvoiceRow { id: string; total: number; payment_status: string }
 
 interface MethodIncome { method: string; total: number }
 
@@ -91,10 +91,10 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
     setLoading(true);
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [pRes, eRes, oRes, invRes] = await Promise.all([
-      (() => { let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type, cheque_status'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
+      (() => { let q = supabase.from('payments').select('invoice_id, method, bank_name, amount, paid_at, reference, payment_type, cheque_status'); if (from) q = q.gte('paid_at', from); if (to) q = q.lte('paid_at', to); return q; })(),
       (() => { let q = supabase.from('expenses').select('id, category, description, amount, method, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
       (() => { let q = supabase.from('other_income').select('id, source_type, amount, method, notes, created_at').order('created_at', { ascending: false }); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
-      (() => { let q = supabase.from('invoices').select('id, total').eq('payment_status', 'unpaid'); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
+      (() => { let q = supabase.from('invoices').select('id, total, payment_status').in('payment_status', ['unpaid', 'partial']); if (from) q = q.gte('created_at', from); if (to) q = q.lte('created_at', to); return q; })(),
     ]);
     setPayments((pRes.data ?? []) as PaymentRow[]);
     setExpenses((eRes.data ?? []) as ExpenseRow[]);
@@ -116,7 +116,18 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
     const m = p.method ?? 'other';
     salesByMethod.set(m, (salesByMethod.get(m) ?? 0) + Number(p.amount));
   }
-  const creditTotal = creditInvoices.reduce((s, i) => s + Number(i.total), 0);
+  // Partial invoices have already had part of their total collected (a real
+  // row in `payments`) — only the amount still unpaid at checkout counts as
+  // credit, otherwise it would double-count alongside salesByMethod above.
+  const paidAtCheckoutByInvoice = new Map<string, number>();
+  for (const p of payments) {
+    if (!p.invoice_id || Number(p.amount) <= 0 || p.payment_type === 'credit_settlement') continue;
+    paidAtCheckoutByInvoice.set(p.invoice_id, (paidAtCheckoutByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount));
+  }
+  const creditTotal = creditInvoices.reduce((s, i) => {
+    const paid = paidAtCheckoutByInvoice.get(i.id) ?? 0;
+    return s + Math.max(0, Number(i.total) - paid);
+  }, 0);
   if (creditTotal > 0) salesByMethod.set('credit', creditTotal);
 
   const salesMethodRows: MethodIncome[] = Array.from(salesByMethod.entries()).map(([method, total]) => ({ method, total }));

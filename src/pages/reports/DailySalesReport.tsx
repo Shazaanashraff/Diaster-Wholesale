@@ -13,7 +13,7 @@ import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleRe
 import type { Product } from '../../types';
 import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search, Edit2 } from 'lucide-react';
 
-interface PaymentRow { method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
+interface PaymentRow { invoice_id: string | null; method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
 interface InvoiceRow {
   id: string;
   invoice_no: string;
@@ -94,7 +94,7 @@ export const DailySalesReport: React.FC = () => {
     const { from, to } = getReportDateRange(period, customFrom, customTo);
     const [paymentsRes, invoicesRes] = await Promise.all([
       (() => {
-        let q = supabase.from('payments').select('method, bank_name, amount, paid_at, reference, payment_type, cheque_status');
+        let q = supabase.from('payments').select('invoice_id, method, bank_name, amount, paid_at, reference, payment_type, cheque_status');
         if (from) q = q.gte('paid_at', from);
         if (to)   q = q.lte('paid_at', to);
         return q;
@@ -111,7 +111,7 @@ export const DailySalesReport: React.FC = () => {
     setPayments((paymentsRes.data ?? []) as PaymentRow[]);
     const invs = (invoicesRes.data ?? []) as unknown as InvoiceRow[];
     setAllInvoices(invs);
-    setCreditInvoices(invs.filter(i => i.payment_status === 'unpaid'));
+    setCreditInvoices(invs.filter(i => i.payment_status === 'unpaid' || i.payment_status === 'partial'));
     setLoading(false);
   }
 
@@ -203,7 +203,18 @@ export const DailySalesReport: React.FC = () => {
     }
   }
 
-  const creditTotal = creditInvoices.reduce((s, i) => s + Number(i.total), 0);
+  // Partial invoices have already had part of their total collected (a real
+  // row in `payments`) — only the amount still unpaid at checkout counts as
+  // credit, otherwise it would double-count alongside the method groups above.
+  const paidAtCheckoutByInvoice = new Map<string, number>();
+  for (const p of payments) {
+    if (!p.invoice_id || Number(p.amount) <= 0 || p.payment_type === 'credit_settlement') continue;
+    paidAtCheckoutByInvoice.set(p.invoice_id, (paidAtCheckoutByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount));
+  }
+  const creditTotal = creditInvoices.reduce((s, i) => {
+    const paid = paidAtCheckoutByInvoice.get(i.id) ?? 0;
+    return s + Math.max(0, Number(i.total) - paid);
+  }, 0);
   if (creditTotal > 0) {
     methodMap.set('credit', { method: 'credit', total: creditTotal, count: creditInvoices.length, byBank: [] });
   }
@@ -620,6 +631,16 @@ export const DailySalesReport: React.FC = () => {
                               <span className="text-gray-300 font-mono">{fmtCurrency(Number(p.amount))}</span>
                             </div>
                           ))}
+                          {(() => {
+                            const paidSoFar = detailPayments.reduce((s, p) => s + Number(p.amount), 0);
+                            const remaining = Number(detailInvoice.total) - paidSoFar;
+                            return remaining > 0.01 ? (
+                              <div className="flex justify-between text-xs border-t border-[#2b313a] pt-2 mt-1">
+                                <span className="text-red-400 font-semibold">Credit (Unpaid)</span>
+                                <span className="text-red-400 font-mono font-semibold">{fmtCurrency(remaining)}</span>
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                     );
