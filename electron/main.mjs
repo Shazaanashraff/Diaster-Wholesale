@@ -112,7 +112,7 @@ function configureAutoUpdater() {
   // invalid/expired, permanently disabling the updater.
   autoUpdater.setFeedURL({
     provider: 'github',
-    owner: 'Hesara2003',
+    owner: 'Shazaanashraff',
     repo: 'Diaster-Wholesale',
     vPrefixedTagName: true,
   });
