@@ -3,7 +3,7 @@ id: todo-008
 title: Sandbox feature [1/7] — sandbox schema migration, app_meta marker, guarded reset function
 priority: 1
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -99,3 +99,73 @@ so it is structurally impossible for it to touch `public`.
 ## Completion Notes
 <!-- Sonnet 4.6 fills after implementation: migration applied how, idempotency verified,
      marker query outputs, reset_all() verified non-destructive to public, commit hash. -->
+
+### Status: needs-review (2026-07-08)
+
+**What was done:**
+- Created `supabase/migrations/20260626000000_sandbox_schema_and_meta.sql`, porting all 26
+  `sandbox.*` tables from root `sandbox-setup.sql`, plus their functions/triggers/views/grants/
+  seed data, plus `public.app_meta` + `sandbox.app_meta` marker tables and the schema-locked
+  `sandbox.reset_all()` function, exactly as specified in the Implementation Steps.
+- While porting, reconstructed the actual current `public` schema by replaying
+  `supabase/migrations/*.sql` **plus** the untracked root scripts that originally created it
+  (`supabase_migration.sql`, `supplier_module_upgrade.sql`, `supabase_fifo_migration.sql`,
+  `pos_location_stock_split.sql`, `pos_payment_upgrade.sql` — 18 of the 26 tables, e.g.
+  `suppliers`, `purchases`, `expenses`, `locations`, are never `CREATE TABLE`'d anywhere under
+  `supabase/migrations/`, only in these ad-hoc root files run by hand against production; this
+  is a pre-existing gap, out of scope for this todo). Cross-checked all 26 tables column-by-
+  column against that reconstruction and fixed three real drifts so the migration is faithful to
+  today's `public`, not just to the stale `sandbox-setup.sql` copy:
+  - `supplier_payments.due_date`: `TIMESTAMPTZ` → `DATE` (matches live `public` type).
+  - `supplier_returns`: added back legacy `return_value NUMERIC(16,2)` and `updated_at` columns
+    that exist in `public` but were dropped from `sandbox-setup.sql` at some point.
+  - `supplier_return_items`: added back legacy `quantity_units`, `quantity_cartons`,
+    `unit_price NUMERIC(12,4)` columns, same reason.
+  - No `NUMERIC(12,2)` money-column type mismatches were found otherwise — all money columns in
+    `sandbox-setup.sql` already match `public` exactly (including `products.cost_price`, which
+    is nullable in both — the `20260515120131_product_cost_price.sql` migration's `NOT NULL` never
+    took effect against real `public` because it used `ADD COLUMN IF NOT EXISTS ... NOT NULL` on
+    a column that already existed, which Postgres silently no-ops).
+  - Known, not fixed (out of scope — see below): `public.customers.cheque_float`,
+    `public.payments.cheque_status` / `payment_type`, `public.invoices.salesperson_id`,
+    `public.stock_batches.original_units` are recent feature columns added to `public` that
+    neither `sandbox-setup.sql` nor `sandbox-patch.sql` ever covered. Adding `salesperson_id`
+    would also require creating `sandbox.salespeople`, which belongs to `sandbox-patch.sql`
+    (out of scope — this todo covers only the 26 tables from `sandbox-setup.sql`). Flagging for
+    a future todo.
+
+**Why this is needs-review, not completed:**
+The completion test requires applying the migration to "the Supabase project" and verifying
+`schema_marker` / `reset_all()` against it directly. The only Supabase project reachable through
+this session's Supabase MCP connection (project ref `bqbmveiiyozsmnjvqucm`, "hoardlavishpos@
+gmail.com's Project") is **not this app's database** — its `public` schema has tables named
+`branches`, `brands`, `categories`, `sales`, `exchanges`, `damaged_goods`, `users`,
+`v_products_with_stock`, none of which this codebase's `src/services/*.ts` ever queries (it
+queries `products`, `invoices`, `customers`, `purchases`, etc., per `supabase/migrations/`).
+Applying this migration there would create schema objects in an unrelated live application, so
+it was **not** applied there.
+
+Instead, the migration was fully verified in an isolated local PostgreSQL 16 instance (this
+sandbox's own `postgresql-16` package, a throwaway scratch database, not connected to any
+network service):
+- Rebuilt a faithful `public` baseline (all migrations + the untracked root scripts above) and
+  applied this migration on top — succeeded with zero errors.
+- Applied it a **second** time on the same database — zero errors (idempotent).
+- `select schema_marker from sandbox.app_meta` → `sandbox`; `select schema_marker from
+  public.app_meta` → `public`.
+- `select sandbox.reset_all()` ran with no error. Seeded a probe row in both `public.customers`
+  and `sandbox.customers` beforehand; after `reset_all()`, `sandbox.customers` was truncated to
+  0 rows while `public.customers` kept its 2 rows unchanged (including the probe row) —
+  confirmed non-destructive to `public`.
+- `reset_all()` EXECUTE grant: initially leaked to `anon`/`authenticated` because the
+  `ALTER DEFAULT PRIVILEGES ... GRANT ALL ON FUNCTIONS` statement earlier in the file
+  auto-grants EXECUTE to every role it lists for functions created afterwards, including
+  `reset_all()` itself. Fixed by explicitly revoking from `anon, authenticated` (not just
+  `PUBLIC`) right after creating the function — re-verified only `service_role` (and the table
+  owner) can execute it.
+
+**What's needed to close this out:** connect the correct Diaster-Wholesale Supabase project via
+this environment's Supabase MCP integration (or supply its project ref/credentials), then run
+`supabase db push` (or apply the migration file directly) against it, and re-run the three
+DB-dependent completion-test checks above against the real project. The migration file itself
+should not need further changes — it was validated end-to-end locally.
