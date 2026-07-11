@@ -3,7 +3,7 @@ id: todo-009
 title: Sandbox feature [2/7] — guarded reset script (npm run sandbox:reset), seed, isolation test
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -90,3 +90,63 @@ proof the whole feature is safe — it must be deterministic and skip gracefully
 ## Completion Notes
 <!-- Sonnet 4.6 fills: how reset was run, seed contents summary, isolation test pass/skip + reason,
      edge cases, commit hash. -->
+
+### Status: completed (2026-07-11)
+
+**What was done:**
+- Added `pg` as a devDependency (`npm i -D pg`).
+- Created `scripts/sandbox-reset.mjs`: reads `SANDBOX_DB_URL`/`SUPABASE_DB_URL`, checks
+  `sandbox.app_meta.schema_marker = 'sandbox'` (belt-and-braces guard on top of the schema-locked
+  `sandbox.reset_all()` from todo-008), wraps the reset + reseed in a transaction that rolls back
+  on any error.
+- Wired `"sandbox:reset": "node scripts/sandbox-reset.mjs"` into `package.json`.
+- Created `supabase/seed/sandbox-seed.sql`, curated from root `sandbox-seed.sql`: unqualified
+  table names (resolved via the script's `set search_path = sandbox`), every insert
+  `ON CONFLICT DO NOTHING`, fixed UUIDs. Trimmed to 2 suppliers / 4 products (all with stock via
+  `stock_batches`) / 2 named customers (Walk-in is already seeded by the todo-008 migration
+  itself, re-inserted here too, harmlessly, via `ON CONFLICT DO NOTHING`) / 1 purchase / 2
+  invoices (`paid`, `partial`) with items and payments.
+- Documented `SANDBOX_DB_URL` in `.env.sandbox.example` with a comment on where to find it in the
+  Supabase dashboard.
+- Created `src/sandbox/__tests__/sandbox-isolation.test.ts`: skips the whole `describe` block via
+  `describe.skip` (with a printed reason) when no `SANDBOX_DB_URL`/`SUPABASE_DB_URL` is set;
+  otherwise snapshots `public.products/customers/invoices` counts, runs `sandbox.reset_all()` +
+  replays the seed, asserts the counts are unchanged, and asserts `sandbox.app_meta.schema_marker
+  === 'sandbox'` plus a known seeded sandbox product exists.
+
+**How it was verified (no live Supabase project is reachable from this session — same blocker
+todo-008 hit — so verification used a local PostgreSQL 16 instance, same approach todo-008
+used):**
+- Applied `supabase/migrations/20260421162200_init_schema.sql` (real `public.products` /
+  `customers` / `invoices`) then `supabase/migrations/20260626000000_sandbox_schema_and_meta.sql`
+  (todo-008's migration) to a fresh throwaway local database.
+- Inserted one probe row each into `public.products` and `public.customers`.
+- Ran `npm run sandbox:reset` twice in a row: both runs printed
+  `✓ sandbox reset + reseed complete`; `public.products`/`public.customers` counts were unchanged
+  both times (proving both non-destructiveness and idempotency); `sandbox.products` went from 0
+  to 4 after run 1 and stayed at 4 after run 2 (no duplicate rows — `ON CONFLICT DO NOTHING`
+  confirmed working); `sandbox.customers` went from 1 (Walk-in, from the todo-008 migration) to 3.
+- Ran `src/sandbox/__tests__/sandbox-isolation.test.ts` directly against that same database with
+  `SANDBOX_DB_URL` set: both assertions passed for real (not skipped) — public counts unchanged
+  across reset, `schema_marker` correct, seeded product found.
+- Confirmed the `reset_all()` grant: `has_function_privilege('service_role', ...) = true`,
+  `anon`/`authenticated` = `false`.
+- `npm test` (no DB creds set): 29 passed, 2 skipped — `sandbox-isolation.test.ts` skipped with
+  the printed reason `set SANDBOX_DB_URL (or SUPABASE_DB_URL) to run this integration test.`,
+  exactly as the completion test requires ("skips with a printed reason if no DB creds").
+- `npx tsc --noEmit`: clean (exit 0).
+
+**Edge cases handled:**
+- Script and test both accept either `SANDBOX_DB_URL` or `SUPABASE_DB_URL`, matching the
+  completion test's "(or `SUPABASE_DB_URL`)" wording.
+- Reset script rolls back the whole transaction (not just the seed step) if the marker check
+  fails or the seed errors, so a bad run can never leave `sandbox` half-reset.
+- Seed file only ever writes unqualified table names — there is no code path in
+  `sandbox-seed.sql` that could resolve to `public.*` even by mistake, since the script always
+  sets `search_path = sandbox` immediately before executing it.
+
+**Not run:** `graphify update .` — no `graphify` CLI is installed in this session's environment
+(`npx graphify` fails with "could not determine executable to run"); flagging for whoever has the
+CLI available to refresh `graphify-out/` for this change.
+
+Commit: see the todo-009 completion commit on `main`.
