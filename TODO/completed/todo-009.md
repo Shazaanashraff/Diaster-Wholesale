@@ -3,7 +3,7 @@ id: todo-009
 title: Sandbox feature [2/7] — guarded reset script (npm run sandbox:reset), seed, isolation test
 priority: 1
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -88,5 +88,50 @@ proof the whole feature is safe — it must be deterministic and skip gracefully
 - **Reference:** root `sandbox-seed.sql`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how reset was run, seed contents summary, isolation test pass/skip + reason,
-     edge cases, commit hash. -->
+
+- Added `pg` + `@types/pg` as devDependencies, `scripts/sandbox-reset.mjs` (ESM), and
+  `"sandbox:reset": "node scripts/sandbox-reset.mjs"` in `package.json`.
+- Curated `supabase/seed/sandbox-seed.sql` from the root `sandbox-seed.sql`: unqualified table
+  names (relies on `search_path = sandbox` set by the reset script), fixed UUIDs throughout, and
+  — since `sandbox.reset_all()` (todo-008) truncates every sandbox table including `locations`
+  and `customers` — added back `Main Warehouse` / `Main Shop` locations and the `Walk-in Customer`
+  row that the migration seeds once but which reset wipes, so every reseed is self-contained.
+  Contents: 2 locations, 3 suppliers, 12 products (all with stock batches), 7 customers (incl.
+  Walk-in), 2 purchases + items, 12 stock batches, 5 invoices + items + payments (INV-0001 is the
+  "confirmed"/paid one), 8 expenses, 2 supplier payments. Dropped one accidental duplicate
+  line-item row present in the original root seed (same product listed twice on INV-0003) —
+  cosmetic, not a correctness requirement.
+- `.env.sandbox.example` documents `SANDBOX_DB_URL` (falls back to `SUPABASE_DB_URL`), same
+  precedence as the reset script.
+- `src/sandbox/__tests__/sandbox-isolation.test.ts` added, `it.skipIf(!SANDBOX_DB_URL)` with the
+  skip reason printed as the test name. No DB creds are available in this environment (same
+  blocker `todo-008` hit: the only Supabase project reachable via this session's MCP connection
+  — `bqbmveiiyozsmnjvqucm`, "hoardlavishpos@gmail.com's Project" — has an unrelated `public`
+  schema, e.g. `branches`/`brands`/`sales`/`exchanges` instead of this app's `products`/
+  `invoices`/`purchases`; re-checked it at the start of this todo and it's still the same wrong
+  project), so `npm test` exercises the skip path.
+- Unlike todo-008, this todo's completion test ("`npm run sandbox:reset` runs end-to-end...")
+  isn't phrased as project-specific, so it was fully exercised end-to-end against an isolated
+  local PostgreSQL 16 instance (this sandbox's own `postgresql-16` package, throwaway scratch DB,
+  no network) rather than left unverified:
+  - Applied the todo-008 migration (creating stand-in `anon`/`authenticated`/`service_role`
+    roles first, since plain Postgres lacks Supabase's built-in roles) + `init_schema.sql` for
+    `public.products`/`customers`/`invoices`.
+  - `npm run sandbox:reset` (via `SANDBOX_DB_URL`) → `✓ sandbox reset + reseed complete`; ran a
+    second time back-to-back with the same result and no errors — safe to run twice.
+  - Verified row counts after reset: 12 products, 7 customers, 3 suppliers, 5 invoices, 26
+    invoice_items, 12 stock_batches, 2 locations, 2 purchases, 8 expenses, 2 supplier_payments.
+  - `select schema_marker from sandbox.app_meta` → `sandbox`.
+  - Seeded a probe row directly into `public.customers` beforehand; ran the isolation test
+    (`SANDBOX_DB_URL` pointed at the scratch DB) — it **passed for real** (not skipped): asserted
+    `public.products`/`customers`/`invoices` counts unchanged across the reset, sandbox marker
+    correct, seeded sandbox product present. Independently re-queried `public.customers` after
+    and confirmed the probe row was still there.
+  - Dropped the scratch database and stopped the local Postgres service afterward, leaving no
+    residual state in the sandbox environment.
+- `npm test`: 29 passed, 1 skipped (the isolation test, reason printed). `npx tsc --noEmit` and
+  `npx tsc -b`: clean.
+- **What's still needed to fully close the loop against the real project:** connect the actual
+  Diaster-Wholesale Supabase project (per todo-008's note) and set `SANDBOX_DB_URL` in a real
+  `.env.sandbox`, then the same `npm run sandbox:reset` + `npm test` will exercise the isolation
+  test for real there too — no code changes anticipated, this was validated end-to-end locally.
