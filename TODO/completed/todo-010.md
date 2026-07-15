@@ -3,7 +3,7 @@ id: todo-010
 title: Sandbox feature [3/7] — test catalog (Layer 1) + precision-contract test
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -76,5 +76,36 @@ this app (LKR, decimals).
   `src/sandbox/__tests__/test-groups.test.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: group count, TestCases authored per group, the exact failing message from
-     the dummy-file demonstration, commit hash. -->
+
+- `src/sandbox/test-groups.ts`: 12 `TEST_GROUPS` entries (`products-inventory, sales-pos,
+  refunds-returns, payments-cheques, customers-credit, suppliers-purchasing, stock-transfers,
+  salespeople, reports, offline-sync, core-infra, sandbox`), no "Money & Ledger" group. Only
+  `sales-pos` (`src/services/posService.test.ts`, `e2e:'pos-checkout'`) and `sandbox`
+  (`sandbox-isolation.test.ts` + `test-groups.test.ts`) have real files; the other 10 start
+  `vitestFiles: []`, `e2e: null`, with an honest "No automated tests yet — covered manually for
+  now." `unitDesc`.
+- `src/sandbox/test-cases.ts`: 29 `TestCase` entries under `sales-pos` (one per real `it(...)` in
+  `posService.test.ts`) + 1 `type:"e2e"` entry for the `pos-checkout` flow = 30. Plus 5 entries
+  under `sandbox`: 2 `type:"integration"` (the isolation tests) + 3 `type:"unit"` (the precision
+  contract's own three assertions). 35 `TestCase` entries total.
+- `src/sandbox/__tests__/test-groups.test.ts`: 3 tests — every `src/**/*.test.{ts,tsx}` is in
+  exactly one group's `vitestFiles` (with `\`/`/` normalised via a manual `readdirSync` walk,
+  Node 22 was available but `fs.globSync` wasn't needed), every listed path `existsSync`s, and
+  every non-null `e2e` resolves to `e2e/<name>.spec.ts`.
+- `npm test`: 3 test files, 33 passed + 2 skipped (the 2 DB-dependent isolation assertions skip
+  without `SANDBOX_DB_URL`/`SUPABASE_DB_URL`; the "no creds configured" placeholder test covers
+  that case and passes).
+- **Demonstrated:** created `src/sandbox/__tests__/_dummy.test.ts` (a real `it(...)`, not
+  registered anywhere) → `npm test` failed with:
+  ```
+  AssertionError: src/sandbox/__tests__/_dummy.test.ts should be registered in exactly one
+  TEST_GROUPS entry: expected +0 to be 1 // Object.is equality
+  ```
+  Deleted `_dummy.test.ts` → `npm test` green again (3 files, 33 passed, 2 skipped).
+- `npx tsc --noEmit`: clean.
+- `npx eslint .` could not be run to verify style: `eslint.config.js` throws `TypeError: Cannot
+  read properties of undefined (reading 'recommended')` in this environment — same pre-existing,
+  unrelated failure already noted in todo-009's Completion Notes. Not part of this todo's
+  completion test.
+- `graphify update .` could not be run: no `graphify` binary is installed in this environment
+  (same as noted in todo-009). Not a completion-test gate for this todo.
