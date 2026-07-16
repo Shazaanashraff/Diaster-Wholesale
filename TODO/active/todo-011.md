@@ -3,7 +3,7 @@ id: todo-011
 title: Sandbox feature [4/7] — live runner IPC (window.sandboxRunner) in Electron main + preload
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -98,3 +98,77 @@ reap it and so a second run can be rejected. Strip ANSI before sending so the UI
 ## Completion Notes
 <!-- Sonnet 4.6 fills: how dev-gate was implemented, Windows cancel verified, packaged-build
      undefined verified, commit hash. -->
+
+### Status: needs-review (2026-07-16)
+
+**What was done:**
+- `electron/main.mjs`: added `sandbox:run` / `sandbox:reset` / `sandbox:cancel` IPC handlers, a
+  shared `runCommand(cmd, args, webContents)` helper (single `activeProc` guard, `readline`-based
+  line streaming from both stdout/stderr, ANSI-stripped and simplified via `simplify(line)`), and
+  the dev-only `additionalArguments: ['--enable-sandbox-runner']` gate on `webPreferences` (only
+  set when `!app.isPackaged`, i.e. `isDev`).
+  - `sandbox:run('unit')` (no filter) → `npm test`; `('unit', {files:[...]})` → `npx vitest run
+    --reporter=verbose <files...>`; `('e2e', {spec})` → `npx playwright test --reporter=line
+    e2e/<spec>.spec.ts`.
+  - `sandbox:reset` → `npm run sandbox:reset`.
+  - `sandbox:cancel`: Windows path is `activeProc.kill()` then `spawn('taskkill', ['/pid', pid,
+    '/T', '/F'])`; POSIX path is `activeProc.kill('SIGTERM')`, exactly per the guardrail.
+  - All three handlers return `{ ok:false, reason:'unavailable-in-packaged-build' }` up front
+    when `app.isPackaged`.
+- `electron/preload.js`: `contextBridge.exposeInMainWorld('sandboxRunner', {...})` now only runs
+  `if (process.argv.includes('--enable-sandbox-runner'))`, exposing `run(type, filter)`,
+  `reset()`, `cancel()`, `onOutput(cb)` (mirrors the existing `desktop` API's unsubscribe-callback
+  pattern). Left the existing `desktop` API untouched.
+- Created `src/types/sandbox-runner.d.ts`: `declare global { interface Window { sandboxRunner?:
+  {...} } }`, typed `run`/`reset`/`cancel` as returning `Promise<{ ok, code?, reason? }>` and
+  `onOutput` returning an unsubscribe function.
+
+**Verified in this environment:**
+- `npm install` initially failed — `node_modules/electron`'s postinstall tries to download the
+  Electron binary and got HTTP 403 from this sandbox's network egress policy (binary-hosting
+  origin isn't reachable here, distinct from the whitelisted npm registry). Installed the rest of
+  the tree with `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install` — this leaves `electron` as an
+  uninstallable stub (`require('electron')` throws "Electron failed to install correctly") but
+  everything else (TypeScript, Vitest, the Node standard library) works normally.
+- `npx tsc -b`: clean, no errors.
+- `npm test`: green — 3 files, 33 passed, 2 skipped (pre-existing DB-dependent skips, unrelated
+  to this change).
+- Because `electron` cannot be `require`'d at all in this sandbox (no display either), the actual
+  Electron main/preload processes cannot be booted here, so the completion test's literal
+  "in the running dev app devtools" step could not be performed directly. Instead, exercised the
+  same underlying logic outside Electron:
+  - Copied the `runCommand`/`simplify` logic into a throwaway Node script (not committed) and ran
+    it for real: `npx vitest run --reporter=verbose src/services/posService.test.ts` streamed 39
+    real lines including `✓ src/services/posService.test.ts > posService › checkout() > ...`
+    (confirms ANSI-strip + `✓ ...` simplification); starting a second run while the first was
+    still active returned `{ ok:false, reason:'already-running' }` (confirms the concurrency
+    guard); sending `SIGTERM` to the active child (`bash -c 'sleep 30'`) stopped it immediately
+    (confirms the POSIX cancel path terminates the run). The Windows `taskkill` branch is
+    code-reviewed only — this sandbox is Linux, so it could not be executed.
+  - Copied `electron/preload.js` verbatim into a `.cjs` file and required it under a hand-mocked
+    `electron` module (`contextBridge.exposeInMainWorld` recording into a plain object,
+    `ipcRenderer` stubbed) to test the gate itself: with `process.argv` lacking
+    `--enable-sandbox-runner`, `sandboxRunner` was never exposed (stays `undefined`, matching the
+    packaged-build requirement) while `desktop` still was; with the flag present, `sandboxRunner`
+    was exposed with exactly the four expected methods (`run`, `reset`, `cancel`, `onOutput`).
+  - No orphan child processes were left running after these checks (`ps aux` confirmed clean).
+- `npx eslint .` could not be run to verify style: `eslint.config.js` throws the same pre-existing
+  `TypeError: Cannot read properties of undefined (reading 'recommended')` already noted in
+  todo-009/todo-010's Completion Notes. Not part of this todo's completion test.
+- `graphify update .` could not be run: no `graphify` binary is installed in this environment
+  (same as noted in prior todos in this series). Not a completion-test gate for this todo.
+
+**Why this is needs-review, not completed:** every check that does not require a live Electron
+GUI passed (`tsc`, `npm test`, and the equivalent-logic streaming/concurrency/cancel/gate checks
+above). The one item not literally satisfied is the completion test's explicit "in the running
+dev app devtools" step — this sandbox cannot install or launch the Electron binary at all (403 on
+the binary download, plus no display), so `window.sandboxRunner.run('unit')` was never observed
+streaming inside an actual `BrowserWindow`'s devtools, and the packaged-build `undefined` check
+was verified only via the extracted preload logic, not a real `electron-builder` packaged app.
+
+**What's needed to close this out:** on a machine that can download/run the real Electron binary
+(or in a session with GUI/binary-download access), run `npm run dev`, open devtools, and confirm
+`window.sandboxRunner.run('unit')` streams output live and `window.sandboxRunner.cancel()` stops
+it; then build a packaged artifact (`npm run dist` or equivalent) and confirm `window.sandboxRunner`
+is `undefined` there. No code changes are expected to be needed — the gate and IPC wiring were
+verified end-to-end via the equivalent-logic tests described above.

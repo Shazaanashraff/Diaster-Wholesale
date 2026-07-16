@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -20,6 +22,9 @@ let updateCheckTimer = null;
 let updaterDisabledReason = null;
 let isCheckingForUpdate = false;
 let lastSentStatus = null;
+
+/** @type {import('node:child_process').ChildProcess | null} */
+let activeProc = null;
 
 function sendUpdaterStatus(status, data = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
@@ -50,6 +55,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: isDev ? ['--enable-sandbox-runner'] : [],
     },
   });
 
@@ -198,6 +204,117 @@ ipcMain.on('updater:install-now', () => {
     log.info('Manual install requested via IPC. Calling quitAndInstall(false, true)...');
     autoUpdater.quitAndInstall(false, true);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Sandbox test runner (dev-only) — todo-011.
+// ---------------------------------------------------------------------------
+
+function stripAnsi(line) {
+  return line.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function simplify(line) {
+  const clean = stripAnsi(line).replace(/\r$/, '');
+  const trimmed = clean.trim();
+
+  if (/^(?:✓|√|PASS)\b/.test(trimmed)) {
+    return `✓ ${trimmed.replace(/^(?:✓|√|PASS)\s*/, '')}`;
+  }
+  if (/^(?:✗|×|FAIL)\b/.test(trimmed)) {
+    return `FAIL ${trimmed.replace(/^(?:✗|×|FAIL)\s*/, '')}`;
+  }
+  return clean;
+}
+
+function runCommand(cmd, args, webContents) {
+  return new Promise((resolve) => {
+    if (activeProc) {
+      resolve({ ok: false, reason: 'already-running' });
+      return;
+    }
+
+    const repoRoot = path.join(__dirname, '..');
+    const proc = spawn(cmd, args, { cwd: repoRoot, shell: true });
+    activeProc = proc;
+
+    const send = (line) => {
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('sandbox:output', simplify(line));
+      }
+    };
+
+    readline.createInterface({ input: proc.stdout }).on('line', send);
+    readline.createInterface({ input: proc.stderr }).on('line', send);
+
+    proc.on('close', (code) => {
+      send(code === 0 ? '✓ done' : `FAIL exited with code ${code}`);
+      activeProc = null;
+      resolve({ ok: true, code });
+    });
+
+    proc.on('error', (error) => {
+      send(`FAIL ${error.message}`);
+      activeProc = null;
+      resolve({ ok: false, reason: error.message ?? String(error) });
+    });
+  });
+}
+
+ipcMain.handle('sandbox:run', (event, type, filter) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+
+  const webContents = event.sender;
+
+  if (type === 'unit' && filter?.files?.length) {
+    return runCommand(
+      'npx',
+      ['vitest', 'run', '--reporter=verbose', ...filter.files],
+      webContents
+    );
+  }
+  if (type === 'unit') {
+    return runCommand('npm', ['test'], webContents);
+  }
+  if (type === 'e2e' && filter?.spec) {
+    return runCommand(
+      'npx',
+      ['playwright', 'test', '--reporter=line', `e2e/${filter.spec}.spec.ts`],
+      webContents
+    );
+  }
+
+  return { ok: false, reason: 'invalid-run-request' };
+});
+
+ipcMain.handle('sandbox:reset', (event) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+
+  return runCommand('npm', ['run', 'sandbox:reset'], event.sender);
+});
+
+ipcMain.handle('sandbox:cancel', () => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+  if (!activeProc) {
+    return { ok: false, reason: 'no-active-run' };
+  }
+
+  const pid = activeProc.pid;
+  if (process.platform === 'win32') {
+    activeProc.kill();
+    spawn('taskkill', ['/pid', String(pid), '/T', '/F']);
+  } else {
+    activeProc.kill('SIGTERM');
+  }
+  activeProc = null;
+
+  return { ok: true };
 });
 
 app.on('window-all-closed', () => {

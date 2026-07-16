@@ -26,3 +26,23 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   sendMetricsFlushed: () => ipcRenderer.send('app:metrics-flushed'),
 });
+
+// Dev-only Sandbox test runner (todo-011). The main process only passes
+// --enable-sandbox-runner when !app.isPackaged, so this is absent (undefined)
+// from any packaged/web build.
+if (process.argv.includes('--enable-sandbox-runner')) {
+  contextBridge.exposeInMainWorld('sandboxRunner', {
+    run: (type, filter) => ipcRenderer.invoke('sandbox:run', type, filter),
+    reset: () => ipcRenderer.invoke('sandbox:reset'),
+    cancel: () => ipcRenderer.invoke('sandbox:cancel'),
+    onOutput: (callback) => {
+      if (typeof callback !== 'function') {
+        return () => {};
+      }
+
+      const listener = (_event, line) => callback(line);
+      ipcRenderer.on('sandbox:output', listener);
+      return () => ipcRenderer.removeListener('sandbox:output', listener);
+    },
+  });
+}
