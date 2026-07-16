@@ -84,6 +84,17 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
       {/* Print-only styles */}
       <style>{`
         @media print {
+          /* The success modal caps its content at 80vh with overflow-y: auto
+             for on-screen scrolling; left in place, that clip also crops the
+             printed output once a bill has enough items to exceed one screen. */
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          [data-testid="pos-success-modal"] {
+            max-height: none !important;
+            overflow: visible !important;
+          }
           body * { visibility: hidden !important; }
           #pos-receipt-printable, #pos-receipt-printable * {
             visibility: visible !important;
@@ -94,7 +105,11 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
             print-color-adjust: exact !important;
           }
           #pos-receipt-printable {
-            position: fixed !important;
+            /* absolute (not fixed) so it still escapes the modal's normal
+               flow, but without CSS paged-media's "fixed = repeat on every
+               page, capped to one page" behaviour, which was truncating
+               long bills instead of letting the 80mm-auto page grow. */
+            position: absolute !important;
             top: 0 !important;
             /* Centre on the page so left/right margins are symmetric instead
                of the content hugging the left with a wide right margin. */
