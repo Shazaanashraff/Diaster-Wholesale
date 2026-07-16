@@ -178,7 +178,11 @@ export const ReturnsPage: React.FC = () => {
       q = q.gte('created_at', `${searchDate}T00:00:00`).lte('created_at', `${searchDate}T23:59:59`);
     } else {
       const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - (isAdmin ? 30 : 10));
+      if (isAdmin) {
+        cutoff.setMonth(cutoff.getMonth() - 2);
+      } else {
+        cutoff.setDate(cutoff.getDate() - 10);
+      }
       q = q.gte('created_at', cutoff.toISOString());
     }
 
