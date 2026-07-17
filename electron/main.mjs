@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import readline from 'node:readline';
 import electronUpdater from 'electron-updater';
 import log from 'electron-log';
 
@@ -13,6 +15,11 @@ const __dirname = path.dirname(__filename);
 const isDev = !app.isPackaged;
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
+const repoRoot = path.join(__dirname, '..');
+const isWindows = process.platform === 'win32';
+
+/** @type {import('node:child_process').ChildProcess | null} */
+let activeProc = null;
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
@@ -50,6 +57,7 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: isDev ? ['--enable-sandbox-runner'] : [],
     },
   });
 
@@ -176,6 +184,106 @@ function configureAutoUpdater() {
     checkForUpdates('interval');
   }, UPDATE_CHECK_INTERVAL_MS);
 }
+
+function simplify(line) {
+  const clean = line.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
+  const passMatch = clean.match(/^\s*(?:\x1b\[\d+m)?[✓✔]\s*(.+)$/) || clean.match(/^\s*✓\s*(.+)$/);
+  if (passMatch) {
+    return `✓ ${passMatch[1]}`;
+  }
+  if (/^\s*(?:✗|✖|×|FAIL)\b/.test(clean)) {
+    return `FAIL ${clean.replace(/^\s*(?:✗|✖|×|FAIL)\s*/, '')}`;
+  }
+  return clean;
+}
+
+function runCommand(cmd, args, webContents) {
+  if (activeProc) {
+    return Promise.resolve({ ok: false, reason: 'already-running' });
+  }
+
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, { cwd: repoRoot, shell: true });
+    activeProc = proc;
+
+    const send = (line) => {
+      if (webContents && !webContents.isDestroyed()) {
+        webContents.send('sandbox:output', simplify(line));
+      }
+    };
+
+    const stdout = readline.createInterface({ input: proc.stdout });
+    stdout.on('line', send);
+    const stderr = readline.createInterface({ input: proc.stderr });
+    stderr.on('line', send);
+
+    proc.on('close', (code) => {
+      send(code === 0 ? '✓ done' : `FAIL exited with code ${code}`);
+      activeProc = null;
+      resolve({ ok: true, code });
+    });
+
+    proc.on('error', (error) => {
+      send(`FAIL ${error?.message ?? String(error)}`);
+      activeProc = null;
+      resolve({ ok: false, reason: error?.message ?? String(error) });
+    });
+  });
+}
+
+ipcMain.handle('sandbox:run', (event, type, filter) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+
+  if (type === 'unit' && filter?.files?.length) {
+    return runCommand('npx', ['vitest', 'run', '--reporter=verbose', ...filter.files], event.sender);
+  }
+  if (type === 'unit') {
+    return runCommand('npm', ['test'], event.sender);
+  }
+  if (type === 'e2e' && filter?.spec) {
+    return runCommand(
+      'npx',
+      ['playwright', 'test', '--reporter=line', `e2e/${filter.spec}.spec.ts`],
+      event.sender,
+    );
+  }
+
+  return { ok: false, reason: 'invalid-request' };
+});
+
+ipcMain.handle('sandbox:reset', (event) => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+
+  return runCommand('npm', ['run', 'sandbox:reset'], event.sender);
+});
+
+ipcMain.handle('sandbox:cancel', () => {
+  if (app.isPackaged) {
+    return { ok: false, reason: 'unavailable-in-packaged-build' };
+  }
+
+  if (!activeProc) {
+    return { ok: false, reason: 'not-running' };
+  }
+
+  const pid = activeProc.pid;
+
+  if (isWindows) {
+    activeProc.kill();
+    if (pid) {
+      spawn('taskkill', ['/pid', String(pid), '/T', '/F']);
+    }
+  } else {
+    activeProc.kill('SIGTERM');
+  }
+
+  activeProc = null;
+  return { ok: true };
+});
 
 app.whenReady().then(() => {
   app.setAppUserModelId('com.diaster.wholesale');

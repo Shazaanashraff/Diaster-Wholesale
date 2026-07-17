@@ -3,7 +3,7 @@ id: todo-011
 title: Sandbox feature [4/7] — live runner IPC (window.sandboxRunner) in Electron main + preload
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -96,5 +96,34 @@ reap it and so a second run can be rejected. Strip ANSI before sending so the UI
 - **Create:** `src/types/sandbox-runner.d.ts`
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: how dev-gate was implemented, Windows cancel verified, packaged-build
-     undefined verified, commit hash. -->
+
+- `electron/main.mjs`: added `sandbox:run`, `sandbox:reset`, `sandbox:cancel` IPC handlers, an
+  `activeProc` singleton guard (second run rejected with `{ok:false, reason:'already-running'}`),
+  a `simplify()` ANSI-strip/pass-fail-marker helper, and a `runCommand()` spawn wrapper that
+  streams stdout/stderr line-by-line via `readline` to `webContents.send('sandbox:output', ...)`.
+  All three handlers short-circuit with `{ok:false, reason:'unavailable-in-packaged-build'}` when
+  `app.isPackaged`. `cancel` uses `taskkill /pid <pid> /T /F` on `win32` (after `proc.kill()`) and
+  `proc.kill('SIGTERM')` elsewhere.
+- Dev-gate: `createMainWindow()` now passes `webPreferences.additionalArguments:
+  ['--enable-sandbox-runner']` only when `!app.isPackaged`. `electron/preload.js` only calls
+  `contextBridge.exposeInMainWorld('sandboxRunner', {...})` when
+  `process.argv.includes('--enable-sandbox-runner')`, so `window.sandboxRunner` is `undefined` in
+  any packaged/web build and in any dev launch that doesn't set the flag.
+- `src/types/sandbox-runner.d.ts` created, declaring `Window.sandboxRunner?: SandboxRunner`
+  (`run`, `reset`, `cancel`, `onOutput`).
+- `npx tsc --noEmit`: clean.
+- `npm test`: 3 files, 33 passed, 2 skipped — unchanged from before this change (no test files
+  touched).
+- **Not verified — environment limitation:** the "running dev app devtools" checklist item
+  (`window.sandboxRunner.run('unit')` streams output, `.cancel()` stops it, `undefined` in a
+  packaged build) could not be exercised. `npm install` in this sandbox fails to fetch the
+  Electron binary itself (`HTTPError: Response code 403 (Forbidden)` from the Electron download
+  host) — the sandbox's egress proxy reports this as an organization policy denial, not a
+  transient error, and per its own guidance ("do not retry or route around it") no workaround was
+  attempted. `npm install ELECTRON_SKIP_BINARY_DOWNLOAD=1` was used instead so the rest of the
+  toolchain (`tsc`, `vitest`) could run, but this leaves no `electron` binary anywhere in the
+  container to launch the app with. Windows-specific `taskkill` cancel behaviour is likewise
+  unverified beyond code inspection (this container is Linux). All IPC/gating logic was
+  implemented per the guide and reviewed by re-reading the spawned code paths, but a human with a
+  working Electron dev environment should do the live devtools check and Windows cancel check
+  before flipping this to `completed`.

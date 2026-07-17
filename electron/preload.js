@@ -26,3 +26,16 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   sendMetricsFlushed: () => ipcRenderer.send('app:metrics-flushed'),
 });
+
+if (process.argv.includes('--enable-sandbox-runner')) {
+  contextBridge.exposeInMainWorld('sandboxRunner', {
+    run: (type, filter) => ipcRenderer.invoke('sandbox:run', type, filter),
+    reset: () => ipcRenderer.invoke('sandbox:reset'),
+    cancel: () => ipcRenderer.invoke('sandbox:cancel'),
+    onOutput: (callback) => {
+      const listener = (_event, line) => callback(line);
+      ipcRenderer.on('sandbox:output', listener);
+      return () => ipcRenderer.removeListener('sandbox:output', listener);
+    },
+  });
+}
