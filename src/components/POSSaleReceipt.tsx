@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { CartItem } from '../pages/POSPage';
 
 export interface SaleReceiptData {
@@ -52,6 +53,18 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
   const invType = paymentSplits.length > 1 ? 'SPLIT' : primaryMethod;
 
   const handlePrint = () => {
+    // `@page { size: 80mm auto }` isn't reliably honoured by Chromium's
+    // print pipeline for continuous-roll widths — it's been observed
+    // falling back to a fixed page length regardless, which is what
+    // truncates long bills. Measure the actual rendered receipt height
+    // (the on-screen preview and the print copy share the same width/
+    // font stack) and set an explicit page height instead of "auto".
+    const heightPx = printRef.current?.scrollHeight ?? 0;
+    const heightMm = Math.ceil(heightPx * 25.4 / 96) + 15; // + buffer for the print copy's slightly larger font-size
+    const pageSizeStyle = document.getElementById('pos-receipt-page-size');
+    if (pageSizeStyle && heightMm > 15) {
+      pageSizeStyle.textContent = `@media print { @page { size: 80mm ${heightMm}mm; margin: 0; } }`;
+    }
     window.print();
   };
 
@@ -79,50 +92,16 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
     </div>
   );
 
-  return (
+  // Shared receipt markup: rendered once for the on-screen preview (inside
+  // the success modal's scrollable 80vh box) and once more, unmodified,
+  // in a portal appended directly to <body> for printing. The portal copy
+  // stays in normal document flow with no ancestor overflow/position
+  // constraints in its way, so the printed page can size itself to the
+  // full receipt height (position: fixed/absolute here previously fought
+  // the modal's own layout and either clipped or mispositioned long bills).
+  const receiptBody = (
     <>
-      {/* Print-only styles */}
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #pos-receipt-printable, #pos-receipt-printable * {
-            visibility: visible !important;
-            /* Force every line bold + pure black so thermal output is dark and legible */
-            font-weight: 700 !important;
-            color: #000 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          #pos-receipt-printable {
-            position: fixed !important;
-            top: 0 !important;
-            /* Centre on the page so left/right margins are symmetric instead
-               of the content hugging the left with a wide right margin. */
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-            width: 80mm !important;
-            padding: 0 1mm !important;
-            font-size: 13px !important;
-            line-height: 1.42 !important;
-          }
-          #pos-receipt-printable img {
-            display: block !important;
-            margin: 0 auto 4px !important;
-            width: 48mm !important;
-            height: auto !important;
-            filter: grayscale(100%) contrast(1.6) brightness(0.5) !important;
-          }
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
-        }
-      `}</style>
-
-      {/* Receipt preview on-screen */}
-      <div id="pos-receipt-printable" ref={printRef} style={s}>
-
-        {/* Header */}
+      {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 6 }}>
           <img src={logoSrc} alt="Diastar" style={{ width: '48mm', height: 'auto', display: 'block', margin: '0 auto 4px', filter: 'grayscale(100%) contrast(1.6) brightness(0.5)' }} />
           <div style={{ fontSize: 12 }}>No. 240, Dam Street, Colombo-12</div>
@@ -259,7 +238,68 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
             <div style={{ marginTop: 2 }}>Loyalty pts earned: +{earnedPoints}</div>
           )}
         </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Print-only styles */}
+      <style>{`
+        @media print {
+          /* #pos-receipt-printable is a portal appended straight to <body>,
+             so hiding everything else that's actually a direct body child
+             (the app root) leaves only the receipt, in normal document
+             flow, for the page to size itself around. */
+          body > *:not(#pos-receipt-printable) { display: none !important; }
+          #pos-receipt-printable {
+            display: block !important;
+            width: 80mm !important;
+            margin: 0 auto !important;
+            padding: 0 1mm !important;
+            font-size: 13px !important;
+            line-height: 1.42 !important;
+          }
+          #pos-receipt-printable, #pos-receipt-printable * {
+            /* Force every line bold + pure black so thermal output is dark and legible */
+            font-weight: 700 !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          #pos-receipt-printable img {
+            display: block !important;
+            margin: 0 auto 4px !important;
+            width: 48mm !important;
+            height: auto !important;
+            filter: grayscale(100%) contrast(1.6) brightness(0.5) !important;
+          }
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+        }
+      `}</style>
+
+      {/* Populated by handlePrint with an explicit height right before
+          window.print() — overrides the "auto" fallback above, since auto
+          isn't reliably respected and was truncating long bills. */}
+      <style id="pos-receipt-page-size" />
+
+      {/* Receipt preview on-screen */}
+      <div ref={printRef} style={s}>
+        {receiptBody}
       </div>
+
+      {/* Print-only copy: portaled to <body>, hidden on screen, shown by
+          the @media print rules above. Kept separate from the on-screen
+          preview so print isolation doesn't have to fight the modal's own
+          layout (see the comment on receiptBody). */}
+      {createPortal(
+        <div id="pos-receipt-printable" style={{ ...s, display: 'none' }}>
+          {receiptBody}
+        </div>,
+        document.body
+      )}
 
       {/* Screen-only controls */}
       <div className="no-print" style={{ display: 'flex', gap: 8, marginTop: 12, maxWidth: 302, margin: '12px auto 0' }}>
