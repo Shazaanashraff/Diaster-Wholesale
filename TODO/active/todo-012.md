@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -81,3 +81,45 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 
 ## Completion Notes
 <!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `src/pages/DeveloperPortal.tsx`: added `'sandbox'` to `PortalTab`, added a `FlaskConical`-iconed
+  "Sandbox" entry to the sub-nav array, filtered out of that array unless
+  `typeof (window as any).sandboxRunner !== 'undefined'`, and rendered `<SandboxRunnerPanel/>` when
+  `portalTab === 'sandbox'`.
+- `src/components/sandbox/SandboxRunnerPanel.tsx` (new): status badge (`role="status"`,
+  `aria-live="polite"`, Idle/Running/Passed/Failed, pulsing dot only while running), broad actions
+  (Run Unit + Integration → `sandboxRunner.run('unit')`; Run E2E → sequentially runs every non-null
+  `TEST_GROUPS[].e2e` spec since the IPC layer from todo-011 only supports running one named spec
+  at a time, no "run all" mode; Reset Sandbox Data → destructive-styled, gated behind `ConfirmModal`;
+  Cancel shown only while running), per-module grid driven by `TEST_GROUPS`/`TEST_CASES` with
+  blue/violet/amber count pills hidden at 0, expandable rows grouping cases into "Unit tests" /
+  "Integration tests (real database)" / "End-to-end tests (Playwright)" sections as `name — what`,
+  a running banner that disables every other module's buttons, and a monospace streaming log panel
+  (pass lines green with a check icon, fail/error lines red with an X icon — never colour alone,
+  auto-scroll pinned to bottom that releases when the user scrolls up, "No output yet" before the
+  first run). Pulse/spinner animations use Tailwind's `motion-reduce:animate-none` so
+  `prefers-reduced-motion` removes them; existing `posFadeIn` entrance animation is left as-is,
+  matching every other tab in this page (none of which gate that entrance fade on reduced-motion
+  either).
+- Deliberate deviation from the literal checklist: the per-row "Run Tests" button is disabled (not
+  just the E2E slot) for modules with zero `vitestFiles`, instead of calling
+  `sandboxRunner.run('unit', {files: []})`. `electron/main.mjs`'s handler treats an empty/absent
+  `files` array as "run the whole suite" (`if (type === 'unit' && filter?.files?.length) {...}
+  else if (type === 'unit') { npm test }`), so leaving it enabled would make a "Run Tests" click on
+  e.g. Products & Inventory silently run every test in the repo instead of doing nothing useful.
+  Fixing the root cause would mean touching `electron/main.mjs`, which is out of this todo's `Files
+  to Modify` list (todo-011's scope) — flagging instead of expanding scope.
+- `npx tsc --noEmit`: clean. `npm run build`: clean (pre-existing chunk-size and CSS optimizer
+  warnings only, unrelated to this change). `npm test`: 3 files, 33 passed, 2 skipped — unchanged.
+- **Not verified — same environment limitation as todo-011:** the manual dev-app walkthrough
+  (broad run, per-module run, E2E run, cancel, reset-with-confirm streaming output; tab hidden when
+  `window.sandboxRunner` is undefined) could not be exercised. `npm install` succeeds, but
+  `node_modules/electron` has no binary — `npm rebuild electron` fails with `HTTPError: Response
+  code 403 (Forbidden)` fetching the Electron binary, which this sandbox's egress proxy reports as
+  an organization policy denial rather than a transient error, so no retry/workaround was
+  attempted. There is no Electron runtime anywhere in this container to launch the app against a
+  live `window.sandboxRunner`. A human with a working Electron dev environment should run the
+  walkthrough (including the packaged-build gating and the reduced-motion check in an actual
+  browser) before flipping this to `completed`.
+- `graphify` CLI is not installed in this container (`graphify update .` → command not found), so
+  the knowledge graph was not refreshed after this change.
