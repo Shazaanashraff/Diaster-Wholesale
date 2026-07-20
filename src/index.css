@@ -264,6 +264,25 @@
   animation: breathingPulse 2s ease-in-out infinite;
 }
 
+@keyframes sandboxPulseDot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.5); }
+  50% { opacity: 0.5; box-shadow: 0 0 0 4px rgba(251, 191, 36, 0); }
+}
+
+.sandbox-status-dot--running {
+  animation: sandboxPulseDot 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-status-dot--running {
+    animation: none;
+  }
+
+  .sandbox-panel-fade {
+    animation: none !important;
+  }
+}
+
 @keyframes posFadeIn {
   from {
     opacity: 0;

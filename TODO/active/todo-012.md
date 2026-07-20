@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -80,4 +80,49 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `DeveloperPortal.tsx`: added `'sandbox'` to `PortalTab`, imported `FlaskConical`, and added a
+  `{ id: 'sandbox', label: 'Sandbox', icon: FlaskConical }` sub-nav entry filtered out unless
+  `typeof (window as any).sandboxRunner !== 'undefined'`. Renders `<SandboxRunnerPanel />` when
+  `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Status badge (`role="status"`, `aria-live="polite"`) cycles Idle → Running (pulsing dot) →
+    Passed/Failed, driven by a single `status` state derived from each `sandboxRunner.run/reset`
+    call's resolved `{ok, code}` (pass = `ok && code === 0`).
+  - Broad actions: **Run Unit + Integration** (`run('unit')`), **Run E2E** (loops
+    `run('e2e', {spec})` over every distinct `TEST_GROUPS[].e2e` value, sequentially, since the
+    IPC layer only accepts one spec per call and one process at a time), **Reset Sandbox Data**
+    (destructive-styled, red, gated behind the existing shared `ConfirmModal`). **Cancel**
+    (`sandboxRunner.cancel()`) only renders while `status === 'running'`.
+  - Per-module grid built from `TEST_GROUPS` + `TEST_CASES[group.id]`: blue/violet/amber count
+    pills for unit/integration/e2e, each hidden when its count is 0; per-row "Run Tests" (disabled
+    when the group has no vitest files) and "Run E2E" (or a muted "no E2E" label when
+    `group.e2e` is null).
+  - Expandable rows group `TEST_CASES[group.id]` by `type` into "Unit tests" / "Integration tests
+    (real database)" / "End-to-end tests (Playwright)" sections, each case rendered as
+    `name — what`.
+  - All action buttons (except Cancel) disable while `status === 'running'`, plus an amber
+    "tests are running" banner naming the active action.
+  - Log panel: fixed `h-64` monospace scroll container, ref-tracked pin-to-bottom that releases
+    when the user scrolls away from the bottom (restored via a rAF-free scroll listener), a
+    "Scrolled up" hint while unpinned, and a "No output yet" placeholder before the first run.
+    Lines are colour + icon coded (`✓ …` → green `CheckCircle2`, `FAIL …` → red `XCircle`), never
+    colour alone, matching the `simplify()` line prefixes already emitted by `electron/main.mjs`.
+  - `prefers-reduced-motion` handled in `src/index.css`: `.sandbox-status-dot--running`'s pulse
+    keyframe and the panel's `posFadeIn` mount animation are both disabled under
+    `@media (prefers-reduced-motion: reduce)`.
+- `npx tsc --noEmit`: clean. `npm run build` (`tsc -b && vite build`): clean (required switching
+  the `TestCase` import to `import type` for `verbatimModuleSyntax`).
+- `npm test`: 3 files, 33 passed, 2 skipped — unchanged from before this change.
+- **Not verified — same environment limitation as todo-011:** the manual dev-app walkthrough
+  (broad run / per-module run / E2E run / cancel / reset-with-confirm actually streaming output
+  in a launched Electron window) could not be exercised. `node_modules/electron/dist` does not
+  exist in this container — `npm install` was run with `ELECTRON_SKIP_BINARY_DOWNLOAD=1` (the
+  Electron binary download is blocked by this sandbox's egress policy, as already documented in
+  todo-011), so there is no Electron binary anywhere to launch `npm run dev` with. The
+  `sandboxRunner` gating, IPC call shapes, and log-line colour/icon logic were verified by
+  re-reading `electron/main.mjs` / `electron/preload.js` against this component's calls, but a
+  human with a working Electron dev environment should do the live walkthrough (and confirm the
+  "Run E2E" broad action, which sequentially replays every catalog E2E spec, behaves acceptably
+  once more specs exist) before flipping this to `completed`.
+- `graphify` CLI is not installed in this container, so `graphify update .` could not be run.
