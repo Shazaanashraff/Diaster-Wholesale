@@ -287,6 +287,26 @@
   }
 }
 
+@keyframes sandboxPulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+.sandbox-pulse-dot {
+  animation: sandboxPulseDot 1.2s ease-in-out infinite;
+}
+
+.sandbox-panel-fade {
+  animation: posFadeIn 220ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-pulse-dot,
+  .sandbox-panel-fade {
+    animation: none;
+  }
+}
+
 @layer components {
   .pos-theme {
     font-family: 'Inter', 'Urbanist', system-ui, -apple-system, sans-serif;

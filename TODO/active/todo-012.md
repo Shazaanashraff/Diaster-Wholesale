@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -80,4 +80,61 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+### Status: needs-review (2026-07-22)
+
+**What was done:**
+- `DeveloperPortal.tsx`: added `'sandbox'` to the `PortalTab` union; added a `Sandbox` entry
+  (icon `FlaskConical`) to the sub-nav array, filtered out with
+  `typeof (window as any).sandboxRunner !== 'undefined'` so the tab is invisible in
+  packaged/web builds and any dev launch that doesn't set `--enable-sandbox-runner`; renders
+  `<SandboxRunnerPanel />` when `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Header with title + status badge (`role="status"`, `aria-live="polite"`) cycling
+    Idle → Running (pulsing amber dot) → Passed (green) / Failed (red).
+  - Broad actions: **Run Unit + Integration** (`run('unit')`), **Run E2E** (loops sequentially
+    over every distinct `TEST_GROUPS[*].e2e` spec via `run('e2e', {spec})`, since the IPC layer
+    only accepts one spec per call — no `main.mjs` change needed), **Reset Sandbox Data**
+    (destructive-styled, behind a confirm dialog), and a **Cancel** button shown only while
+    `status === 'running'`.
+  - Per-module grid from `TEST_GROUPS`: label + coloured pills (unit=blue, db/integration=violet,
+    e2e=amber) derived from `TEST_CASES[group.id]`, each hidden when its count is 0; per-row
+    **Run Tests** (disabled when the group has no `vitestFiles`) and **Run E2E** (or a muted
+    "no E2E" label when `group.e2e` is null).
+  - Expand/collapse per row into the three labelled sections **Unit tests / Integration tests
+    (real database) / End-to-end tests (Playwright)**, each listing `name — what` from
+    `TEST_CASES`.
+  - While any run is active, every action button (broad and per-row) is disabled and an amber
+    banner names the running module.
+  - Streaming log panel: monospace, fixed height (`h-64`), auto-scrolls pinned to bottom and
+    releases the pin when the user scrolls up (24px-from-bottom threshold); pass lines get a
+    green check icon, fail lines a red X icon (icon + `✓`/`FAIL` text label, not colour alone);
+    "No output yet" placeholder before the first run.
+  - Subscribes to `window.sandboxRunner.onOutput` once on mount; derives pass/fail from the
+    resolved `{ok, code}` of each `run()`/`reset()` call.
+- `src/index.css`: added `.sandbox-pulse-dot` / `.sandbox-panel-fade` keyframe classes, both
+  disabled under `@media (prefers-reduced-motion: reduce)`.
+- `npx tsc --noEmit`: clean. `npm run build`: clean (pre-existing chunk-size/CSS warnings only,
+  unrelated to this change). `npm test`: 3 files, 33 passed, 2 skipped — unchanged.
+
+**Why this is needs-review, not completed:**
+The completion test's last item — "Manual walkthrough in dev app: broad run, per-module run,
+E2E run, cancel, and reset-with-confirm all work and stream output" — could not be exercised.
+Same root cause as todo-011: `npm install` in this sandboxed environment cannot fetch the
+Electron binary itself (the egress proxy denies it as an organization-policy block, not a
+transient error), so no `electron` executable exists anywhere in this container to launch the
+dev app with. `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install` was used instead so `tsc`/`vite
+build`/`vitest` could run and be verified above, but the live devtools walkthrough — clicking
+each button in the running app and watching output stream — is unverified beyond code
+inspection and cross-checking every call site against `electron/preload.js` /
+`electron/main.mjs`'s actual IPC contract (confirmed to match: `run(type, filter)`,
+`reset()`, `cancel()`, `onOutput(cb)`, and the `sandbox:run`/`sandbox:reset`/`sandbox:cancel`
+handler behavior in `main.mjs`).
+
+**What's needed to close this out:** a human (or an environment with a working Electron
+download path) should run `npm run dev:sandbox`, open devtools, and confirm: the Sandbox tab
+appears; **Run Unit + Integration** streams `npm test` output and flips the badge to
+Passed/Failed; a per-row **Run Tests** on `sales-pos` streams its vitest output; **Run E2E**
+runs the `pos-checkout` spec; **Cancel** stops an in-flight run; **Reset Sandbox Data**'s
+confirm dialog appears and, on confirm, streams `npm run sandbox:reset` output. No code changes
+are expected to be needed — this is a live-environment verification step only.

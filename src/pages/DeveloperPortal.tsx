@@ -18,6 +18,7 @@ import {
   Network,
   Play,
   FileCode,
+  FlaskConical,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -35,9 +36,10 @@ import { usePermissions } from '../utils/permissions';
 import { runAggregationAndUpload } from '../services/aggregator';
 import { db } from '../services/auditDb';
 import { cn } from '../lib/utils';
+import { SandboxRunnerPanel } from '../components/sandbox/SandboxRunnerPanel';
 
 type TimeRange = '24h' | '7d' | '30d';
-type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest';
+type PortalTab = 'egress' | 'offline' | 'connection' | 'storage' | 'sysinfo' | 'loadtest' | 'sandbox';
 type EgressTab = 'user' | 'device' | 'page' | 'query' | 'meta';
 type QuerySortField = 'calls' | 'bytes' | 'duration';
 
@@ -376,8 +378,11 @@ export const DeveloperPortal: React.FC = () => {
             { id: 'storage', label: 'Local Settings', icon: FileCode },
             { id: 'sysinfo', label: 'System Environment', icon: Cpu },
             { id: 'loadtest', label: 'Load Generator', icon: Play },
+            { id: 'sandbox', label: 'Sandbox', icon: FlaskConical },
           ] as const
-        ).map(tab => (
+        )
+          .filter(tab => tab.id !== 'sandbox' || typeof (window as any).sandboxRunner !== 'undefined')
+          .map(tab => (
           <button
             key={tab.id}
             onClick={() => setPortalTab(tab.id)}
@@ -971,6 +976,12 @@ export const DeveloperPortal: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {portalTab === 'sandbox' && (
+        <div style={{ animation: 'posFadeIn 220ms ease' }}>
+          <SandboxRunnerPanel />
         </div>
       )}
 
