@@ -264,6 +264,21 @@
   animation: breathingPulse 2s ease-in-out infinite;
 }
 
+@keyframes sandboxStatusPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.sandbox-status-dot--running {
+  animation: sandboxStatusPulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-status-dot--running {
+    animation: none;
+  }
+}
+
 @keyframes posFadeIn {
   from {
     opacity: 0;

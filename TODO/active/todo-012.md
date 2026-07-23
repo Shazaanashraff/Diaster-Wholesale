@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -81,3 +81,44 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 
 ## Completion Notes
 <!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `DeveloperPortal.tsx`: added `'sandbox'` to `type PortalTab`; added `{ id:'sandbox', label:'Sandbox',
+  icon: FlaskConical }` to the sub-nav array, filtered out unless `typeof (window as any).sandboxRunner
+  !== 'undefined'`; renders `<SandboxRunnerPanel/>` when `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Status badge (`role="status"`, `aria-live="polite"`) cycles Idle → Running → Passed/Failed, driven
+    by the resolved `SandboxRunResult.ok` from `window.sandboxRunner.run(...)`.
+  - Broad actions call `.run('unit')` / `.run('e2e')` with no filter; a **Cancel** button (calls
+    `.cancel()`) appears only while `status === 'running'`. **Reset Sandbox Data** is styled
+    destructive (red) and gated behind a confirm dialog before calling `.reset()`.
+  - Per-module grid renders one row per `TEST_GROUPS` entry with unit (blue) / integration (violet) /
+    e2e (amber) count pills derived from `TEST_CASES[group.id]`, each hidden when its count is 0.
+    Per-row **Run Tests** calls `.run('unit', { files: group.vitestFiles })` (disabled when the group
+    has no vitest files); per-row **Run E2E** calls `.run('e2e', { spec: group.e2e })` when `group.e2e`
+    is set, otherwise a muted "no E2E" label is shown instead of a button.
+  - Expanding a row (only enabled when the group has cases) renders three sections — "Unit tests",
+    "Integration tests (real database)", "End-to-end tests (Playwright)" — each listing `name — what`
+    from `TEST_CASES`, sections with zero cases are omitted.
+  - While `status === 'running'`, every module button (broad + per-row) is disabled via the `isRunning`
+    guard and a "tests are running" banner is shown.
+  - Log panel: fixed `h-64` monospace scroll container; a `pinnedRef` tracks whether the user is at the
+    bottom (within 24px), auto-scrolling only while pinned and releasing the pin on manual scroll-up.
+    Each line is classified pass/fail/neutral by regex on the raw text and rendered with both an icon
+    (`CheckCircle2`/`XCircle`) and colour, never colour alone. Shows "No output yet." before the first
+    run.
+  - The pulsing status dot uses a new CSS class `sandbox-status-dot--running` (added to `src/index.css`)
+    with its `@keyframes` wrapped by a `@media (prefers-reduced-motion: reduce)` override that disables
+    the animation — no JS-driven motion.
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (pre-existing chunk-size/CSS warnings only, unrelated to this change).
+- `npm test`: 3 files, 33 passed, 2 skipped — unchanged (no test files touched).
+- **Not verified — environment limitation:** the "Manual walkthrough in dev app" checklist item
+  (broad run, per-module run, E2E run, cancel, reset-with-confirm streaming output) could not be
+  exercised. As in todo-011, `npm install` in this sandbox uses `ELECTRON_SKIP_BINARY_DOWNLOAD=1`
+  because the Electron binary host is blocked by this environment's egress policy, so
+  `node_modules/electron/dist` (the actual Electron executable) does not exist here, and there is no
+  `DISPLAY` either — there is no way to launch the Electron dev app in this container. All UI logic
+  was implemented per the guide and reviewed by re-reading the component; a human with a working
+  Electron dev environment should do the live walkthrough (including confirming the reduced-motion
+  and log auto-scroll/pin-release behaviour visually) before flipping this to `completed`.
+- `graphify` CLI is not installed in this container, so `graphify update .` could not be run.
