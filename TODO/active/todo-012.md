@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -80,4 +80,55 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `src/pages/DeveloperPortal.tsx`: added `'sandbox'` to `PortalTab`; added a `Sandbox` sub-nav
+  entry (using `FlaskConical`) that is filtered out of the tab list unless
+  `typeof (window as any).sandboxRunner !== 'undefined'`; renders `<SandboxRunnerPanel />` when
+  `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Status badge (`role="status"` + `aria-live="polite"`) cycling Idle → Running (pulsing dot,
+    `motion-safe:animate-pulse` so `prefers-reduced-motion` disables it automatically) →
+    Passed (green) / Failed (red).
+  - Broad actions: Run Unit + Integration (`runner.run('unit')`), Run E2E (`runner.run('e2e')`),
+    Reset Sandbox Data (destructive-styled, routed through the existing `ConfirmModal` component
+    before calling `runner.reset()`). A Cancel button (`runner.cancel()`) appears only while a
+    run is active.
+  - Per-module grid built from `TEST_GROUPS`, with Unit (blue) / DB-Integration (violet) /
+    E2E (amber) count pills derived from `TEST_CASES[group.id]`, each hidden when its count is 0.
+    Per-row "Run Tests" (`runner.run('unit', {files: group.vitestFiles})`) and "Run E2E"
+    (`runner.run('e2e', {spec: group.e2e})`) buttons, or a muted "no E2E" label when `group.e2e`
+    is `null`.
+  - Expandable rows group `TEST_CASES[group.id]` by `type` into "Unit tests" / "Integration tests
+    (real database)" / "End-to-end tests (Playwright)" sections, each entry rendered as
+    `name — what`; groups with no cases yet fall back to the catalog's own `unitDesc` placeholder
+    text instead of a hard-coded string.
+  - All per-module and broad-action buttons (and Reset) disable while a run is in flight; a
+    "tests are running" banner is shown.
+  - Streaming log panel subscribes to `runner.onOutput` in a `useEffect`, is monospace with a
+    fixed height, auto-scrolls while pinned to the bottom, and releases the pin once the user
+    scrolls up (tracked via a scroll-distance check in an `onScroll` handler, not state, to avoid
+    fighting the auto-scroll effect). Lines are classified pass/fail by leading `✓`/`✗` markers or
+    `PASS`/`FAIL`/`error` text; pass/fail lines get both a `CheckCircle2`/`XCircle` icon *and* a
+    `[PASS]`/`[FAIL]` text label ahead of the colour, per the icon-plus-label requirement. A
+    "No output yet." placeholder shows before the first run.
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (pre-existing chunk-size and CSS-selector warnings only, unrelated to
+  this change).
+- `npm test`: 3 files, 33 passed, 2 skipped — unchanged, no test files touched.
+
+**Not verified — environment limitation:** the "Manual walkthrough in dev app" checklist item
+(broad run, per-module run, E2E run, cancel, reset-with-confirm all streaming real output) could
+not be exercised. Unlike todo-011's environment, the Electron binary *is* available here
+(`node_modules/.bin/electron --version` → `v36.9.5`), but there is no `.env` or `.env.sandbox` in
+this container — both are git-ignored and neither exists — so `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` are unset. Without a real Supabase connection the app cannot
+authenticate any user, so the `role === 'developer'` gate on `DeveloperPortal` itself cannot be
+passed, let alone the `window.sandboxRunner` IPC calls exercised against a live sandbox database.
+`eslint` was also attempted for extra confidence but fails on this repo's `eslint.config.js`
+(`TypeError: Cannot read properties of undefined (reading 'recommended')`) independent of this
+change — not part of this task's completion test, left as-is. `graphify` is not installed in this
+container (`graphify: command not found`), so `graphify update .` could not be run per
+CLAUDE.md — flagging for a human/future session with graphify available to run it.
+A human with real Supabase sandbox credentials should do the live devtools walkthrough (and the
+Windows-specific `taskkill` cancel path, which is separately still unverified per todo-011) before
+flipping this to `completed`.
