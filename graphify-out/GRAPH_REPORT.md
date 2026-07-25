@@ -1,11 +1,11 @@
-# Graph Report - Diaster-Wholesale  (2026-07-07)
+# Graph Report - Diaster-Wholesale  (2026-07-25)
 
 ## Corpus Check
-- 106 files · ~4,479,682 words
+- 111 files · ~4,484,624 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 562 nodes · 746 edges · 21 communities detected
+- 570 nodes · 750 edges · 22 communities detected
 - Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 142 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -31,6 +31,7 @@
 - [[_COMMUNITY_Community 22|Community 22]]
 - [[_COMMUNITY_Community 25|Community 25]]
 - [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 27|Community 27]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `load()` - 12 edges
@@ -59,8 +60,8 @@
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.05
-Nodes (31): load(), closeAdjustModal(), fetchInventory(), handleAdjustSubmit(), loadLedger(), openHistory(), getInventory(), getInventoryByLocation() (+23 more)
+Cohesion: 0.06
+Nodes (29): handleConfirm(), handleDrop(), handleFile(), handleFileInput(), handleRollback(), load(), classifyRows(), confirmImport() (+21 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.08
@@ -83,28 +84,28 @@ Cohesion: 0.08
 Nodes (14): handleRefresh(), load(), loadData(), handlePeriodChange(), handleRefresh(), loadData(), getCurrentStockReport(), getCurrentStockReportByLocation() (+6 more)
 
 ### Community 6 - "Community 6"
+Cohesion: 0.11
+Nodes (18): handleChequeAction(), handleRecordPayment(), handleSaveChanges(), loadData(), archiveCustomer(), completeCheque(), createCustomer(), depositCheque() (+10 more)
+
+### Community 7 - "Community 7"
 Cohesion: 0.09
 Nodes (16): runAggregationAndUpload(), startMetricsScheduler(), AppOfflineDatabase, generateUUID(), getOrCreateDeviceId(), logMetricEvent(), cn(), fmt() (+8 more)
 
-### Community 7 - "Community 7"
+### Community 8 - "Community 8"
 Cohesion: 0.07
 Nodes (11): load(), load(), cn(), load(), load(), load(), ProfitLossReport(), load() (+3 more)
-
-### Community 8 - "Community 8"
-Cohesion: 0.11
-Nodes (18): handleChequeAction(), handleRecordPayment(), handleSaveChanges(), loadData(), archiveCustomer(), completeCheque(), createCustomer(), depositCheque() (+10 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.11
 Nodes (15): getMovementRates(), createPurchase(), deletePurchase(), deletePurchaseDependents(), forceDeletePurchase(), getPurchases(), handleCreate(), handleDelete() (+7 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.13
-Nodes (13): DashboardRoute(), ProtectedRoute(), canCancelSales(), handleCancel(), isAdmin(), load(), can(), canAny() (+5 more)
+Cohesion: 0.11
+Nodes (11): closeAdjustModal(), fetchInventory(), handleAdjustSubmit(), loadLedger(), openHistory(), getInventory(), getInventoryByLocation(), getPosShopCatalog() (+3 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.13
-Nodes (9): handleConfirm(), handleDrop(), handleFile(), handleFileInput(), handleRollback(), classifyRows(), confirmImport(), parseExcelFile() (+1 more)
+Nodes (13): DashboardRoute(), ProtectedRoute(), canCancelSales(), handleCancel(), isAdmin(), load(), can(), canAny() (+5 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.11
@@ -142,6 +143,10 @@ Nodes (2): ARAgingReport(), bucketColor()
 Cohesion: 1.0
 Nodes (2): ageBucket(), load()
 
+### Community 27 - "Community 27"
+Cohesion: 1.0
+Nodes (2): findTestFiles(), normalise()
+
 ## Knowledge Gaps
 - **Thin community `Community 22`** (4 nodes): `mapInvoice()`, `processInvoiceReturn()`, `searchReturnableInvoices()`, `returnsService.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -149,16 +154,18 @@ Nodes (2): ageBucket(), load()
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 26`** (3 nodes): `StockAgingReport.tsx`, `ageBucket()`, `load()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 27`** (3 nodes): `test-groups.test.ts`, `findTestFiles()`, `normalise()`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `getProducts()` connect `Community 0` to `Community 1`, `Community 3`, `Community 9`, `Community 11`, `Community 13`?**
-  _High betweenness centrality (0.254) - this node is a cross-community bridge._
-- **Why does `getReportDateRange()` connect `Community 7` to `Community 0`, `Community 10`?**
-  _High betweenness centrality (0.210) - this node is a cross-community bridge._
-- **Why does `load()` connect `Community 10` to `Community 7`?**
-  _High betweenness centrality (0.163) - this node is a cross-community bridge._
+- **Why does `getProducts()` connect `Community 0` to `Community 1`, `Community 3`, `Community 9`, `Community 10`, `Community 13`?**
+  _High betweenness centrality (0.247) - this node is a cross-community bridge._
+- **Why does `getReportDateRange()` connect `Community 8` to `Community 0`, `Community 10`, `Community 11`?**
+  _High betweenness centrality (0.204) - this node is a cross-community bridge._
+- **Why does `load()` connect `Community 11` to `Community 8`?**
+  _High betweenness centrality (0.159) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `load()` (e.g. with `getPurchaseById()` and `getPendingApprovals()`) actually correct?**
   _`load()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 10 inferred relationships involving `getReportDateRange()` (e.g. with `load()` and `load()`) actually correct?**
