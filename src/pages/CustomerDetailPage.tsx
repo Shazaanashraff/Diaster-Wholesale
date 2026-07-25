@@ -638,14 +638,21 @@ export const CustomerDetailPage: React.FC = () => {
                     { v: 'cash',          label: 'Cash',          Icon: Wallet   },
                     { v: 'bank_transfer', label: 'Bank Transfer', Icon: Building2 },
                     { v: 'cheque',        label: 'Cheque',        Icon: FileText  },
-                  ] as { v: PayMethod; label: string; Icon: any }[]).map(({ v, label, Icon }) => (
+                  ] as { v: PayMethod; label: string; Icon: any }[]).map(({ v, label, Icon }) => {
+                    // General (no-invoice) payments are cash-only, so they always
+                    // reduce outstanding immediately (cheque/bank would defer or add friction).
+                    const locked = selectedInvoiceId === 'general' && v !== 'cash';
+                    return (
                     <button
                       key={v}
                       type="button"
+                      disabled={locked}
                       onClick={() => { setPaymentMethod(v); setPaymentBankName(''); setPaymentError(''); }}
                       className={cn(
                         "flex flex-col items-center gap-2 p-3 rounded-2xl border text-xs font-bold transition-all",
-                        paymentMethod === v
+                        locked
+                          ? "bg-[#171c23] border-[#2b313a] text-gray-700 opacity-40 cursor-not-allowed"
+                          : paymentMethod === v
                           ? "bg-primary/10 border-primary/50 text-primary"
                           : "bg-[#171c23] border-[#2b313a] text-gray-500 hover:text-gray-300"
                       )}
@@ -653,8 +660,12 @@ export const CustomerDetailPage: React.FC = () => {
                       <Icon size={18} strokeWidth={2.5} />
                       {label}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
+                {selectedInvoiceId === 'general' && (
+                  <p className="text-[10px] font-semibold text-gray-500 pl-1">General payments are cash-only. Link an invoice to pay by bank transfer or cheque.</p>
+                )}
               </div>
 
               {/* Amount */}
@@ -737,7 +748,12 @@ export const CustomerDetailPage: React.FC = () => {
                 <div className="relative">
                   <select
                     value={selectedInvoiceId}
-                    onChange={e => setSelectedInvoiceId(e.target.value)}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSelectedInvoiceId(val);
+                      // General payments are cash-only — reset a lingering cheque/bank selection.
+                      if (val === 'general') { setPaymentMethod('cash'); setPaymentBankName(''); setPaymentError(''); }
+                    }}
                     className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none pr-12 text-white"
                   >
                     <option value="general">General Payment (No Invoice)</option>
