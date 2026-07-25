@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -80,4 +80,68 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+### Status: needs-review (2026-07-25)
+
+**What was done:**
+- `src/pages/DeveloperPortal.tsx`: added `'sandbox'` to the `PortalTab` union; the sub-nav array
+  now conditionally appends a `{ id: 'sandbox', label: 'Sandbox', icon: FlaskConical }` entry only
+  when `typeof (window as any).sandboxRunner !== 'undefined'`; renders `<SandboxRunnerPanel />`
+  when `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Header with title + `role="status" aria-live="polite"` badge cycling
+    Idle (gray) → Running (blue, pulsing dot via new `.sandbox-status-dot--running` CSS class) →
+    Passed (green) / Failed (red), showing the currently-running label.
+  - Broad actions: **Run Unit + Integration** (`run('unit')`, no filter → `npm test`), **Run E2E**
+    (sequentially runs every group with a non-null `e2e` spec — the runner IPC from todo-011 only
+    accepts one spec per call, so "broad E2E" chains calls one at a time via a small `runSequence`
+    helper rather than a single call), **Reset Sandbox Data** (destructive-styled, red, opens a
+    `ConfirmModal` before calling `.reset()`). **Cancel** renders only while `status === 'running'`
+    and calls `.cancel()`, which also stops any remaining steps in a broad-E2E sequence via a
+    `cancelledRef` guard (status resolves to Idle, not Failed, after an explicit cancel).
+  - Per-module grid driven by `TEST_GROUPS`/`TEST_CASES`: coloured pills (Unit blue, DB/Integration
+    violet, E2E amber), each hidden when its count is 0; per-row **Run Tests** (disabled when
+    `vitestFiles` is empty) and **Run E2E** (or a muted "no E2E" label when `group.e2e` is null).
+    Rows expand/collapse into **Unit tests / Integration tests (real database) / End-to-end tests
+    (Playwright)** sections, each item rendered as `name — what` straight from `TEST_CASES`.
+  - While a run is active, every module action is `disabled` and a "tests are running" banner is
+    shown above the grid.
+  - Streaming log panel: fixed-height (`h-72`) monospace scroll container; a `pinnedRef` tracks
+    whether the user is scrolled to the bottom (within 24px) — new lines auto-scroll only while
+    pinned, and scrolling up releases the pin (checked via `onScroll`). Lines are colour- **and**
+    icon-coded (`✓` prefix → green + `CheckCircle2`, `FAIL` prefix → red + `XCircle`, matching the
+    prefixes `main.mjs`'s `simplify()` already emits), never colour alone. "No output yet."
+    placeholder before the first run.
+  - Reduced motion: added `@keyframes sandboxStatusPulse` / `.sandbox-status-dot--running` to
+    `src/index.css`, with a `@media (prefers-reduced-motion: reduce)` override that disables the
+    animation entirely (no separate JS check needed).
+  - Colours/typography reuse the existing DeveloperPortal dark-theme tokens (`#171c23` /
+    `#1d222a` / `#2b313a` panels, existing badge/pill/button patterns) — no new design tokens
+    introduced. Reused the existing `ConfirmModal` component for the reset confirmation rather
+    than building a new dialog.
+- `npx tsc --noEmit`: clean.
+- `npm run build`: clean (pre-existing chunk-size and CSS-selector warnings only, unrelated to
+  this change — same warnings present before this todo).
+- `npm test`: 3 files, 33 passed, 2 skipped — unchanged (no test files touched by this todo).
+
+**Why this is needs-review, not completed:**
+The completion test's last checkbox — *"Manual walkthrough in dev app: broad run, per-module run,
+E2E run, cancel, and reset-with-confirm all work and stream output"* — could not be exercised.
+Same root cause already recorded in todo-011: `npm install` in this sandbox cannot fetch the
+Electron binary (`electron/dist` is absent; `require('electron')` fails with "Electron failed to
+install correctly") because the sandbox's egress proxy blocks the Electron download host as an
+organisation policy denial, not a transient error, and per its own guidance no workaround was
+attempted. `ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install` was used instead so `tsc`/`vitest`/`vite
+build` could run, but there is no way to launch the actual dev app (`npm run dev` /
+`dev:electron`) in this container to click through the Sandbox tab, so the live devtools
+walkthrough (window.sandboxRunner interactions, real streamed output, actual cancel/reset
+behaviour, `prefers-reduced-motion` rendering) is unverified beyond code inspection and the static
+checks above. `graphify` was also not runnable — the `graphify` CLI isn't installed in this
+container (`command not found`), so `graphify update .` could not be executed either.
+
+**What's needed to close this out:** a human (or an environment where the Electron binary can be
+downloaded) should run `npm run dev` (or `npm run dev:sandbox`), open the Developer Portal as a
+`developer`-role user, confirm the Sandbox tab appears, and click through: broad unit run, broad
+E2E run, a per-module run, Cancel mid-run, and Reset Sandbox Data with the confirm dialog — then
+flip this to `completed`. No further code changes are expected to be needed unless that walkthrough
+surfaces a real bug.

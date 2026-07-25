@@ -2671,3 +2671,18 @@ input.no-spinner[type=number] {
     grid-template-columns: repeat(5, 1fr) !important;
   }
 }
+
+@keyframes sandboxStatusPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.5; box-shadow: 0 0 0 4px transparent; }
+}
+
+.sandbox-status-dot--running {
+  animation: sandboxStatusPulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sandbox-status-dot--running {
+    animation: none;
+  }
+}
