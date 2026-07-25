@@ -39,18 +39,24 @@ export const PurchaseHistoryReport: React.FC = () => {
           total_lkr,
           created_at,
           suppliers ( name ),
-          purchase_costs ( amount )
+          purchase_costs ( amount_lkr )
         `)
         .order('created_at', { ascending: false });
 
       if (from) query = query.gte('created_at', from);
       if (to)   query = query.lte('created_at', to);
 
-      const { data: rows } = await query;
+      const { data: rows, error } = await query;
+      if (error) {
+        console.error('Failed to load purchase history:', error.message);
+        setData([]);
+        setLoading(false);
+        return;
+      }
 
       const mapped: PurchaseRow[] = (rows ?? []).map((r: any) => {
         const additionalCosts = (r.purchase_costs ?? []).reduce(
-          (sum: number, c: any) => sum + Number(c.amount ?? 0),
+          (sum: number, c: any) => sum + Number(c.amount_lkr ?? 0),
           0
         );
         return {
