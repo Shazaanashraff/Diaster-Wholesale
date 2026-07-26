@@ -12,6 +12,7 @@ import { Modal } from '../components/Modal';
 import {
   getCustomerById, getCustomerLedger, recordPayment, updateCustomer,
   depositCheque, completeCheque, returnCheque,
+  reverseChequeToReturned, undoChequeDeposit, representCheque,
 } from '../services/customerService';
 import { getRemainingCredit } from '../utils/creditCheck';
 import { SL_BANKS } from '../constants/banks';
@@ -134,13 +135,18 @@ export const CustomerDetailPage: React.FC = () => {
   // ── Cheque lifecycle actions ───────────────────────────────────
   const handleChequeAction = async (
     paymentId: string,
-    action: 'deposit' | 'complete' | 'return'
+    action: 'deposit' | 'complete' | 'return' | 'reverse' | 'undo-deposit' | 'represent',
+    confirmMsg?: string,
   ) => {
+    if (confirmMsg && !confirm(confirmMsg)) return;
     setChequeActionLoading(prev => ({ ...prev, [paymentId]: true }));
     try {
-      if (action === 'deposit')  await depositCheque(paymentId);
-      if (action === 'complete') await completeCheque(paymentId);
-      if (action === 'return')   await returnCheque(paymentId);
+      if (action === 'deposit')      await depositCheque(paymentId);
+      if (action === 'complete')     await completeCheque(paymentId);
+      if (action === 'return')       await returnCheque(paymentId);
+      if (action === 'reverse')      await reverseChequeToReturned(paymentId);
+      if (action === 'undo-deposit') await undoChequeDeposit(paymentId);
+      if (action === 'represent')    await representCheque(paymentId);
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Action failed');
@@ -219,6 +225,12 @@ export const CustomerDetailPage: React.FC = () => {
   const completedCheques  = payments.filter(p => p.method === 'cheque' && p.cheque_status === 'completed');
   const returnedCheques   = payments.filter(p => p.method === 'cheque' && p.cheque_status === 'returned');
 
+  // Uncleared = recorded but not yet deducted from outstanding (pending or in float).
+  // cheque_float alone understates this — a freshly-recorded cheque is 'pending'
+  // and only joins cheque_float once deposited, so it's invisible without this.
+  const unclearedChequeTotal = [...pendingCheques, ...processingCheques]
+    .reduce((s, p) => s + Math.abs(p.amount || 0), 0);
+
   const chequeTabCounts: Record<ChequeTab, number> = {
     float:     pendingCheques.length + processingCheques.length,
     completed: completedCheques.length,
@@ -284,6 +296,23 @@ export const CustomerDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {/* ── Pending cheque alert ───────────────────────────────── */}
+        {pendingCheques.length > 0 && (
+          <button
+            onClick={() => document.getElementById('cheque-management-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="w-full mb-6 flex items-center justify-between gap-3 px-5 py-3.5 bg-amber-900/10 border border-amber-900/30 rounded-2xl text-left hover:bg-amber-900/15 transition-all"
+            style={{ animation: 'posFadeIn 380ms ease both' }}
+          >
+            <span className="flex items-center gap-3 text-sm font-bold text-amber-400">
+              <Clock size={16} />
+              {pendingCheques.length} cheque{pendingCheques.length !== 1 ? 's' : ''} awaiting deposit — Rs.{' '}
+              {pendingCheques.reduce((s, p) => s + Math.abs(p.amount || 0), 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })}{' '}
+              not yet reflected in outstanding
+            </span>
+            <span className="text-[11px] font-bold text-amber-500 uppercase tracking-widest shrink-0">View →</span>
+          </button>
+        )}
+
         {/* ── Summary cards ──────────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10">
           {/* Outstanding Balance */}
@@ -345,6 +374,11 @@ export const CustomerDetailPage: React.FC = () => {
               <p className={cn("text-xl font-bold tracking-tighter", chequeFloat > 0 ? "text-amber-400" : "text-gray-500")}>
                 {chequeFloat > 0 ? <>Rs. <AnimatedNumber value={chequeFloat} /></> : 'None'}
               </p>
+              {unclearedChequeTotal > 0 && (
+                <p className="text-[10px] text-gray-500 font-semibold mt-1">
+                  Rs. {unclearedChequeTotal.toLocaleString('en-LK', { minimumFractionDigits: 2 })} uncleared, not yet in outstanding
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -471,7 +505,35 @@ export const CustomerDetailPage: React.FC = () => {
                                   {isLoading ? <Loader2 size={10} className="animate-spin" /> : <XCircle size={10} />}
                                   Returned
                                 </button>
+                                <button
+                                  disabled={isLoading}
+                                  onClick={() => handleChequeAction(pay.id, 'undo-deposit')}
+                                  title="Undo deposit — move back to Pending"
+                                  className="flex items-center gap-1 px-2 py-1 bg-[#22282f] text-gray-400 border border-[#2b313a] rounded-lg text-[10px] font-bold hover:text-gray-200 transition-all disabled:opacity-50"
+                                >
+                                  Undo
+                                </button>
                               </div>
+                            )}
+                            {pay.method === 'cheque' && pay.cheque_status === 'completed' && (
+                              <button
+                                disabled={isLoading}
+                                onClick={() => handleChequeAction(pay.id, 'reverse', `Mark this cheque as bounced? Rs. ${Math.abs(pay.amount || 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })} will be added back to outstanding.`)}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-900/20 text-red-400 border border-red-900/30 rounded-lg text-[10px] font-bold hover:bg-red-900/40 transition-all disabled:opacity-50 w-fit"
+                              >
+                                {isLoading ? <Loader2 size={10} className="animate-spin" /> : <XCircle size={10} />}
+                                Mark Bounced
+                              </button>
+                            )}
+                            {pay.method === 'cheque' && pay.cheque_status === 'returned' && (
+                              <button
+                                disabled={isLoading}
+                                onClick={() => handleChequeAction(pay.id, 'represent')}
+                                className="flex items-center gap-1 px-2 py-1 bg-amber-900/20 text-amber-400 border border-amber-900/30 rounded-lg text-[10px] font-bold hover:bg-amber-900/40 transition-all disabled:opacity-50 w-fit"
+                              >
+                                {isLoading ? <Loader2 size={10} className="animate-spin" /> : <ArrowRightCircle size={10} />}
+                                Re-present
+                              </button>
                             )}
                             {/* Cheque meta */}
                             {pay.method === 'cheque' && pay.cheque_number && (
@@ -496,7 +558,7 @@ export const CustomerDetailPage: React.FC = () => {
 
         {/* ── Cheque Management Section ───────────────────────────── */}
         {(pendingCheques.length + processingCheques.length + completedCheques.length + returnedCheques.length) > 0 && (
-          <div className="bg-[#171c23] rounded-[2.5rem] p-8 border border-[#2b313a]" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '700ms' }}>
+          <div id="cheque-management-section" className="bg-[#171c23] rounded-[2.5rem] p-8 border border-[#2b313a]" style={{ animation: 'posFadeIn 400ms ease both', animationDelay: '700ms' }}>
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 bg-amber-900/20 text-amber-400 rounded-xl flex items-center justify-center border border-amber-900/30">
                 <FileText size={24} strokeWidth={2.5} />
@@ -599,7 +661,35 @@ export const CustomerDetailPage: React.FC = () => {
                             {isLoading ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
                             Cheque Returned
                           </button>
+                          <button
+                            disabled={isLoading}
+                            onClick={() => handleChequeAction(pay.id, 'undo-deposit')}
+                            title="Undo deposit — move back to Pending"
+                            className="flex items-center gap-1.5 px-3 py-2 bg-[#22282f] text-gray-400 border border-[#2b313a] rounded-xl text-xs font-bold hover:text-gray-200 transition-all disabled:opacity-50"
+                          >
+                            Undo
+                          </button>
                         </div>
+                      )}
+                      {pay.cheque_status === 'completed' && (
+                        <button
+                          disabled={isLoading}
+                          onClick={() => handleChequeAction(pay.id, 'reverse', `Mark this cheque as bounced? Rs. ${Math.abs(pay.amount || 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })} will be added back to outstanding.`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-xs font-bold hover:bg-red-900/40 transition-all disabled:opacity-50"
+                        >
+                          {isLoading ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                          Mark Bounced
+                        </button>
+                      )}
+                      {pay.cheque_status === 'returned' && (
+                        <button
+                          disabled={isLoading}
+                          onClick={() => handleChequeAction(pay.id, 'represent')}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-amber-900/20 text-amber-400 border border-amber-900/30 rounded-xl text-xs font-bold hover:bg-amber-900/40 transition-all disabled:opacity-50"
+                        >
+                          {isLoading ? <Loader2 size={12} className="animate-spin" /> : <ArrowRightCircle size={12} />}
+                          Re-present
+                        </button>
                       )}
                     </div>
                   </div>
@@ -638,21 +728,14 @@ export const CustomerDetailPage: React.FC = () => {
                     { v: 'cash',          label: 'Cash',          Icon: Wallet   },
                     { v: 'bank_transfer', label: 'Bank Transfer', Icon: Building2 },
                     { v: 'cheque',        label: 'Cheque',        Icon: FileText  },
-                  ] as { v: PayMethod; label: string; Icon: any }[]).map(({ v, label, Icon }) => {
-                    // General (no-invoice) payments are cash-only, so they always
-                    // reduce outstanding immediately (cheque/bank would defer or add friction).
-                    const locked = selectedInvoiceId === 'general' && v !== 'cash';
-                    return (
+                  ] as { v: PayMethod; label: string; Icon: any }[]).map(({ v, label, Icon }) => (
                     <button
                       key={v}
                       type="button"
-                      disabled={locked}
                       onClick={() => { setPaymentMethod(v); setPaymentBankName(''); setPaymentError(''); }}
                       className={cn(
                         "flex flex-col items-center gap-2 p-3 rounded-2xl border text-xs font-bold transition-all",
-                        locked
-                          ? "bg-[#171c23] border-[#2b313a] text-gray-700 opacity-40 cursor-not-allowed"
-                          : paymentMethod === v
+                        paymentMethod === v
                           ? "bg-primary/10 border-primary/50 text-primary"
                           : "bg-[#171c23] border-[#2b313a] text-gray-500 hover:text-gray-300"
                       )}
@@ -660,12 +743,8 @@ export const CustomerDetailPage: React.FC = () => {
                       <Icon size={18} strokeWidth={2.5} />
                       {label}
                     </button>
-                    );
-                  })}
+                  ))}
                 </div>
-                {selectedInvoiceId === 'general' && (
-                  <p className="text-[10px] font-semibold text-gray-500 pl-1">General payments are cash-only. Link an invoice to pay by bank transfer or cheque.</p>
-                )}
               </div>
 
               {/* Amount */}
@@ -703,9 +782,16 @@ export const CustomerDetailPage: React.FC = () => {
               {/* Cheque fields */}
               {paymentMethod === 'cheque' && (
                 <div className="space-y-3 p-4 bg-amber-900/5 rounded-2xl border border-amber-900/20">
-                  <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5">
-                    <Clock size={10} /> Outstanding balance updates only when cheque clears
-                  </p>
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-start gap-1.5">
+                    <Clock size={10} className="mt-0.5 shrink-0" />
+                    <span>
+                      Held, not deducted yet. Outstanding stays at Rs. {(customer.outstanding_balance || 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
+                      {Number(paymentAmount) > 0 && (
+                        <> — it will drop to Rs. {Math.max(0, (customer.outstanding_balance || 0) - Number(paymentAmount)).toLocaleString('en-LK', { minimumFractionDigits: 2 })} once you mark this cheque "Cleared" below.</>
+                      )}
+                      {' '}Until then, find it under "Cheque Management" → In Float.
+                    </span>
+                  </div>
                   <div className="space-y-2">
                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Cheque Number <span className="text-red-400">*</span></label>
                     <input
@@ -748,12 +834,7 @@ export const CustomerDetailPage: React.FC = () => {
                 <div className="relative">
                   <select
                     value={selectedInvoiceId}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setSelectedInvoiceId(val);
-                      // General payments are cash-only — reset a lingering cheque/bank selection.
-                      if (val === 'general') { setPaymentMethod('cash'); setPaymentBankName(''); setPaymentError(''); }
-                    }}
+                    onChange={e => setSelectedInvoiceId(e.target.value)}
                     className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all appearance-none pr-12 text-white"
                   >
                     <option value="general">General Payment (No Invoice)</option>

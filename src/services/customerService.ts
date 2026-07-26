@@ -136,6 +136,36 @@ export const returnCheque = async (paymentId: string): Promise<void> => {
   if (error) throw error;
 };
 
+/** Reverse a cheque already marked 'completed' — it bounced after clearing.
+ *  Adds the amount back onto outstanding_balance. */
+export const reverseChequeToReturned = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'returned',
+  });
+  if (error) throw error;
+};
+
+/** Undo an accidental "Deposit" click — moves a cheque back from
+ *  'processing' to 'pending' and removes it from cheque_float. */
+export const undoChequeDeposit = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'pending',
+  });
+  if (error) throw error;
+};
+
+/** Re-present a bounced cheque at the bank — moves it from 'returned'
+ *  back to 'processing' and back into cheque_float. */
+export const representCheque = async (paymentId: string): Promise<void> => {
+  const { error } = await supabase.rpc('update_cheque_status', {
+    p_payment_id: paymentId,
+    p_new_status: 'processing',
+  });
+  if (error) throw error;
+};
+
 export const deleteCustomer = async (id: string): Promise<void> => {
   const { error } = await supabase
     .from('customers')

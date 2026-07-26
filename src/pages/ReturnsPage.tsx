@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { getProducts } from '../services/productService';
 import { getSalespeople, type Salesperson } from '../services/salespersonService';
+import { getCustomerById } from '../services/customerService';
+import { isOverCreditLimit, getRemainingCredit } from '../utils/creditCheck';
+import type { Customer } from '../types';
 import { usePermissions } from '../utils/permissions';
 import { cn } from '../lib/utils';
 import {
@@ -71,6 +74,8 @@ interface SalesReturn {
   exchange_invoice_no: string | null;
   exchange_difference: number | null;
   settlement_type: string | null;
+  credit_adjustment: number;
+  customer_id: string | null;
   returned_by: string;
   created_at: string;
 }
@@ -138,6 +143,8 @@ export const ReturnsPage: React.FC = () => {
   const [productSearch, setProductSearch] = useState('');
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [selectedSalespersonId, setSelectedSalespersonId] = useState<string>('');
+  const [paidSoFar, setPaidSoFar] = useState(0);
+  const [returnCustomer, setReturnCustomer] = useState<Customer | null>(null);
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
@@ -248,6 +255,36 @@ export const ReturnsPage: React.FC = () => {
     getProducts().then(list => setProducts(list as any[]));
   }, [returnType]);
 
+  // How much of the original invoice was actually paid (cash/bank/completed
+  // cheque) — drives the credit-vs-cash split on a return, and the customer
+  // record for the exchange credit-limit check.
+  useEffect(() => {
+    if (!selectedInvoice) { setPaidSoFar(0); setReturnCustomer(null); return; }
+    let cancelled = false;
+
+    supabase
+      .from('payments')
+      .select('amount, cheque_status')
+      .eq('invoice_id', selectedInvoice.id)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const paid = ((data ?? []) as Array<{ amount: number; cheque_status: string | null }>)
+          .filter(p => p.cheque_status == null || p.cheque_status === 'completed')
+          .reduce((s, p) => s + Number(p.amount || 0), 0);
+        setPaidSoFar(paid);
+      });
+
+    if (selectedInvoice.customer_id) {
+      getCustomerById(selectedInvoice.customer_id)
+        .then(c => { if (!cancelled) setReturnCustomer(c); })
+        .catch(() => { if (!cancelled) setReturnCustomer(null); });
+    } else {
+      setReturnCustomer(null);
+    }
+
+    return () => { cancelled = true; };
+  }, [selectedInvoice]);
+
   // ─── History ──────────────────────────────────────────────────────────────
 
   const loadHistory = useCallback(async () => {
@@ -257,8 +294,8 @@ export const ReturnsPage: React.FC = () => {
       .select(`
         id, return_number, original_invoice_id, return_type, reason,
         status, resolution_type, refund_amount, exchange_invoice_no,
-        exchange_difference, settlement_type, returned_by, created_at,
-        invoices!original_invoice_id(invoice_no, customers(name))
+        exchange_difference, settlement_type, credit_adjustment, returned_by, created_at,
+        invoices!original_invoice_id(invoice_no, customer_id, customers(name))
       `)
       .order('created_at', { ascending: false })
       .limit(100);
@@ -271,8 +308,10 @@ export const ReturnsPage: React.FC = () => {
           ...r,
           original_invoice_no: inv?.invoice_no ?? '—',
           customer_name: cust?.name ?? 'Unknown',
+          customer_id: inv?.customer_id ?? null,
           refund_amount: Number(r.refund_amount ?? 0),
           exchange_difference: r.exchange_difference != null ? Number(r.exchange_difference) : null,
+          credit_adjustment: Number(r.credit_adjustment ?? 0),
         };
       }));
     }
@@ -331,6 +370,17 @@ export const ReturnsPage: React.FC = () => {
   const settlementType = Math.abs(exchangeDiff) < 0.01 ? 'EvenExchange'
     : exchangeDiff > 0 ? 'UpgradePayment' : 'CashRefund';
 
+  // Return settlement split: release credit against whatever part of the
+  // original invoice is still unpaid, refund cash only for the rest.
+  const unpaidPortion = Math.max(0, (selectedInvoice?.total ?? 0) - paidSoFar);
+  const creditPortion = Math.min(returnedValue, unpaidPortion);
+  const cashPortion   = Math.max(0, returnedValue - creditPortion);
+
+  // Credit-to-credit exchange: net effect on outstanding if settled on credit.
+  const exchangeCreditLimitBreach = returnType === 'Exchange' && settlementMethod === 'credit' && returnCustomer
+    ? isOverCreditLimit(returnCustomer, exchangeDiff)
+    : false;
+
   const filteredProducts = productSearch.length > 1
     ? products.filter(p => {
         const q = productSearch.toLowerCase();
@@ -348,9 +398,13 @@ export const ReturnsPage: React.FC = () => {
     const returnNumber = `RET-${Date.now().toString(36).toUpperCase()}`;
     const isDamageReturn = returnType === 'Return' && reason === 'Damaged';
     const isCashRefundReturn = returnType === 'Return' && !isDamageReturn;
-    const refundAmount = isCashRefundReturn ? returnedValue : 0;
     let exchangeInvoiceId: string | null = null;
     let exchangeInvoiceNo: string | null = null;
+    // refundAmount = actual cash paid out; creditAdjustment = net delta applied
+    // to customers.outstanding_balance (negative = credit released to customer,
+    // positive = credit added against them).
+    let refundAmount = 0;
+    let creditAdjustment = 0;
 
     try {
       if (!selectedInvoice.customer_id) {
@@ -361,6 +415,7 @@ export const ReturnsPage: React.FC = () => {
         // Track completed steps for rollback on failure
         const restoredProducts: Array<{ product_id: string; pieces: number }> = [];
         const deductedProducts: Array<{ product_id: string; pieces: number }> = [];
+        let exchangeCreditApplied = false;
 
         try {
           for (const r of returnItems) {
@@ -372,7 +427,9 @@ export const ReturnsPage: React.FC = () => {
 
           exchangeInvoiceNo = `EXC-${Date.now().toString(36).toUpperCase()}`;
           const absDiff = Math.abs(exchangeDiff);
-          const isPaid = absDiff < 0.01 || !!settlementMethod;
+          // Credit settlement never marks the exchange invoice "paid" — the
+          // difference sits on the customer's outstanding balance instead.
+          const isPaid = absDiff < 0.01 || settlementMethod !== 'credit';
 
           const { data: excInv, error: excInvErr } = await supabase
             .from('invoices')
@@ -421,16 +478,29 @@ export const ReturnsPage: React.FC = () => {
           }
 
           if (absDiff >= 0.01) {
-            const { error: payErr } = await supabase.from('payments').insert({
-              invoice_id: exchangeInvoiceId,
-              customer_id: selectedInvoice.customer_id,
-              amount: exchangeDiff,
-              method: settlementMethod,
-              bank_name: settlementMethod === 'bank_transfer' ? settlementBank || null : null,
-              reference: exchangeInvoiceNo,
-              paid_at: new Date().toISOString(),
-            });
-            if (payErr) throw new Error(payErr.message);
+            if (settlementMethod === 'credit') {
+              // Credit-to-credit: release the returned value and add the
+              // replacement value onto outstanding in one atomic call — no
+              // cash/bank/card payment row, since no money changed hands.
+              const { error: adjErr } = await supabase.rpc('adjust_customer_outstanding', {
+                p_customer_id: selectedInvoice.customer_id,
+                p_delta: exchangeDiff,
+              });
+              if (adjErr) throw new Error(adjErr.message);
+              exchangeCreditApplied = true;
+              creditAdjustment = exchangeDiff;
+            } else {
+              const { error: payErr } = await supabase.from('payments').insert({
+                invoice_id: exchangeInvoiceId,
+                customer_id: selectedInvoice.customer_id,
+                amount: exchangeDiff,
+                method: settlementMethod,
+                bank_name: settlementMethod === 'bank_transfer' ? settlementBank || null : null,
+                reference: exchangeInvoiceNo,
+                paid_at: new Date().toISOString(),
+              });
+              if (payErr) throw new Error(payErr.message);
+            }
           }
         } catch (exchangeErr: any) {
           // Rollback: delete exchange invoice (cascades to items), reverse stock
@@ -445,6 +515,13 @@ export const ReturnsPage: React.FC = () => {
           for (const { product_id, pieces } of deductedProducts) {
             await restoreStock(product_id, 0, pieces, 1, 'Exchange rollback');
           }
+          if (exchangeCreditApplied) {
+            await supabase.rpc('adjust_customer_outstanding', {
+              p_customer_id: selectedInvoice.customer_id,
+              p_delta: -exchangeDiff,
+            });
+            creditAdjustment = 0;
+          }
           throw new Error(`Exchange failed and was rolled back: ${exchangeErr.message}${rollbackNote}`);
         }
       } else if (isCashRefundReturn) {
@@ -458,14 +535,29 @@ export const ReturnsPage: React.FC = () => {
           );
         }
 
-        await supabase.from('payments').insert({
-          invoice_id: selectedInvoice.id,
-          customer_id: selectedInvoice.customer_id,
-          amount: -Math.abs(returnedValue),
-          method: 'cash',
-          reference: `RETURN-${selectedInvoice.invoice_no}`,
-          paid_at: new Date().toISOString(),
-        });
+        // Auto-split: release credit against whatever part of the original
+        // invoice is still unpaid first, refund cash only for the rest — a
+        // credit sale never paid a cent shouldn't trigger a cash payout.
+        if (creditPortion > 0) {
+          const { error: adjErr } = await supabase.rpc('adjust_customer_outstanding', {
+            p_customer_id: selectedInvoice.customer_id,
+            p_delta: -creditPortion,
+          });
+          if (adjErr) throw new Error(adjErr.message);
+          creditAdjustment = -creditPortion;
+        }
+
+        if (cashPortion > 0) {
+          await supabase.from('payments').insert({
+            invoice_id: selectedInvoice.id,
+            customer_id: selectedInvoice.customer_id,
+            amount: -Math.abs(cashPortion),
+            method: 'cash',
+            reference: `RETURN-${selectedInvoice.invoice_no}`,
+            paid_at: new Date().toISOString(),
+          });
+        }
+        refundAmount = cashPortion;
       }
 
       const { data: retRow, error: retErr } = await supabase
@@ -486,6 +578,7 @@ export const ReturnsPage: React.FC = () => {
                 : null,
           exchange_difference: returnType === 'Exchange' ? exchangeDiff : null,
           refund_amount: refundAmount,
+          credit_adjustment: creditAdjustment,
           returned_by: role.replace('_', ' '),
           salesperson_id: selectedSalespersonId || null,
           workflow_snapshot: {
@@ -494,6 +587,9 @@ export const ReturnsPage: React.FC = () => {
             replacement_items: replacements,
             exchange_invoice_id: exchangeInvoiceId,
             return_mode: isDamageReturn ? 'damage' : 'cash_refund',
+            settlement_method: returnType === 'Exchange' ? settlementMethod : (creditPortion > 0 ? 'credit_and_cash' : 'cash'),
+            credit_portion: returnType === 'Return' ? creditPortion : undefined,
+            cash_portion: returnType === 'Return' ? cashPortion : undefined,
           },
         })
         .select('id').single();
@@ -653,6 +749,16 @@ export const ReturnsPage: React.FC = () => {
           status: 'Cancelled', cancelled_at: new Date().toISOString(),
           cancelled_by: role, cancel_reason: 'Undone',
         }).eq('id', ret.id);
+      }
+
+      // Reverse whatever this return/exchange did to the customer's
+      // outstanding balance. credit_adjustment is 0 for return modes that
+      // never touched it (Pending/Damaged, Repaired), so this is a no-op there.
+      if (ret.credit_adjustment && ret.customer_id) {
+        await supabase.rpc('adjust_customer_outstanding', {
+          p_customer_id: ret.customer_id,
+          p_delta: -ret.credit_adjustment,
+        });
       }
 
       showToast('Return cancelled');
@@ -902,6 +1008,28 @@ export const ReturnsPage: React.FC = () => {
                 )}
               </div>
 
+              {/* Return settlement split — how much comes off outstanding vs cash refund */}
+              {returnType === 'Return' && reason !== 'Damaged' && returnItems.length > 0 && (
+                <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl p-5 space-y-2">
+                  <p className="text-[14px] font-bold text-gray-500 uppercase tracking-widest mb-1">Settlement</p>
+                  {creditPortion > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Off outstanding balance</span>
+                      <span className="font-mono font-bold text-green-400">−{fmt(creditPortion)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Cash refund</span>
+                    <span className="font-mono font-bold text-amber-400">{fmt(cashPortion)}</span>
+                  </div>
+                  {creditPortion > 0 && (
+                    <p className="text-[13px] text-gray-600 pt-1">
+                      This invoice had Rs. {(unpaidPortion).toLocaleString('en-LK', { minimumFractionDigits: 2 })} still unpaid — returned goods release that credit first.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Exchange replacements */}
               {returnType === 'Exchange' && (
                 <div className="bg-[#171c23] border border-[#2b313a] rounded-2xl overflow-hidden">
@@ -993,13 +1121,13 @@ export const ReturnsPage: React.FC = () => {
                               {exchangeDiff > 0 ? 'Payment method' : 'Refund method'}
                             </p>
                             <div className="flex flex-wrap gap-2">
-                              {['cash', 'card', 'bank_transfer'].map(m => (
+                              {['cash', 'card', 'bank_transfer', 'credit'].map(m => (
                                 <button key={m} onClick={() => setSettlementMethod(m)}
                                   className={cn('px-3 py-1.5 rounded-xl text-[14px] font-bold border transition-all capitalize',
                                     settlementMethod === m
                                       ? 'bg-primary/15 border-primary/30 text-primary'
                                       : 'bg-[#22282f] border-[#2b313a] text-gray-500 hover:text-gray-300')}>
-                                  {m.replace('_', ' ')}
+                                  {m}
                                 </button>
                               ))}
                             </div>
@@ -1011,6 +1139,31 @@ export const ReturnsPage: React.FC = () => {
                                 placeholder="Bank name (e.g. Commercial Bank)"
                                 className="mt-2 w-full bg-[#1d222a] border border-[#2b313a] rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 outline-none focus:border-primary/50"
                               />
+                            )}
+                            {settlementMethod === 'credit' && (
+                              <div className="mt-3 space-y-2 p-3 bg-[#171c23] rounded-xl border border-[#2b313a]">
+                                <p className="text-[14px] text-gray-400">No money changes hands — the customer's outstanding balance moves instead:</p>
+                                <div className="flex justify-between text-[13px] font-mono">
+                                  <span className="text-gray-500">Credit released (return)</span>
+                                  <span className="text-green-400">−{fmt(returnedValue)}</span>
+                                </div>
+                                <div className="flex justify-between text-[13px] font-mono">
+                                  <span className="text-gray-500">Credit added (replacement)</span>
+                                  <span className="text-red-400">+{fmt(replacementValue)}</span>
+                                </div>
+                                <div className="flex justify-between text-[13px] font-mono font-bold pt-1.5 border-t border-[#2b313a]">
+                                  <span className="text-gray-400">Net change to outstanding</span>
+                                  <span className={exchangeDiff >= 0 ? 'text-red-400' : 'text-green-400'}>
+                                    {exchangeDiff >= 0 ? '+' : '−'}{fmt(Math.abs(exchangeDiff))}
+                                  </span>
+                                </div>
+                                {exchangeCreditLimitBreach && returnCustomer && (
+                                  <div className="flex items-center gap-2 mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[13px] text-amber-400">
+                                    <AlertCircle size={13} className="shrink-0" />
+                                    This will exceed {selectedInvoice.customer_name}'s credit limit (remaining: {fmt(getRemainingCredit(returnCustomer) === Infinity ? 0 : getRemainingCredit(returnCustomer))}). You can still proceed.
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
