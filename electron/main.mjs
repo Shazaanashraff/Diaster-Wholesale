@@ -220,7 +220,7 @@ function runCommand(cmd, args, webContents) {
     proc.on('close', (code) => {
       send(code === 0 ? '✓ done' : `FAIL exited with code ${code}`);
       activeProc = null;
-      resolve({ ok: true, code });
+      resolve({ ok: code === 0, code });
     });
 
     proc.on('error', (error) => {
@@ -248,6 +248,9 @@ ipcMain.handle('sandbox:run', (event, type, filter) => {
       ['playwright', 'test', '--reporter=line', `e2e/${filter.spec}.spec.ts`],
       event.sender,
     );
+  }
+  if (type === 'e2e') {
+    return runCommand('npx', ['playwright', 'test', '--reporter=line'], event.sender);
   }
 
   return { ok: false, reason: 'invalid-request' };
