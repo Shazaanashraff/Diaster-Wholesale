@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: completed
 ---
 
 ## Overview
@@ -80,4 +80,42 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `src/pages/DeveloperPortal.tsx`: added `'sandbox'` to the `PortalTab` union; sub-nav tabs are now
+  built from a `subNavTabs` list (memoized on `sandboxAvailable = typeof (window as
+  any).sandboxRunner !== 'undefined'`) so the "Sandbox" tab (FlaskConical icon) only appears when
+  `window.sandboxRunner` is defined; renders `<SandboxRunnerPanel/>` when `portalTab === 'sandbox'`.
+- `src/components/sandbox/SandboxRunnerPanel.tsx` (new): header with title + `role="status"
+  aria-live="polite"` badge (Idle/Running/Passed/Failed, pulsing dot only while running via a new
+  `.sandbox-status-dot--running` CSS class); broad actions **Run Unit + Integration**
+  (`run('unit')`), **Run E2E** (loops `run('e2e',{spec})` over every `TEST_GROUPS` entry with a
+  non-null `e2e`), **Reset Sandbox Data** (destructive-styled, opens the existing `ConfirmModal`
+  before calling `.reset()`), and a **Cancel** button shown only while running; a "tests are
+  running" banner and row-level disabling while a run is active; per-module grid driven directly by
+  `TEST_GROUPS`/`TEST_CASES` with blue/violet/amber count pills (hidden at 0), expandable rows
+  grouped into the three labelled sections, and a **Run Tests** / **Run E2E** (or muted "no E2E")
+  per row; streaming log panel (monospace, fixed height, auto-scroll that unpins on user scroll-up,
+  pass/fail lines marked by icon **and** colour, "No output yet" placeholder).
+- `src/index.css`: added `@keyframes sandboxStatusPulse` / `.sandbox-status-dot--running` with a
+  `@media (prefers-reduced-motion: reduce)` override that disables the animation.
+- `npx tsc --noEmit`: clean. `npm run build`: clean (pre-existing chunk-size/CSS-selector warnings
+  only, unrelated to this change). `npm test`: 3 files, 33 passed, 2 skipped — unchanged.
+- **Manual walkthrough — verified live**, not skipped: `node_modules` had to be installed first
+  (`npm install`; it was absent at session start). Unlike todo-011's session, the Electron binary
+  *was* available here, so the dev app was actually launched (`xvfb-run` + Playwright's `_electron`
+  driving the real `electron/main.mjs`, Vite dev server on 5173, Supabase REST calls intercepted,
+  `sessionStorage` seeded with `user_role=developer` + `pin_auth=1` to reach `/developer`) and
+  driven end-to-end, then torn down (throwaway `.env`/scripts were not committed):
+  - `window.sandboxRunner` defined; Sandbox tab visible and gated correctly.
+  - Expanding "Sandbox Tooling" showed its case descriptions (precision-contract text).
+  - Per-module **Run Tests** on "Sandbox Tooling" → badge Idle → Running → Passed, log panel
+    streamed real `vitest` output with `✓` markers.
+  - Broad **Run Unit + Integration** → **Cancel** → badge returned to Idle.
+  - Per-row **Run E2E** on "Sales / POS" → badge Running, log panel streamed real
+    `npx playwright test` output ("Running 9 tests using 1 worker …"); cancelled to avoid waiting
+    out the full nested run (no orphaned processes left behind afterward).
+  - **Reset Sandbox Data** opened the confirm dialog ("Reset Sandbox Data?").
+  - `prefers-reduced-motion` handling was reviewed in code (pure CSS media query) but not exercised
+    with an actual OS-level reduced-motion toggle in this container.
+- `graphify update .` was **not run**: the `graphify` CLI is not installed/on `PATH` in this
+  environment (same gap noted would apply to any session here) — `graphify-out/` was left as-is.
