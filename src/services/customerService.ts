@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { Customer, Invoice, Payment } from '../types';
 
 const CUSTOMER_COLUMNS = 'id, name, phone, email, address, type, credit_limit, outstanding_balance, cheque_float, created_at, updated_at';
-const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, bank_name, cheque_number, due_date, cheque_status, payment_type, paid_at, created_at';
+const PAYMENT_COLUMNS = 'id, invoice_id, customer_id, amount, method, reference, bank_name, cheque_number, due_date, cheque_status, payment_type, reason, adjusted_by, paid_at, created_at';
 
 export const getCustomers = async (): Promise<Customer[]> => {
   const { data, error } = await supabase
@@ -164,6 +164,25 @@ export const representCheque = async (paymentId: string): Promise<void> => {
     p_new_status: 'processing',
   });
   if (error) throw error;
+};
+
+/** Admin-only manual correction to a customer's outstanding balance.
+ *  `delta` is signed: positive increases what the customer owes, negative
+ *  decreases it. Requires a non-empty reason, enforced server-side too. */
+export const adjustCustomerOutstandingManual = async (
+  customerId: string,
+  delta: number,
+  reason: string,
+  adjustedBy: string,
+): Promise<number> => {
+  const { data, error } = await supabase.rpc('adjust_customer_outstanding_manual', {
+    p_customer_id: customerId,
+    p_delta:       delta,
+    p_reason:      reason,
+    p_adjusted_by: adjustedBy,
+  });
+  if (error) throw error;
+  return data as number;
 };
 
 export const deleteCustomer = async (id: string): Promise<void> => {

@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 
 interface CreditRow {
   customerId: string; customerName: string; invoiceCount: number;
-  totalAmount: number; totalPaid: number; outstanding: number; oldestInvoice: string;
+  totalAmount: number; totalPaid: number; outstanding: number; oldestInvoice: string | null;
 }
 
 export const CreditReport: React.FC = () => {
@@ -22,28 +22,46 @@ export const CreditReport: React.FC = () => {
   useEffect(() => {
     async function load() {
       const { from, to } = getReportDateRange(period, customFrom, customTo);
+
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, name, outstanding_balance')
+        .eq('is_active', true)
+        .gt('outstanding_balance', 0)
+        .order('outstanding_balance', { ascending: false });
+
       let q = supabase
         .from('invoices')
-        .select('id, total, created_at, customer_id, customers(name), payments(amount)')
+        .select('id, total, created_at, customer_id, payments(amount)')
         .in('payment_status', ['unpaid', 'partial']);
       if (from) q = q.gte('created_at', from);
       if (to)   q = q.lte('created_at', to);
-      const { data } = await q;
+      const { data: invoices } = await q;
 
-      const map: Record<string, CreditRow> = {};
-      for (const inv of (data ?? []) as any[]) {
+      const invMap: Record<string, { invoiceCount: number; totalAmount: number; totalPaid: number; oldestInvoice: string | null }> = {};
+      for (const inv of (invoices ?? []) as any[]) {
         const cid = inv.customer_id ?? 'unknown';
-        const name = inv.customers?.name ?? 'Walk-in';
         const paid = (inv.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        const outstanding = Math.max(0, Number(inv.total) - paid);
-        if (!map[cid]) map[cid] = { customerId: cid, customerName: name, invoiceCount: 0, totalAmount: 0, totalPaid: 0, outstanding: 0, oldestInvoice: inv.created_at };
-        map[cid].invoiceCount++;
-        map[cid].totalAmount += Number(inv.total);
-        map[cid].totalPaid   += paid;
-        map[cid].outstanding += outstanding;
-        if (inv.created_at < map[cid].oldestInvoice) map[cid].oldestInvoice = inv.created_at;
+        if (!invMap[cid]) invMap[cid] = { invoiceCount: 0, totalAmount: 0, totalPaid: 0, oldestInvoice: inv.created_at };
+        invMap[cid].invoiceCount++;
+        invMap[cid].totalAmount += Number(inv.total);
+        invMap[cid].totalPaid   += paid;
+        if (!invMap[cid].oldestInvoice || inv.created_at < invMap[cid].oldestInvoice!) invMap[cid].oldestInvoice = inv.created_at;
       }
-      setRows(Object.values(map).sort((a, b) => b.outstanding - a.outstanding));
+
+      const newRows: CreditRow[] = ((customers ?? []) as any[]).map(c => {
+        const stats = invMap[c.id];
+        return {
+          customerId: c.id,
+          customerName: c.name ?? 'Walk-in',
+          invoiceCount: stats?.invoiceCount ?? 0,
+          totalAmount: stats?.totalAmount ?? 0,
+          totalPaid: stats?.totalPaid ?? 0,
+          outstanding: Number(c.outstanding_balance) || 0,
+          oldestInvoice: stats?.oldestInvoice ?? null,
+        };
+      });
+      setRows(newRows.sort((a, b) => b.outstanding - a.outstanding));
     }
     load();
   }, [period, customFrom, customTo]);
@@ -52,7 +70,7 @@ export const CreditReport: React.FC = () => {
   const totalCustomers   = rows.length;
 
   const exportHeaders = ['Customer', 'Invoices', 'Total Billed', 'Paid', 'Outstanding', 'Oldest Invoice'];
-  const exportRows = rows.map(r => [r.customerName, r.invoiceCount, fmtCurrency(r.totalAmount), fmtCurrency(r.totalPaid), fmtCurrency(r.outstanding), fmtDate(r.oldestInvoice)]);
+  const exportRows = rows.map(r => [r.customerName, r.invoiceCount, fmtCurrency(r.totalAmount), fmtCurrency(r.totalPaid), fmtCurrency(r.outstanding), r.oldestInvoice ? fmtDate(r.oldestInvoice) : '-']);
 
   return (
     <div className="space-y-6">
@@ -81,10 +99,12 @@ export const CreditReport: React.FC = () => {
             </span>
           ), className: 'text-right' },
           { header: 'Oldest Invoice', accessor: (r: CreditRow) => (
-            <span className="flex items-center gap-1 text-amber-400">
-              <AlertCircle size={11} />
-              {fmtDate(r.oldestInvoice)}
-            </span>
+            r.oldestInvoice ? (
+              <span className="flex items-center gap-1 text-amber-400">
+                <AlertCircle size={11} />
+                {fmtDate(r.oldestInvoice)}
+              </span>
+            ) : <span className="text-gray-500">-</span>
           )},
         ]}
         data={rows}

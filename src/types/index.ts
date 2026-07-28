@@ -85,13 +85,15 @@ export interface Payment {
   invoice_id: string | null;
   customer_id: string;
   amount: number;
-  method: 'cash' | 'bank_transfer' | 'cheque' | 'credit';
+  method: 'cash' | 'bank_transfer' | 'cheque' | 'credit' | 'adjustment';
   reference: string;
   bank_name?: string | null;
   cheque_number?: string | null;
   due_date?: string | null;
   cheque_status?: 'pending' | 'processing' | 'completed' | 'returned' | null;
-  payment_type: 'sale' | 'credit_settlement';
+  payment_type: 'sale' | 'credit_settlement' | 'manual_adjustment';
+  reason?: string | null;
+  adjusted_by?: string | null;
   paid_at: string;
   created_at: string;
 }

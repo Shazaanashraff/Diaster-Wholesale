@@ -5,7 +5,7 @@ import {
   ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown,
   ClipboardList, Receipt, Edit, AlertCircle, Loader2, Mail, Phone,
   MapPin, Hash, User, Landmark, FileText, ArrowRightCircle,
-  CheckCircle, XCircle, Clock, Building2,
+  CheckCircle, XCircle, Clock, Building2, Scale,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
@@ -13,19 +13,23 @@ import {
   getCustomerById, getCustomerLedger, recordPayment, updateCustomer,
   depositCheque, completeCheque, returnCheque,
   reverseChequeToReturned, undoChequeDeposit, representCheque,
+  adjustCustomerOutstandingManual,
 } from '../services/customerService';
 import { getRemainingCredit } from '../utils/creditCheck';
 import { SL_BANKS } from '../constants/banks';
 import type { Customer, Invoice, Payment } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedNumber } from '../components/AnimatedNumber';
+import { usePermissions } from '../utils/permissions';
 
 type PayMethod = 'cash' | 'bank_transfer' | 'cheque';
 type ChequeTab = 'float' | 'completed' | 'returned';
+type AdjustDirection = 'increase' | 'decrease';
 
 export const CustomerDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { can, role } = usePermissions();
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -60,6 +64,15 @@ export const CustomerDetailPage: React.FC = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
+
+  // Adjust balance modal state (admin only)
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [adjustDirection, setAdjustDirection] = useState<AdjustDirection>('decrease');
+  const [adjustAmount, setAdjustAmount] = useState<number | ''>('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustLoading, setAdjustLoading] = useState(false);
+  const [adjustError, setAdjustError] = useState('');
+  const [adjustSuccess, setAdjustSuccess] = useState('');
 
   const loadData = async () => {
     if (!id) return;
@@ -183,6 +196,41 @@ export const CustomerDetailPage: React.FC = () => {
     }
   };
 
+  // ── Adjust balance modal (admin only) ───────────────────────────
+  const openAdjustModal = () => {
+    setAdjustDirection('decrease');
+    setAdjustAmount('');
+    setAdjustReason('');
+    setAdjustError('');
+    setAdjustSuccess('');
+    setIsAdjustModalOpen(true);
+  };
+
+  const handleAdjustBalance = async () => {
+    if (!id) return;
+    if (!adjustAmount || Number(adjustAmount) <= 0) {
+      setAdjustError('Amount must be greater than 0');
+      return;
+    }
+    if (!adjustReason.trim()) {
+      setAdjustError('A reason is required');
+      return;
+    }
+    try {
+      setAdjustLoading(true);
+      setAdjustError('');
+      const delta = adjustDirection === 'decrease' ? -Number(adjustAmount) : Number(adjustAmount);
+      await adjustCustomerOutstandingManual(id, delta, adjustReason.trim(), role);
+      setAdjustSuccess('Balance adjusted successfully!');
+      await loadData();
+      setTimeout(() => { setAdjustSuccess(''); setIsAdjustModalOpen(false); }, 2000);
+    } catch (err: any) {
+      setAdjustError(err.message || 'Failed to adjust balance');
+    } finally {
+      setAdjustLoading(false);
+    }
+  };
+
   // ── Derived data ───────────────────────────────────────────────
   if (loading) {
     return (
@@ -252,6 +300,7 @@ export const CustomerDetailPage: React.FC = () => {
 
   const METHOD_LABEL: Record<string, string> = {
     cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', credit: 'Credit',
+    adjustment: 'Balance Adjustment',
   };
 
   return (
@@ -289,6 +338,12 @@ export const CustomerDetailPage: React.FC = () => {
               className="flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] rounded-2xl md:rounded-3xl font-bold text-sm border border-[#2b313a] transition-all active:scale-[0.98]">
               <Edit size={18} strokeWidth={2.5} /> EDIT
             </button>
+            {can('adjust_balance') && (
+              <button onClick={openAdjustModal}
+                className="flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 bg-[#1d222a] text-amber-400 hover:text-amber-300 hover:bg-[#2b313a] rounded-2xl md:rounded-3xl font-bold text-sm border border-amber-900/30 transition-all active:scale-[0.98]">
+                <Scale size={18} strokeWidth={2.5} /> ADJUST BALANCE
+              </button>
+            )}
             <button onClick={openPaymentModal}
               className="flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-primary text-black rounded-2xl md:rounded-3xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98]">
               <Wallet size={20} strokeWidth={2.5} /> RECORD PAYMENT
@@ -474,6 +529,12 @@ export const CustomerDetailPage: React.FC = () => {
                             {pay.cheque_status && (
                               <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest inline-block w-fit", CHEQUE_STATUS_STYLE[pay.cheque_status])}>
                                 {pay.cheque_status}
+                              </span>
+                            )}
+                            {pay.method === 'adjustment' && pay.reason && (
+                              <span className="text-[10px] text-gray-500 italic max-w-[220px]">
+                                "{pay.reason}"
+                                {pay.adjusted_by && <span className="not-italic text-gray-600"> — {pay.adjusted_by}</span>}
                               </span>
                             )}
                             {/* Cheque action buttons */}
@@ -971,6 +1032,114 @@ export const CustomerDetailPage: React.FC = () => {
                     ) : (
                       <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
                         SAVE CHANGES
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* ── ADJUST BALANCE MODAL (admin only) ────────────────────── */}
+      <Modal isOpen={isAdjustModalOpen} onClose={() => !adjustSuccess && setIsAdjustModalOpen(false)} title="Adjust Outstanding Balance">
+        <div className="space-y-5">
+          {adjustSuccess ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center">
+              <div className="w-20 h-20 bg-green-900/20 text-green-400 rounded-full flex items-center justify-center mb-6 border border-green-900/30">
+                <CheckCircle2 size={40} strokeWidth={2.5} />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Balance Adjusted!</h3>
+              <p className="text-sm font-semibold text-gray-400">The ledger has been updated successfully.</p>
+            </div>
+          ) : (
+            <>
+              {adjustError && (
+                <div className="p-3 bg-red-900/20 text-red-400 text-sm font-bold rounded-xl border border-red-900/30 flex items-center gap-2">
+                  <AlertCircle size={14} /> {adjustError}
+                </div>
+              )}
+
+              <div className="p-3 bg-amber-900/5 text-amber-500 text-xs font-semibold rounded-xl border border-amber-900/20 flex items-start gap-2">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                Current outstanding: Rs. {(customer.outstanding_balance || 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })}. This bypasses the normal payment/return flow — use it only for corrections, write-offs, or goodwill adjustments.
+              </div>
+
+              {/* Direction selector */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest pl-1">Direction</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { v: 'decrease', label: 'Decrease (customer owes less)' },
+                    { v: 'increase', label: 'Increase (customer owes more)' },
+                  ] as { v: AdjustDirection; label: string }[]).map(({ v, label }) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => { setAdjustDirection(v); setAdjustError(''); }}
+                      className={cn(
+                        "flex flex-col items-center gap-1 p-3 rounded-2xl border text-xs font-bold transition-all text-center",
+                        adjustDirection === v
+                          ? "bg-primary/10 border-primary/50 text-primary"
+                          : "bg-[#171c23] border-[#2b313a] text-gray-500 hover:text-gray-300"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  Amount (Rs.) <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number" min="1"
+                  value={adjustAmount}
+                  onChange={e => setAdjustAmount(e.target.value ? Number(e.target.value) : '')}
+                  placeholder="e.g. 5000"
+                  className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-xl font-bold outline-none transition-all text-white placeholder-gray-500"
+                />
+              </div>
+
+              {/* Reason */}
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                  Reason <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={adjustReason}
+                  onChange={e => setAdjustReason(e.target.value)}
+                  placeholder="Why is this adjustment being made?"
+                  rows={3}
+                  className="w-full bg-[#171c23] border border-[#2b313a] focus:border-primary/50 rounded-2xl py-4 px-6 text-sm font-semibold outline-none transition-all resize-none text-white placeholder-gray-500"
+                />
+              </div>
+
+              <div className="pt-2 grid grid-cols-2 gap-4">
+                <button
+                  disabled={adjustLoading}
+                  onClick={() => setIsAdjustModalOpen(false)}
+                  className="w-full py-4 rounded-2xl border border-[#c4d7db] bg-[#d7e5e8] text-sm font-bold text-[#1f2937] hover:bg-[#cbe0e4] transition-all disabled:opacity-50"
+                >
+                  CANCEL
+                </button>
+                <button
+                  disabled={adjustLoading || !adjustAmount || !adjustReason.trim()}
+                  onClick={handleAdjustBalance}
+                  className="w-full h-[52px] bg-[#f8fafc] text-black border border-[#f8fafc] rounded-2xl font-bold text-sm hover:bg-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center relative overflow-hidden"
+                >
+                  <AnimatePresence mode="wait">
+                    {adjustLoading ? (
+                      <motion.div key="spinner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute">
+                        CONFIRM ADJUSTMENT
                       </motion.div>
                     )}
                   </AnimatePresence>

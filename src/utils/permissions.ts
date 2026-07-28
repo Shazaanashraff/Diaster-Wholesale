@@ -20,7 +20,8 @@ export type Permission =
   | 'view_sales_report'
   | 'view_dev_portal'
   | 'create_transfers'
-  | 'receive_transfers';
+  | 'receive_transfers'
+  | 'adjust_balance';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
@@ -29,7 +30,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'bulk_import', 'override_pricing', 'approve_discounts',
     'view_customers', 'manage_customers', 'view_inventory',
     'manage_inventory', 'manage_returns', 'view_sales_report',
-    'create_transfers', 'receive_transfers',
+    'create_transfers', 'receive_transfers', 'adjust_balance',
   ],
   developer: [
     'view_dev_portal',

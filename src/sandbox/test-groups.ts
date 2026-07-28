@@ -65,9 +65,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: [],
+    vitestFiles: ['src/services/customerService.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
+      'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
+      'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
+      'Supabase client.',
     e2eDesc: null,
   },
   {
@@ -113,9 +117,11 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'core-infra',
     label: 'Core Infrastructure',
-    vitestFiles: [],
+    vitestFiles: ['src/utils/permissions.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Role/permission gating: confirms the admin-only "adjust_balance" permission is granted ' +
+      'exclusively to the admin role and denied to every other role.',
     e2eDesc: null,
   },
   {
