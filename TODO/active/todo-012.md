@@ -3,7 +3,7 @@ id: todo-012
 title: Sandbox feature [5/7] — Sandbox screen UI as a tab in DeveloperPortal
 priority: 2
 created: 2026-06-24
-status: active
+status: needs-review
 ---
 
 ## Overview
@@ -80,4 +80,48 @@ catalog exactly, since the precision contract (todo-010) guarantees the catalog 
 - **Create:** `src/components/sandbox/SandboxRunnerPanel.tsx` (and any small subcomponents/CSS)
 
 ## Completion Notes
-<!-- Sonnet 4.6 fills: components created, accessibility handling, walkthrough result, commit hash. -->
+
+- `DeveloperPortal.tsx`: added `'sandbox'` to `PortalTab`, added a `FlaskConical`-icon `Sandbox`
+  entry to the sub-nav array, filtered out of that array unless `typeof (window as
+  any).sandboxRunner !== 'undefined'`, and rendered `<SandboxRunnerPanel />` when
+  `portalTab === 'sandbox'`.
+- Created `src/components/sandbox/SandboxRunnerPanel.tsx`:
+  - Header with title + status badge (`role="status" aria-live="polite"`), dot pulses via
+    `animate-pulse motion-reduce:animate-none` only while `status==='running'`, colour/label
+    transitions Idle (gray) → Running (blue) → Passed (green) / Failed (red).
+  - Broad actions: **Run Unit + Integration** (`run('unit')`), **Run E2E** (`run('e2e')`),
+    **Reset Sandbox Data** (destructive-styled, opens the existing `ConfirmModal` and only calls
+    `.reset()` on confirm). **Cancel** renders only while `running`, calls `.cancel()`.
+  - Per-module grid built directly from `TEST_GROUPS`; pill counts derived from
+    `TEST_CASES[group.id]` counted by `type` (unit=blue, integration=violet, e2e=amber), each
+    hidden when its count is 0. Per-row **Run Tests** (`run('unit', {files: group.vitestFiles})`,
+    disabled when `vitestFiles` is empty) and **Run E2E** (`run('e2e', {spec: group.e2e})`, or a
+    muted "no E2E" label when `group.e2e` is null).
+  - Expand/collapse per row into **Unit tests / Integration tests (real database) / End-to-end
+    tests (Playwright)** sections, each listing `TEST_CASES[group.id]` filtered by type as
+    `name — what`; a group with zero registered cases (e.g. `products-inventory`) falls back to
+    showing its catalog `unitDesc` ("No automated tests yet…").
+  - While `running`: every per-module button is disabled and a blue "tests are running" banner
+    shows above the grid.
+  - Streaming log panel: fixed-height (`h-64`) monospace scroll container subscribed to
+    `window.sandboxRunner.onOutput`; a `pinnedRef` tracks whether the user is scrolled to the
+    bottom (within 24px) and only then auto-scrolls new lines into view; scrolling up releases the
+    pin until the user scrolls back down. Lines matching a fail/error pattern render red with an
+    `XCircle` icon + label, pass-pattern lines render green with a `CheckCircle2` icon + label
+    (icon+label, not colour alone), everything else is plain gray; "No output yet" shows before
+    the first line arrives.
+  - All spinners/pulses use `motion-reduce:animate-none`; all colours come from the existing
+    dark-theme token classes already used elsewhere in `DeveloperPortal.tsx`, no new theme was
+    introduced (page has no separate light theme to mirror).
+- `npx tsc --noEmit`: clean. `npm run build`: clean (pre-existing chunk-size and CSS-selector
+  warnings only, unrelated to this change). `npx vitest run`: 5 files, 42 passed, 2 skipped —
+  unchanged.
+- **Not verified — same environment limitation as todo-011:** the manual dev-app walkthrough
+  (broad run, per-module run, E2E run, cancel, reset-with-confirm all streaming output) could not
+  be exercised. `npm install` succeeds, but the `electron` package's own binary was never
+  downloaded (blocked by the same egress policy documented in todo-011's notes — the download
+  host returns 403 in this sandbox), so `node_modules/electron` has no runnable binary and
+  `window.sandboxRunner` never exists here regardless of the `--enable-sandbox-runner` gate. All
+  UI logic was implemented per the guide and reviewed by re-reading the component; a human with a
+  working Electron dev environment should do the live walkthrough before flipping this to
+  `completed`.
