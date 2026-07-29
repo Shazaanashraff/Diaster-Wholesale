@@ -14,6 +14,53 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'rejects receiving more units than were ordered',
+      what: 'Trying to mark more units as received than were originally ordered is refused before anything is saved.',
+      type: 'unit',
+    },
+    {
+      name: 'rejects more damaged units than received units',
+      what: 'Trying to log more damaged units than the total units received on that line is refused before anything is saved.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts one purchase_receive row per item and marks the purchase "received" on success',
+      what: 'Confirming a good receive records each product line and flips the purchase order to "received".',
+      type: 'unit',
+    },
+    {
+      name: 'rejects the whole batch if any single item fails validation, even when others are valid',
+      what: 'If even one product line in a receive is invalid, none of the lines are saved — it\'s all or nothing.',
+      type: 'unit',
+    },
+    {
+      name: 'throws the underlying database error message when the purchase_receive insert fails',
+      what: 'If saving the receive fails in the database, the real reason is shown instead of a generic failure.',
+      type: 'unit',
+    },
+    {
+      name: 'computes total_rmb as the sum of quantity_units * unit_price_rmb across items',
+      what: 'A new purchase order\'s total in RMB is the sum of every line\'s quantity times its unit price.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when generate_purchase_reference RPC returns an error, without inserting the purchase',
+      what: 'If the database can\'t generate a PO reference number, no purchase order is created.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the purchase_items insert fails after the purchase row was created',
+      what: 'If a purchase order\'s line items fail to save after the order itself was created, the failure surfaces clearly.',
+      type: 'unit',
+    },
+    {
+      name: 'receiving a PO adds a stock_batches row (received - damaged), and deduct_stock_fifo consumes it correctly',
+      what: 'Against a real sandbox database: receiving a PO adds exactly the sellable stock (received minus damaged, split into full cartons and loose pieces), a sale eats into that stock oldest-batch-first down to the exact right amount, and trying to sell more than remains is rejected instead of letting stock go negative.',
+      type: 'integration',
+    },
+  ],
   'sales-pos': [
     {
       name: 'floors netTotal / 100',
@@ -190,6 +237,85 @@ export const TEST_CASES: Record<string, TestCase[]> = {
     {
       name: 'every non-null e2e entry resolves to e2e/<name>.spec.ts',
       what: 'Every E2E flow the catalog lists actually has a matching Playwright spec file on disk.',
+      type: 'unit',
+    },
+  ],
+  'payments-cheques': [
+    {
+      name: 'depositCheque moves pending -> processing',
+      what: 'Depositing a cheque at the bank moves it from "pending" to "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque moves processing -> completed',
+      what: 'Marking a deposited cheque as cleared moves it from "processing" to "completed".',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque moves processing -> returned (bounced before clearing)',
+      what: 'A cheque that bounces while still at the bank moves from "processing" to "returned".',
+      type: 'unit',
+    },
+    {
+      name: 'reverseChequeToReturned moves completed -> returned (bounced after clearing)',
+      what: 'A cheque that bounces after it had already been marked cleared is reversed to "returned".',
+      type: 'unit',
+    },
+    {
+      name: 'undoChequeDeposit moves processing -> pending',
+      what: 'Undoing an accidental "deposit" click moves a cheque back from "processing" to "pending".',
+      type: 'unit',
+    },
+    {
+      name: 'representCheque moves returned -> processing (re-presented at the bank)',
+      what: 'Re-presenting a bounced cheque at the bank moves it from "returned" back to "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'propagates an invalid-transition rejection from the DB unchanged (e.g. pending -> completed)',
+      what: 'If a cheque status change skips a required step (like jumping straight from "pending" to "completed"), the database\'s rejection reason is shown as-is.',
+      type: 'unit',
+    },
+    {
+      name: 'propagates a "not a cheque payment" rejection from the DB unchanged',
+      what: 'Trying to change the cheque status of a payment that was never a cheque is rejected with a clear reason.',
+      type: 'unit',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'calls record_payment_atomic with the customer, invoice, amount, and method',
+      what: 'Recording a customer payment sends the customer, invoice, amount, and payment method to the database exactly as entered.',
+      type: 'unit',
+    },
+    {
+      name: 'passes a null invoice_id through unchanged for a general (no-invoice) payment',
+      what: 'A payment that isn\'t tied to a specific invoice is recorded as a general payment against the customer\'s account, not forced onto an invoice.',
+      type: 'unit',
+    },
+    {
+      name: 'carries bank_name, cheque_number, and due_date through for a cheque payment',
+      what: 'A cheque payment keeps its bank name, cheque number, and due date attached when it\'s recorded.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error, leaving the outstanding balance untouched',
+      what: 'If recording a payment fails (e.g. an invalid amount), nothing is applied to the customer\'s outstanding balance.',
+      type: 'unit',
+    },
+    {
+      name: 'calls the RPC with the exact signed delta, reason, and adjuster',
+      what: 'An admin\'s manual balance correction sends the exact amount, reason, and admin name to the database.',
+      type: 'unit',
+    },
+    {
+      name: 'passes a positive delta through unchanged for an increase',
+      what: 'An admin correction that increases what a customer owes is sent to the database as a positive amount, unchanged.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error',
+      what: 'If an admin tries to adjust a balance without a valid reason, the database\'s rejection is shown to them.',
       type: 'unit',
     },
   ],

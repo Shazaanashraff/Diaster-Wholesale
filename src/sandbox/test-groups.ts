@@ -28,9 +28,18 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: [
+      'src/services/purchaseService.test.ts',
+      'src/sandbox/__tests__/products-inventory.integration.test.ts',
+    ],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving a purchase order: rejects receiving more units than were ordered or more damaged ' +
+      'units than were received (before anything is written), and reports the real database error ' +
+      'if the receive itself fails to save, all against a mocked Supabase client. Plus a live-database ' +
+      'check (against the sandbox schema) that a received PO creates the right stock (received minus ' +
+      'damaged, split into cartons and loose pieces), that a sale correctly eats into that stock oldest-' +
+      'batch-first, and that trying to sell more than remains is rejected instead of going negative.',
     e2eDesc: null,
   },
   {
@@ -57,9 +66,16 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/chequeLifecycle.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Every cheque lifecycle action (deposit, complete, return, reverse-after-clearing, undo-deposit, ' +
+      're-present) calls the update_cheque_status RPC with the exact payment and target status the ' +
+      'state machine expects, and a rejection from the database (an invalid transition, or a payment ' +
+      'that isn\'t a cheque at all) propagates to the caller with its original message intact, all ' +
+      'against a mocked Supabase client. The transition rules and float/balance math themselves live ' +
+      'in Postgres and are not yet covered by a live-database test — that RPC has not been ported to ' +
+      'the sandbox schema (see this file\'s completion notes for todo-013).',
     e2eDesc: null,
   },
   {
@@ -68,10 +84,13 @@ export const TEST_GROUPS: TestGroup[] = [
     vitestFiles: ['src/services/customerService.test.ts'],
     e2e: null,
     unitDesc:
-      'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
-      'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
-      'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Recording a payment: the customer, invoice (or null for a general payment), amount, method, ' +
+      'and cheque/bank details are passed through to the record_payment_atomic RPC untouched, and a ' +
+      'rejected payment (e.g. a zero amount) throws instead of silently doing nothing. Plus the admin-' +
+      'only manual outstanding-balance adjustment: the signed delta, reason, and admin identity are ' +
+      'passed through to the adjust_customer_outstanding_manual RPC untouched, and RPC errors (e.g. a ' +
+      'missing reason) propagate as thrown errors, all against a mocked Supabase client. Credit-limit ' +
+      'enforcement itself is covered under Sales / POS (checkCreditLimit runs during checkout).',
     e2eDesc: null,
   },
   {
