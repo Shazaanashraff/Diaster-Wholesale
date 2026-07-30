@@ -1,11 +1,11 @@
 # Graph Report - Diaster-Wholesale  (2026-07-30)
 
 ## Corpus Check
-- 113 files · ~4,487,547 words
+- 114 files · ~4,489,345 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 577 nodes · 759 edges · 22 communities detected
+- 587 nodes · 773 edges · 22 communities detected
 - Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 146 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -46,15 +46,15 @@
 10. `load()` - 8 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `load()` --calls--> `getPendingApprovals()`  [INFERRED]
+  src\pages\PurchaseDetailPage.tsx → src\services\supplierService.ts
+- `handleResolveApproval()` --calls--> `resolveDiscountApproval()`  [INFERRED]
+  src\pages\PurchaseDetailPage.tsx → src\services\supplierService.ts
 - `handleFile()` --calls--> `parseExcelFile()`  [INFERRED]
   src\pages\BulkImportPage.tsx → src\services\importService.ts
 - `loadData()` --calls--> `getCustomerById()`  [INFERRED]
   src\pages\CustomerDetailPage.tsx → src\services\customerService.ts
 - `loadData()` --calls--> `getCustomerLedger()`  [INFERRED]
-  src\pages\CustomerDetailPage.tsx → src\services\customerService.ts
-- `handleChequeAction()` --calls--> `depositCheque()`  [INFERRED]
-  src\pages\CustomerDetailPage.tsx → src\services\customerService.ts
-- `handleChequeAction()` --calls--> `completeCheque()`  [INFERRED]
   src\pages\CustomerDetailPage.tsx → src\services\customerService.ts
 
 ## Communities
@@ -65,31 +65,31 @@ Nodes (27): handleConfirm(), handleDrop(), handleFile(), handleFileInput(), hand
 
 ### Community 1 - "Community 1"
 Cohesion: 0.08
-Nodes (23): clearSyncedSales(), getPendingCount(), getPendingSales(), markSynced(), openDB(), saveOfflineSale(), syncPendingSales(), addToCart() (+15 more)
+Nodes (31): handleDelete(), handleSaveExpense(), handleSaveIncome(), load(), showToast(), createExpense(), deleteExpense(), getCompanyCashBalance() (+23 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.1
-Nodes (27): handleAddCost(), handleCancel(), handleDeleteCost(), handleFinalize(), handleOrder(), handleReceive(), handleResolveApproval(), handleSaveItems() (+19 more)
+Cohesion: 0.08
+Nodes (23): clearSyncedSales(), getPendingCount(), getPendingSales(), markSynced(), openDB(), saveOfflineSale(), syncPendingSales(), addToCart() (+15 more)
 
 ### Community 3 - "Community 3"
+Cohesion: 0.1
+Nodes (26): handleAddCost(), handleCancel(), handleDeleteCost(), handleFinalize(), handleOrder(), handleReceive(), handleResolveApproval(), handleSaveItems() (+18 more)
+
+### Community 4 - "Community 4"
 Cohesion: 0.09
 Nodes (23): handleAdjustBalance(), handleChequeAction(), handleRecordPayment(), handleSaveChanges(), loadData(), adjustCustomerOutstandingManual(), archiveCustomer(), completeCheque() (+15 more)
 
-### Community 4 - "Community 4"
+### Community 5 - "Community 5"
+Cohesion: 0.11
+Nodes (21): archiveSupplier(), createSupplier(), deleteSupplierPayment(), getPendingApprovals(), getSupplierLedger(), getSuppliers(), normalizePurchaseTotal(), recordSupplierPayment() (+13 more)
+
+### Community 6 - "Community 6"
 Cohesion: 0.07
 Nodes (10): runAggregationAndUpload(), startMetricsScheduler(), handleDelLsKey(), handleForceSync(), handleSetLsKey(), loadAuditData(), loadLocalStorageKeys(), handleSave() (+2 more)
 
-### Community 5 - "Community 5"
+### Community 7 - "Community 7"
 Cohesion: 0.08
 Nodes (14): handleRefresh(), load(), loadData(), handlePeriodChange(), handleRefresh(), loadData(), getCurrentStockReport(), getCurrentStockReportByLocation() (+6 more)
-
-### Community 6 - "Community 6"
-Cohesion: 0.12
-Nodes (19): archiveSupplier(), createSupplier(), deleteSupplierPayment(), getSupplierLedger(), getSuppliers(), normalizePurchaseTotal(), recordSupplierPayment(), recordSupplierPaymentFull() (+11 more)
-
-### Community 7 - "Community 7"
-Cohesion: 0.13
-Nodes (18): handleDelete(), handleSaveExpense(), handleSaveIncome(), load(), showToast(), createExpense(), deleteExpense(), getCompanyCashBalance() (+10 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.07
@@ -104,28 +104,28 @@ Cohesion: 0.13
 Nodes (13): DashboardRoute(), ProtectedRoute(), canCancelSales(), handleCancel(), isAdmin(), load(), can(), canAny() (+5 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.14
-Nodes (10): getMovementRates(), createPurchase(), getPurchases(), handleCreate(), handleQuickCreateProduct(), load(), loadPanelData(), openPanel() (+2 more)
+Cohesion: 0.15
+Nodes (10): getMovementRates(), handleCreate(), handleDelete(), handleQuickCreateProduct(), load(), loadPanelData(), openPanel(), setItem() (+2 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.18
-Nodes (13): canApprove(), confirmComplete(), handleComplete(), handleCreate(), load(), openDetail(), showToast(), getLocations() (+5 more)
+Cohesion: 0.19
+Nodes (12): canApprove(), confirmComplete(), handleComplete(), handleCreate(), load(), openDetail(), showToast(), completeStockTransfer() (+4 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.2
-Nodes (13): cancelSupplierReturn(), completeSupplierReturn(), createSupplierReturn(), generateReturnReference(), getSupplierReturnById(), getSupplierReturns(), async(), handleComplete() (+5 more)
-
-### Community 14 - "Community 14"
 Cohesion: 0.17
 Nodes (11): handleCreate(), handleRename(), handleToggleActive(), loadInvoices(), loadPeople(), showToast(), addSalesperson(), getAllSalespeople() (+3 more)
 
-### Community 15 - "Community 15"
+### Community 14 - "Community 14"
 Cohesion: 0.19
 Nodes (6): completeReturn(), deductStock(), restoreStock(), showToast(), submitReturn(), undoReturn()
 
-### Community 16 - "Community 16"
+### Community 15 - "Community 15"
 Cohesion: 0.18
 Nodes (9): AppOfflineDatabase, generateUUID(), getOrCreateDeviceId(), logMetricEvent(), cn(), fmt(), handleOpeningBlur(), KPI() (+1 more)
+
+### Community 16 - "Community 16"
+Cohesion: 0.31
+Nodes (6): cancel(), doReset(), runBroad(), runModule(), runModuleE2E(), runner()
 
 ### Community 17 - "Community 17"
 Cohesion: 0.36
@@ -158,12 +158,12 @@ Nodes (2): findTestFiles(), normalise()
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `getProducts()` connect `Community 0` to `Community 2`, `Community 9`, `Community 11`, `Community 12`, `Community 13`?**
-  _High betweenness centrality (0.249) - this node is a cross-community bridge._
+- **Why does `getProducts()` connect `Community 0` to `Community 1`, `Community 3`, `Community 9`, `Community 11`, `Community 12`?**
+  _High betweenness centrality (0.241) - this node is a cross-community bridge._
 - **Why does `getReportDateRange()` connect `Community 8` to `Community 0`, `Community 9`, `Community 10`?**
-  _High betweenness centrality (0.210) - this node is a cross-community bridge._
+  _High betweenness centrality (0.203) - this node is a cross-community bridge._
 - **Why does `load()` connect `Community 10` to `Community 8`?**
-  _High betweenness centrality (0.166) - this node is a cross-community bridge._
+  _High betweenness centrality (0.160) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `load()` (e.g. with `getPurchaseById()` and `getPendingApprovals()`) actually correct?**
   _`load()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 10 inferred relationships involving `getReportDateRange()` (e.g. with `load()` and `load()`) actually correct?**
