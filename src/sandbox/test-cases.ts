@@ -166,6 +166,127 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       type: 'e2e',
     },
   ],
+  'products-inventory': [
+    {
+      name: 'receiving a GRN creates a stock batch sized to received-minus-damaged units',
+      what: 'When a container of stock arrives and is marked received, the sellable amount added to stock is what actually arrived minus whatever was damaged — never the full ordered amount.',
+      type: 'integration',
+    },
+    {
+      name: 'a fully-damaged GRN line adds zero stock (sellable floors at 0, never negative)',
+      what: 'If every unit in a delivery line was damaged, nothing is added to sellable stock — it never goes negative or adds phantom stock.',
+      type: 'integration',
+    },
+    {
+      name: 'selling deducts stock FIFO, oldest batch first, across multiple GRNs',
+      what: 'When two containers of the same product have arrived on different days, a sale eats into the oldest delivery first before touching the newer one.',
+      type: 'integration',
+    },
+    {
+      name: 'selling more than available raises a specific "Insufficient stock" error',
+      what: 'Trying to sell more units than are actually in stock is rejected with a specific error naming exactly how many units are short, and leaves existing stock untouched.',
+      type: 'integration',
+    },
+  ],
+  'payments-cheques': [
+    {
+      name: 'received: recordPayment with method "cheque" carries the cheque details',
+      what: 'Recording a customer\'s cheque payment keeps the bank name, cheque number, and due date attached to it from the moment it\'s received.',
+      type: 'unit',
+    },
+    {
+      name: 'deposited: depositCheque moves pending -> processing',
+      what: 'Taking a received cheque to the bank marks it as "processing" — on its way to clearing.',
+      type: 'unit',
+    },
+    {
+      name: 'cleared: completeCheque moves processing -> completed',
+      what: 'When a deposited cheque clears at the bank, it\'s marked "completed" and the customer\'s account is credited.',
+      type: 'unit',
+    },
+    {
+      name: 'bounced: returnCheque moves processing -> returned',
+      what: 'When a deposited cheque bounces, it\'s marked "returned" instead of completed.',
+      type: 'unit',
+    },
+    {
+      name: 'bounced after clearing: reverseChequeToReturned also requests "returned"',
+      what: 'A cheque that bounces after already being marked cleared can still be flipped back to "returned", reversing the credit it gave the customer.',
+      type: 'unit',
+    },
+    {
+      name: 'undo: undoChequeDeposit moves processing back to pending',
+      what: 'An accidental "deposit" click can be undone, putting the cheque back to square one.',
+      type: 'unit',
+    },
+    {
+      name: 're-present: representCheque moves returned back to processing',
+      what: 'A bounced cheque can be re-presented at the bank a second time, putting it back into processing.',
+      type: 'unit',
+    },
+    {
+      name: 'invalid transition (e.g. completing a cheque still pending) rejects with the DB\'s specific error',
+      what: 'Trying to clear a cheque that was never deposited is rejected with a specific "invalid transition" error instead of silently succeeding.',
+      type: 'unit',
+    },
+    {
+      name: 'invalid transition (depositing a payment that is not a cheque) rejects with a specific error',
+      what: 'Trying to "deposit" a cash or card payment (which was never a cheque) is rejected with a specific error naming the payment.',
+      type: 'unit',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'calls record_payment_atomic with the customer, invoice, amount, and method',
+      what: 'Recording a cash payment against an invoice records exactly that customer, that invoice, that amount, and the cash method — nothing more, nothing less.',
+      type: 'unit',
+    },
+    {
+      name: 'passes bank_name, cheque_number, and due_date through for a cheque payment',
+      what: 'A cheque payment keeps its bank name, cheque number, and due date attached when it\'s recorded.',
+      type: 'unit',
+    },
+    {
+      name: 'records a walk-in payment with no invoice as p_invoice_id: null',
+      what: 'A payment not tied to any specific invoice (e.g. a general account payment) is recorded with no invoice attached, not a made-up one.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error',
+      what: 'If the database rejects a payment (e.g. a negative amount), the person recording it sees the real reason instead of it looking like it worked.',
+      type: 'unit',
+    },
+    {
+      name: 'combines invoices and payments for the customer',
+      what: 'A customer\'s ledger shows both everything they\'ve been invoiced and every payment they\'ve made, pulled together in one place.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the invoices query fails, without touching payments',
+      what: 'If a customer\'s invoice history can\'t be loaded, their ledger fails loudly rather than showing a payment history next to a blank, misleading invoice list.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the payments query fails even if invoices succeeded',
+      what: 'If a customer\'s payment history can\'t be loaded, their ledger fails loudly rather than showing invoices next to a blank, misleading payment list.',
+      type: 'unit',
+    },
+    {
+      name: 'calls the RPC with the exact signed delta, reason, and adjuster',
+      what: 'An admin\'s manual correction to a customer\'s balance records the exact amount, the reason given, and which admin made it.',
+      type: 'unit',
+    },
+    {
+      name: 'passes a positive delta through unchanged for an increase',
+      what: 'A manual correction that increases what a customer owes is recorded as a positive amount, not silently flipped.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error',
+      what: 'A manual balance correction with no reason given is rejected by the database, and the admin sees exactly why.',
+      type: 'unit',
+    },
+  ],
   sandbox: [
     {
       name: 'reset_all() + reseed never changes public row counts',

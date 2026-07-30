@@ -28,9 +28,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/inventory-receiving.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving a GRN (goods received note) against a real sandbox database creates stock ' +
+      'sized to received-minus-damaged units, a fully-damaged line adds nothing, and selling ' +
+      'deducts stock oldest-batch-first (FIFO) — with a specific error when a sale asks for ' +
+      'more than is in stock.',
     e2eDesc: null,
   },
   {
@@ -57,9 +61,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/chequeLifecycle.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'The cheque lifecycle received → deposited → cleared / bounced (plus undo-deposit and ' +
+      're-present) each call the update_cheque_status RPC with the exact expected status, and ' +
+      'an invalid transition (e.g. completing a cheque that is still pending) propagates the ' +
+      'database\'s specific rejection message, all against a mocked Supabase client.',
     e2eDesc: null,
   },
   {
@@ -68,10 +76,13 @@ export const TEST_GROUPS: TestGroup[] = [
     vitestFiles: ['src/services/customerService.test.ts'],
     e2e: null,
     unitDesc:
-      'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
-      'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
-      'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Recording a payment (cash or cheque) against a customer\'s ledger passes the exact ' +
+      'amount, method, and cheque details to the record_payment_atomic RPC; a customer\'s ' +
+      'ledger correctly combines their invoices and payments and fails loudly if either query ' +
+      'fails; and the admin-only manual outstanding-balance adjustment passes its signed delta, ' +
+      'reason, and admin identity through to the adjust_customer_outstanding_manual RPC ' +
+      'untouched, with RPC errors (e.g. a missing reason) propagating as thrown errors — all ' +
+      'against a mocked Supabase client.',
     e2eDesc: null,
   },
   {
