@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Product, ProductStock, StockAdjustment } from '../types';
+import { computeStock } from '../utils/stockUtils';
 
 /** Columns for stock views — avoids select('*') egress. */
 export const SHOP_STOCK_COLUMNS =
@@ -111,7 +112,7 @@ export async function getPosShopCatalog(): Promise<{
 
   const inventory = (data ?? []) as ProductStock[];
   const products = inventory
-    .filter((r) => Number(r.cartons_in) > 0 || Number(r.pieces_in) > 0)
+    .filter((r) => computeStock(r).totalPieces > 0)
     .map(mapShopStockRowToProduct);
 
   return { products, inventory };
