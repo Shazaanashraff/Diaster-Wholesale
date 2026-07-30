@@ -183,7 +183,7 @@ export const DailySalesReport: React.FC = () => {
   }
 
   // Split into sales receipts, settlements, and returns
-  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && p.payment_type !== 'manual_adjustment' && isClearedForReporting(p));
   const settlementPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
   const returnPayments     = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
 

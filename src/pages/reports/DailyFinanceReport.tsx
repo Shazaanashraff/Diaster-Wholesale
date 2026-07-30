@@ -105,7 +105,7 @@ export const DailyFinanceReport: React.FC<DailyFinanceReportProps> = ({
 
   useEffect(() => { load(); }, [load]);
 
-  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+  const salesPayments      = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && p.payment_type !== 'manual_adjustment' && isClearedForReporting(p));
   const settlementPayments = payments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
   const returnPayments     = payments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
   const chequesInFloat     = payments.filter(p => p.cheque_status === 'pending' || p.cheque_status === 'processing');

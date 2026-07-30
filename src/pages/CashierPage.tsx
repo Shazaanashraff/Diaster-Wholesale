@@ -94,7 +94,7 @@ export const CashierPage: React.FC = () => {
       // Cheques only count once cleared; settlements (money collected against an
       // existing credit invoice) are never "sales" — they're money already recognized
       // as revenue when that invoice was originally created.
-      const salesPayments  = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && isClearedForReporting(p));
+      const salesPayments  = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type !== 'credit_settlement' && p.payment_type !== 'manual_adjustment' && isClearedForReporting(p));
       const settlementPayments = allPayments.filter(p => Number(p.amount) > 0 && !p.reference?.startsWith('RETURN-') && p.payment_type === 'credit_settlement' && isClearedForReporting(p));
       const returnPayments = allPayments.filter(p => Number(p.amount) < 0 || p.reference?.startsWith('RETURN-'));
       const chequesInFloat = allPayments.filter(p => p.cheque_status === 'pending' || p.cheque_status === 'processing');

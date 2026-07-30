@@ -30,11 +30,13 @@ export const CashFlowReport: React.FC = () => {
       const { from, to } = getReportDateRange(period, customFrom, customTo);
       
       const [payments, expenses] = await Promise.all([
-        supabase.from('payments').select('amount, created_at, method').gte('created_at', from || '').lte('created_at', to || ''),
+        supabase.from('payments').select('amount, created_at, method, payment_type').gte('created_at', from || '').lte('created_at', to || ''),
         supabase.from('expenses').select('amount, created_at').gte('created_at', from || '').lte('created_at', to || '')
       ]);
 
-      const inData: CashFlowTransaction[] = (payments.data || []).map(p => ({ ...p, type: 'IN', label: 'Sales Receipt' } as CashFlowTransaction));
+      // Manual balance adjustments are a ledger correction, not real cash movement.
+      const realPayments = (payments.data || []).filter(p => p.payment_type !== 'manual_adjustment');
+      const inData: CashFlowTransaction[] = realPayments.map(p => ({ ...p, type: 'IN', label: 'Sales Receipt' } as CashFlowTransaction));
       const outData: CashFlowTransaction[] = (expenses.data || []).map(e => ({ ...e, type: 'OUT', label: 'Expense' } as CashFlowTransaction));
 
       const all = [...inData, ...outData].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
