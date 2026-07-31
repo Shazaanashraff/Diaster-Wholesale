@@ -14,6 +14,80 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'throws before touching the DB when received_units exceeds ordered_units',
+      what: 'Trying to receive more units than were ordered on a purchase is rejected before anything is written to the database.',
+      type: 'unit',
+    },
+    {
+      name: 'throws before touching the DB when damaged_units exceeds received_units',
+      what: 'Marking more units damaged than were actually received is rejected before anything is written to the database.',
+      type: 'unit',
+    },
+    {
+      name: 'inserts one purchase_receive row per item and marks the purchase received',
+      what: 'Confirming a receive records exactly one line per product and flips the purchase to "received".',
+      type: 'unit',
+    },
+    {
+      name: 'rejects when the purchase_receive insert itself fails',
+      what: 'If the database rejects the receive record, the purchase is never marked received with missing stock data.',
+      type: 'unit',
+    },
+    {
+      name: 'receiving a purchase creates a stock batch net of damaged units, and FIFO deduction reduces it correctly',
+      what: 'Against a real sandbox database: confirming a receive with some damaged units adds exactly the good units as new stock, and selling stock oldest-first (FIFO) takes off exactly the right number of pieces — trying to take more than exists is rejected.',
+      type: 'integration',
+    },
+  ],
+  'payments-cheques': [
+    {
+      name: 'depositCheque: pending → processing',
+      what: 'Depositing a received cheque asks the database to move it into "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque: processing → completed',
+      what: 'Marking a deposited cheque as cleared asks the database to move it into "completed".',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque: processing → returned',
+      what: 'Marking a deposited cheque as bounced asks the database to move it into "returned".',
+      type: 'unit',
+    },
+    {
+      name: 'reverseChequeToReturned: completed → returned',
+      what: 'Reversing a cheque that already cleared but then bounced asks the database to move it back to "returned".',
+      type: 'unit',
+    },
+    {
+      name: 'undoChequeDeposit: processing → pending',
+      what: 'Undoing an accidental deposit click asks the database to move the cheque back to "pending".',
+      type: 'unit',
+    },
+    {
+      name: 'representCheque: returned → processing',
+      what: 'Re-presenting a bounced cheque at the bank asks the database to move it back into "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'propagates the DB\'s exact "invalid transition" error instead of swallowing it',
+      what: 'An impossible cheque status change (e.g. skipping straight from received to cleared) is refused with a clear reason, not silently ignored.',
+      type: 'unit',
+    },
+    {
+      name: 'propagates the DB\'s "not a cheque payment" error for a non-cheque payment id',
+      what: 'Trying to change the "cheque status" of a cash or card payment is refused with a clear reason.',
+      type: 'unit',
+    },
+    {
+      name: 'propagates the DB\'s "not found" error for an unknown payment id',
+      what: 'Trying to change the status of a cheque that doesn\'t exist is refused with a clear reason.',
+      type: 'unit',
+    },
+  ],
   'sales-pos': [
     {
       name: 'floors netTotal / 100',
@@ -164,6 +238,38 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       name: 'POS checkout flow',
       what: 'Opens the real POS screen in Electron, adds a product to the cart, completes a sale, and checks the success modal, error states (RPC failure, insufficient stock), and cart-clearing all behave correctly end-to-end.',
       type: 'e2e',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'calls record_payment_atomic with the exact customer, invoice, and amount',
+      what: 'Recording a cash or bank payment against an invoice tells the database exactly who paid, on which invoice, and how much — nothing more, nothing less.',
+      type: 'unit',
+    },
+    {
+      name: 'passes bank name, cheque number, and due date through for a cheque payment',
+      what: 'Recording a cheque payment keeps the bank name, cheque number, and due date attached to it.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error, so the outstanding balance is never left half-updated',
+      what: 'If the database refuses to record a payment (e.g. it exceeds what\'s owed), nothing is silently left half-applied.',
+      type: 'unit',
+    },
+    {
+      name: 'available credit matches limit - outstanding_balance for the seeded customer',
+      what: 'Against a real sandbox database: a customer\'s spare credit is exactly their approved limit minus what they currently owe.',
+      type: 'integration',
+    },
+    {
+      name: 'a credit sale within the available headroom is allowed',
+      what: 'Against a real sandbox database: a sale that fits within a customer\'s remaining credit is allowed to go on their account.',
+      type: 'integration',
+    },
+    {
+      name: 'a credit sale that would breach the limit is rejected',
+      what: 'Against a real sandbox database: a sale that would push a customer over their approved credit limit is rejected.',
+      type: 'integration',
     },
   ],
   sandbox: [

@@ -28,9 +28,17 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: [
+      'src/services/purchaseService.test.ts',
+      'src/sandbox/__tests__/products-inventory.integration.test.ts',
+    ],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving a purchase: rejects receiving/damaging more units than were ordered/received ' +
+      'before touching the database, and records one purchase_receive row per item. Against a ' +
+      'real sandbox database, confirms the receive-confirmation trigger creates a stock batch ' +
+      'net of damaged units, and that FIFO stock deduction (the same routine POS checkout uses) ' +
+      'reduces it by exactly the right number of pieces.',
     e2eDesc: null,
   },
   {
@@ -57,21 +65,34 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/cheques.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Each cheque-lifecycle action (deposit, complete, return, undo-deposit, re-present, ' +
+      'reverse-to-returned) requests exactly the right new status from the update_cheque_status ' +
+      'RPC, and the database\'s own errors (invalid transition, not a cheque payment, payment ' +
+      'not found) propagate to the caller untouched, against a mocked Supabase client. The ' +
+      'transition rules themselves live server-side and are not yet reachable as a real ' +
+      'sandbox-database integration test — see TODO/completed/todo-013.md for why.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: [
+      'src/services/customerService.test.ts',
+      'src/sandbox/__tests__/customers-credit.integration.test.ts',
+    ],
     e2e: null,
     unitDesc:
       'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
       'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
-      'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'RPC errors (e.g. a missing reason) propagate as thrown errors. Recording a payment passes ' +
+      'the customer, invoice, amount, and (for cheques) bank/cheque/due-date details through to ' +
+      'record_payment_atomic untouched, all against a mocked Supabase client. Against a real ' +
+      'sandbox database, confirms the credit-limit rule (available = limit − outstanding balance) ' +
+      'matches the real numbers on a seeded customer, allowing headroom sales and rejecting ' +
+      'over-limit ones.',
     e2eDesc: null,
   },
   {
