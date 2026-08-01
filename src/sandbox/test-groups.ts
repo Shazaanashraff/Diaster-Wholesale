@@ -28,9 +28,14 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.integration.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving (GRN) against the sandbox database: a purchase transitioning to "received" creates ' +
+      'a stock batch sized to received-minus-damaged units, split into cartons and loose pieces, and ' +
+      'never double-creates one on a repeat update. Selling stock (FIFO deduction) drains the oldest ' +
+      'batch first and raises a specific "Insufficient stock: N units undeducted" error — without ' +
+      'partially applying — when there isn\'t enough.',
     e2eDesc: null,
   },
   {
@@ -49,29 +54,45 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'refunds-returns',
     label: 'Refunds & Returns',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/refunds-returns.integration.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Against the sandbox database: a full return releases the whole credit portion of a sale off ' +
+      'the customer\'s outstanding balance, a partial return releases only the returned share, and ' +
+      'restoring returned stock adds a correctly-sized batch. The self-contained atomic return/exchange ' +
+      'path computes its refund amount correctly and rejects a missing invoice, an unknown invoice, or ' +
+      'a return item that doesn\'t belong to the invoice being returned against.',
     e2eDesc: null,
   },
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/customerService.cheque.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Every stage of a cheque\'s life — received, deposited, cleared, bounced, undone, re-presented — ' +
+      'sends the database the exact status transition it claims to, against a mocked Supabase client. ' +
+      'A transition the database rejects (an out-of-order status change, an unknown payment, or acting ' +
+      'on a non-cheque payment) propagates its specific error back to the caller unchanged.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: [
+      'src/services/customerService.test.ts',
+      'src/sandbox/__tests__/customers-credit.integration.test.ts',
+    ],
     e2e: null,
     unitDesc:
       'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
       'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
       'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Supabase client. Against the sandbox database: a sale followed by a payment nets outstanding ' +
+      'balance back to zero, overpayment clamps at zero rather than going negative, and — ' +
+      'confirmed directly against the schema — the credit-limit rule is enforced only client-side ' +
+      '(checkCreditLimit, under Sales/POS); nothing in the database itself stops a balance from ' +
+      'exceeding a customer\'s credit limit.',
     e2eDesc: null,
   },
   {
