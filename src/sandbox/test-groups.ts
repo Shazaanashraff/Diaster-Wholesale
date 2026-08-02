@@ -28,9 +28,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Goods-receipt (GRN) math against the sandbox database: a receipt with damaged units ' +
+      'creates stock only for the sellable remainder, a fully-damaged receipt adds no stock at ' +
+      'all, and a sale deducts exactly the sold units from what remains (rejecting a sale that ' +
+      'asks for more than is in stock).',
     e2eDesc: null,
   },
   {
@@ -65,13 +69,18 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: [
+      'src/services/customerService.test.ts',
+      'src/sandbox/__tests__/customers-credit.test.ts',
+    ],
     e2e: null,
     unitDesc:
       'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
       'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
       'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Supabase client. Against the sandbox database: the real credit-limit rule allows a sale ' +
+      'exactly at the remaining limit and rejects one rupee over it, and outstanding_balance ' +
+      'rises on a credit sale, falls back on payment, and clamps at 0 rather than going negative.',
     e2eDesc: null,
   },
   {

@@ -166,6 +166,45 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       type: 'e2e',
     },
   ],
+  'products-inventory': [
+    {
+      name: 'a GRN receipt with damaged units creates a batch net of the damage',
+      what: 'Receiving a container against a purchase order only adds the sellable units to stock — any units marked damaged on arrival never become sellable stock.',
+      type: 'integration',
+    },
+    {
+      name: 'a fully-damaged receipt (0 sellable) creates no stock_batches row',
+      what: 'If every unit in a delivery is marked damaged, nothing is added to stock at all — not even an empty record.',
+      type: 'integration',
+    },
+    {
+      name: 'a sale deducts the sold units from stock_batches via FIFO',
+      what: 'Ringing up a sale removes exactly the sold quantity from the oldest stock first, leaving the correct amount behind.',
+      type: 'integration',
+    },
+    {
+      name: 'deduct_stock_fifo rejects a sale that exceeds remaining stock',
+      what: 'Trying to sell more than is physically in stock is rejected with a clear "insufficient stock" error instead of going negative.',
+      type: 'integration',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'a sale within remaining credit is allowed; one over it is rejected',
+      what: 'A credit sale that exactly uses up a customer\'s remaining approved credit is allowed; a sale for even one rupee more is rejected.',
+      type: 'integration',
+    },
+    {
+      name: 'outstanding balance rises on a credit sale, then falls on payment',
+      what: 'A customer\'s account balance goes up by the credit portion of a sale, and comes back down by the right amount once they pay it off.',
+      type: 'integration',
+    },
+    {
+      name: 'a payment larger than the outstanding balance clamps at 0, never negative',
+      what: 'Recording a payment bigger than what a customer actually owes leaves their balance at exactly LKR 0 — it never goes negative.',
+      type: 'integration',
+    },
+  ],
   sandbox: [
     {
       name: 'reset_all() + reseed never changes public row counts',
