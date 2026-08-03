@@ -14,6 +14,65 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'receiving a purchase creates a stock batch with received-minus-damaged sellable units',
+      what: 'When a container of stock arrives and is marked received, the sellable stock batch is the received amount minus whatever arrived damaged — never the full ordered amount.',
+      type: 'integration',
+    },
+    {
+      name: 'a fully damaged receipt (0 sellable) creates no stock batch',
+      what: 'If everything in a shipment arrived damaged, no stock batch is created at all — damaged goods are never added to sellable stock.',
+      type: 'integration',
+    },
+    {
+      name: 'deduct_stock_fifo consumes the oldest batch first, deleting it once emptied',
+      what: 'Selling stock always takes from the oldest delivery first; once a batch is fully sold out it disappears rather than sitting at zero.',
+      type: 'integration',
+    },
+    {
+      name: 'deduct_stock_fifo raises "Insufficient stock" and leaves batches unchanged when demand exceeds supply',
+      what: 'Trying to sell more than is actually in stock is rejected with a clear error, and no stock is deducted at all — never a partial, silent short-sale.',
+      type: 'integration',
+    },
+  ],
+  'payments-cheques': [
+    {
+      name: 'depositCheque moves a cheque to "processing"',
+      what: 'Marking a received cheque as deposited at the bank moves it into "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque moves a cheque to "completed"',
+      what: 'Marking a deposited cheque as cleared moves it into "completed" and settles it against the customer\'s balance.',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque moves a cheque to "returned" (bounced before clearing)',
+      what: 'A cheque that bounces before it clears is marked "returned".',
+      type: 'unit',
+    },
+    {
+      name: 'reverseChequeToReturned moves a completed cheque back to "returned" (bounced after clearing)',
+      what: 'A cheque that bounces after it already cleared is reversed back to "returned", putting the amount back on the customer\'s outstanding balance.',
+      type: 'unit',
+    },
+    {
+      name: 'undoChequeDeposit moves a cheque back to "pending"',
+      what: 'Accidentally marking a cheque as deposited can be undone, moving it back to "pending" as if it never went to the bank.',
+      type: 'unit',
+    },
+    {
+      name: 'representCheque moves a returned cheque back to "processing" (re-presented at the bank)',
+      what: 'A bounced cheque that gets re-presented at the bank goes back into "processing".',
+      type: 'unit',
+    },
+    {
+      name: 'propagates an invalid-transition rejection from the RPC instead of swallowing it',
+      what: 'An invalid cheque status change (e.g. skipping straight from pending to completed) is rejected with a clear error instead of silently doing nothing.',
+      type: 'unit',
+    },
+  ],
   'sales-pos': [
     {
       name: 'floors netTotal / 100',
@@ -164,6 +223,48 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       name: 'POS checkout flow',
       what: 'Opens the real POS screen in Electron, adds a product to the cart, completes a sale, and checks the success modal, error states (RPC failure, insufficient stock), and cart-clearing all behave correctly end-to-end.',
       type: 'e2e',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'allows a sale that keeps outstanding + total within the limit',
+      what: 'A sale that keeps a customer\'s total owed within their approved credit limit goes through.',
+      type: 'unit',
+    },
+    {
+      name: 'blocks a sale that would push outstanding + total over the limit',
+      what: 'A sale that would push a customer\'s total owed past their approved credit limit is blocked.',
+      type: 'unit',
+    },
+    {
+      name: 'allows a sale that lands exactly on the limit',
+      what: 'A sale that brings a customer\'s balance to exactly their credit limit (not over it) is still allowed.',
+      type: 'unit',
+    },
+    {
+      name: 'treats a credit_limit of 0 or negative as unlimited — never blocks',
+      what: 'A customer with no credit limit set (0, or a negative value) is never blocked from a credit sale.',
+      type: 'unit',
+    },
+    {
+      name: 'a credit sale increases outstanding_balance by exactly the credit portion',
+      what: 'Putting part of a sale on a customer\'s account increases what they owe by exactly that amount, verified against the sandbox database.',
+      type: 'integration',
+    },
+    {
+      name: 'a cash payment decreases outstanding_balance by the paid amount',
+      what: 'A cash or bank payment reduces what a customer owes by exactly the amount paid, verified against the sandbox database.',
+      type: 'integration',
+    },
+    {
+      name: 'a payment larger than the outstanding balance clamps outstanding_balance at 0, never negative',
+      what: 'Overpaying never leaves a customer with a negative balance — it floors at zero, verified against the sandbox database.',
+      type: 'integration',
+    },
+    {
+      name: 'a sale followed by a full payment nets the balance back to its starting point',
+      what: 'Selling on credit and then paying that exact amount back leaves the customer\'s balance unchanged overall, verified against the sandbox database.',
+      type: 'integration',
     },
   ],
   sandbox: [

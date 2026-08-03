@@ -28,9 +28,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Goods-receiving and stock deduction against the sandbox database: receiving a ' +
+      'purchase turns received-minus-damaged units into a sellable stock batch, and ' +
+      'selling stock deducts from the oldest batch first, raising a clear error instead ' +
+      'of overselling when there isn\'t enough on hand.',
     e2eDesc: null,
   },
   {
@@ -57,21 +61,32 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/customerService.cheques.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Cheque lifecycle actions (deposit, complete, return, undo-deposit, re-present) each ' +
+      'send the correct status transition to the update_cheque_status RPC, and a rejected ' +
+      '(invalid) transition propagates as an error instead of being silently swallowed, ' +
+      'all against a mocked Supabase client.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: [
+      'src/services/customerService.test.ts',
+      'src/utils/creditCheck.test.ts',
+      'src/sandbox/__tests__/customers-credit.test.ts',
+    ],
     e2e: null,
     unitDesc:
       'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
       'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
       'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Supabase client. Plus the credit-limit rule itself: a sale is blocked once outstanding ' +
+      'balance plus the sale would exceed the limit, and a credit_limit of 0 (or unset) means ' +
+      'unlimited credit — verified against the sandbox database for a sale increasing and a ' +
+      'payment decreasing (never below zero) a customer\'s outstanding balance.',
     e2eDesc: null,
   },
   {
