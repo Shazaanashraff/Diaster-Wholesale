@@ -14,6 +14,40 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'receiving a GRN creates a correctly sized stock batch',
+      what: 'Recording a goods-received note for a purchase order creates a new stock batch sized from received units minus damaged units, split into cartons and loose pieces.',
+      type: 'integration',
+    },
+    {
+      name: 'deducting sold units reduces the batch and rebalances cartons/loose',
+      what: 'Selling stock removes exactly that many units from the batch it came from, converting a spare carton into loose pieces when needed so the count never goes wrong.',
+      type: 'integration',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'credit-limit rule: a sale within available credit is allowed',
+      what: 'A credit sale that stays within a customer\'s remaining credit headroom is allowed.',
+      type: 'integration',
+    },
+    {
+      name: 'credit-limit rule: a sale exceeding available credit is rejected',
+      what: 'A credit sale that would push a customer past their credit limit is rejected before it happens.',
+      type: 'integration',
+    },
+    {
+      name: 'a credit sale then a payment updates outstanding_balance by the exact delta',
+      what: 'Selling on credit raises what a customer owes by the sale amount, and a payment lowers it by exactly the amount paid — no more, no less.',
+      type: 'integration',
+    },
+    {
+      name: 'a payment larger than the balance clamps outstanding_balance at 0, never negative',
+      what: 'If a customer pays more than they currently owe, their balance stops at zero instead of going negative.',
+      type: 'integration',
+    },
+  ],
   'sales-pos': [
     {
       name: 'floors netTotal / 100',

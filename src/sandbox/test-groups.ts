@@ -28,9 +28,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving a GRN against a purchase order creates a correctly sized stock batch from ' +
+      'received minus damaged units, and selling deducts exactly the right units from that ' +
+      'batch — rebalancing cartons/loose pieces when loose would go negative — against the real ' +
+      'sandbox database.',
     e2eDesc: null,
   },
   {
@@ -65,13 +69,19 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: [
+      'src/services/customerService.test.ts',
+      'src/sandbox/__tests__/customers-credit.test.ts',
+    ],
     e2e: null,
     unitDesc:
       'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
       'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
       'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Supabase client. Plus: the credit-limit rule allows a sale within available credit and ' +
+      'rejects one that would exceed it, and a credit sale followed by a payment updates ' +
+      'outstanding balance by the exact delta (clamped at 0, never negative) against the real ' +
+      'sandbox database.',
     e2eDesc: null,
   },
   {
