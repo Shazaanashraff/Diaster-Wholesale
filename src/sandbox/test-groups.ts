@@ -28,9 +28,13 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Integration tests against the sandbox schema: receiving a container/GRN turns received-minus-' +
+      'damaged units into a correctly sized stock batch (cartons + loose pieces), and a sale-style ' +
+      'stock deduction reduces remaining stock by exactly the units sold — selling more than what is ' +
+      'left fails loudly instead of going negative.',
     e2eDesc: null,
   },
   {
@@ -57,21 +61,27 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'payments-cheques',
     label: 'Payments & Cheques',
-    vitestFiles: [],
+    vitestFiles: ['src/services/chequeService.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Cheque lifecycle passthrough to the update_cheque_status RPC: deposit (pending → processing), ' +
+      'clear (processing → completed), bounce (processing → returned), plus the reverse corrections ' +
+      '(completed → returned, returned → processing, processing → pending) — and that an invalid ' +
+      'transition or a non-cheque payment is rejected with the RPC’s specific error message, all ' +
+      'against a mocked Supabase client.',
     e2eDesc: null,
   },
   {
     id: 'customers-credit',
     label: 'Customers & Credit',
-    vitestFiles: ['src/services/customerService.test.ts'],
+    vitestFiles: ['src/services/customerService.test.ts', 'src/utils/creditCheck.test.ts'],
     e2e: null,
     unitDesc:
-      'Admin-only manual outstanding-balance adjustment: the signed delta, reason, and admin ' +
-      'identity are passed through to the adjust_customer_outstanding_manual RPC untouched, and ' +
-      'RPC errors (e.g. a missing reason) propagate as thrown errors, all against a mocked ' +
-      'Supabase client.',
+      'Credit-limit rule (a sale is only blocked once outstanding + sale total exceeds the customer’s ' +
+      'limit, and a limit of 0 means unlimited); admin-only manual outstanding-balance adjustment and ' +
+      'recording a payment both pass their exact amounts/method through to their RPCs untouched, with ' +
+      'RPC errors (e.g. a missing reason, a bad invoice_id) propagating as thrown errors — all against ' +
+      'a mocked Supabase client.',
     e2eDesc: null,
   },
   {

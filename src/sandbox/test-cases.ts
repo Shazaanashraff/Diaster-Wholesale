@@ -166,6 +166,107 @@ export const TEST_CASES: Record<string, TestCase[]> = {
       type: 'e2e',
     },
   ],
+  'products-inventory': [
+    {
+      name: 'receiving a container/GRN creates a stock batch sized from received minus damaged units',
+      what: 'When a container arrives and is marked received, the sellable stock added is what actually arrived minus whatever was damaged — split correctly into cartons and loose pieces.',
+      type: 'integration',
+    },
+    {
+      name: 'a sale-style deduction (deduct_stock_fifo) reduces remaining stock by exactly the units sold',
+      what: 'Selling stock takes the oldest stock first and reduces what is left by exactly the number of units sold, down to the piece.',
+      type: 'integration',
+    },
+  ],
+  'customers-credit': [
+    {
+      name: 'calls the RPC with the exact signed delta, reason, and adjuster',
+      what: 'A manual balance correction sends the exact amount, reason, and which admin made it to the database untouched.',
+      type: 'unit',
+    },
+    {
+      name: 'passes a positive delta through unchanged for an increase',
+      what: 'Increasing what a customer owes by a manual correction sends that increase through exactly as entered.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC returns an error',
+      what: 'A manual balance correction with no reason given is rejected with a clear error instead of silently going through.',
+      type: 'unit',
+    },
+    {
+      name: 'records a cash payment against outstanding balance with empty optional fields',
+      what: 'Recording a cash payment against a customer\'s account sends the right customer, invoice, amount and method to the database, with no bank/cheque details attached.',
+      type: 'unit',
+    },
+    {
+      name: 'passes bank name, cheque number, and due date through for a cheque payment',
+      what: 'Recording a cheque payment keeps the bank name, cheque number, and due date attached to that payment.',
+      type: 'unit',
+    },
+    {
+      name: 'throws when the RPC rejects the payment (e.g. an unknown invoice_id)',
+      what: 'Recording a payment against an invoice that doesn\'t exist is rejected with a clear error instead of silently being lost.',
+      type: 'unit',
+    },
+    {
+      name: 'is false/true around the credit-limit boundary',
+      what: 'A sale is only flagged as over the limit once the customer\'s existing balance plus the new sale actually exceeds their credit limit — landing exactly on the limit is still allowed.',
+      type: 'unit',
+    },
+    {
+      name: 'treats a credit_limit of 0 as "no limit"',
+      what: 'A customer with no credit limit set can never be blocked for exceeding it, no matter how large their balance.',
+      type: 'unit',
+    },
+    {
+      name: 'getRemainingCredit reflects headroom left, clamped at 0',
+      what: 'The credit still available to a customer is their limit minus what they already owe, and it never shows as a negative number.',
+      type: 'unit',
+    },
+  ],
+  'payments-cheques': [
+    {
+      name: 'depositCheque moves pending -> processing',
+      what: 'Marking a cheque as deposited at the bank moves it from "received" to "at the bank" status.',
+      type: 'unit',
+    },
+    {
+      name: 'completeCheque moves processing -> completed',
+      what: 'Marking a cheque as cleared moves it to "completed" and, server-side, reduces the customer\'s outstanding balance by the cheque amount.',
+      type: 'unit',
+    },
+    {
+      name: 'returnCheque moves processing -> returned',
+      what: 'Marking a cheque as bounced before it cleared moves it to "returned" without touching the customer\'s outstanding balance.',
+      type: 'unit',
+    },
+    {
+      name: 'reverseChequeToReturned moves completed -> returned',
+      what: 'A cheque that bounces after already being marked cleared can be reversed — server-side, this adds the amount back onto the customer\'s outstanding balance.',
+      type: 'unit',
+    },
+    {
+      name: 'undoChequeDeposit moves processing -> pending',
+      what: 'An accidental "deposit" click on a cheque can be undone, moving it back to "received" and out of the bank float.',
+      type: 'unit',
+    },
+    {
+      name: 'representCheque moves returned -> processing',
+      what: 'A bounced cheque can be re-presented at the bank, moving it back to "at the bank" status.',
+      type: 'unit',
+    },
+    {
+      name: 'rejects an invalid transition with the specific error from the RPC',
+      what: 'Trying to skip a step in the cheque\'s lifecycle (e.g. clearing a cheque that was never deposited) is rejected with a clear, specific error.',
+      type: 'unit',
+    },
+    {
+      name: 'rejects completing a payment that is not a cheque at all',
+      what: 'Trying to run cheque-only actions on a cash or card payment is rejected with a clear error, since it was never a cheque.',
+      type: 'unit',
+    },
+  ],
   sandbox: [
     {
       name: 'reset_all() + reseed never changes public row counts',
