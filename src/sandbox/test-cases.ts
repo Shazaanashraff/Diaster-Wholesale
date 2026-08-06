@@ -14,6 +14,18 @@ export interface TestCase {
 }
 
 export const TEST_CASES: Record<string, TestCase[]> = {
+  'products-inventory': [
+    {
+      name: 'GRN receipt adds sellable units to stock via the purchase-received trigger',
+      what: 'Marking a container/purchase as "received" turns its received-minus-damaged units into stock, ready to sell, in the sandbox database.',
+      type: 'integration',
+    },
+    {
+      name: 'deduct_stock_fifo removes exactly the sold units from remaining stock',
+      what: 'Selling units removes exactly that many pieces from the oldest stock on hand — no more, no less — in the sandbox database.',
+      type: 'integration',
+    },
+  ],
   'sales-pos': [
     {
       name: 'floors netTotal / 100',

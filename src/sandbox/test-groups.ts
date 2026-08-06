@@ -28,9 +28,12 @@ export const TEST_GROUPS: TestGroup[] = [
   {
     id: 'products-inventory',
     label: 'Products & Inventory',
-    vitestFiles: [],
+    vitestFiles: ['src/sandbox/__tests__/products-inventory.test.ts'],
     e2e: null,
-    unitDesc: NO_TESTS_YET,
+    unitDesc:
+      'Receiving a container/GRN (marking a purchase "received") turns sellable units into ' +
+      'stock, and selling units deducts them from remaining stock oldest-batch-first — both ' +
+      'proved against a real sandbox database.',
     e2eDesc: null,
   },
   {
