@@ -30,13 +30,25 @@ export const CreditReport: React.FC = () => {
         .gt('outstanding_balance', 0)
         .order('outstanding_balance', { ascending: false });
 
-      let q = supabase
-        .from('invoices')
-        .select('id, total, created_at, customer_id, payments(amount)')
-        .in('payment_status', ['unpaid', 'partial']);
-      if (from) q = q.gte('created_at', from);
-      if (to)   q = q.lte('created_at', to);
-      const { data: invoices } = await q;
+      // Supabase caps a single request at 1000 rows, and "All Time" on a
+      // busy store easily exceeds that — page through with .range() so
+      // Total Billed/Paid aren't silently computed from a truncated set.
+      const PAGE_SIZE = 1000;
+      const invoices: any[] = [];
+      for (let offset = 0; ; offset += PAGE_SIZE) {
+        let q = supabase
+          .from('invoices')
+          .select('id, total, created_at, customer_id, payments(amount)')
+          .in('payment_status', ['unpaid', 'partial'])
+          .order('id', { ascending: true })
+          .range(offset, offset + PAGE_SIZE - 1);
+        if (from) q = q.gte('created_at', from);
+        if (to)   q = q.lte('created_at', to);
+        const { data: page, error } = await q;
+        if (error) { console.error('Credit report fetch failed:', error); break; }
+        invoices.push(...(page ?? []));
+        if (!page || page.length < PAGE_SIZE) break;
+      }
 
       const invMap: Record<string, { invoiceCount: number; totalAmount: number; totalPaid: number; oldestInvoice: string | null }> = {};
       for (const inv of (invoices ?? []) as any[]) {
