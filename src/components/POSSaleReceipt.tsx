@@ -123,8 +123,8 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
         {divider()}
 
         {/* Column header */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 26px 50px 60px', gap: '0 2px', fontSize: 12, fontWeight: 900, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
-          <span>Item</span>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 9ch 3ch 9ch 9ch', gap: '0 5px', fontSize: 11, fontWeight: 900, borderBottom: '1px dashed black', paddingBottom: 3, marginBottom: 3 }}>
+          <span style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}>Item</span>
           <span style={{ textAlign: 'right' }}>Rate</span>
           <span style={{ textAlign: 'right' }}>Qty</span>
           <span style={{ textAlign: 'right' }}>Disc</span>
@@ -148,7 +148,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
               {item.product.item_code && (
                 <div style={{ fontSize: 10, color: '#000', marginBottom: 1 }}>{item.product.item_code}</div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 26px 50px 60px', gap: '0 2px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 9ch 3ch 9ch 9ch', gap: '0 5px', fontSize: 11 }}>
                 <span />
                 <span style={{ textAlign: 'right' }}>{fmt(rate)}</span>
                 <span style={{ textAlign: 'right' }}>{qty}</span>
