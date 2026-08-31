@@ -23,54 +23,77 @@ export const CreditReport: React.FC = () => {
     async function load() {
       const { from, to } = getReportDateRange(period, customFrom, customTo);
 
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id, name, outstanding_balance')
-        .eq('is_active', true)
-        .gt('outstanding_balance', 0)
-        .order('outstanding_balance', { ascending: false });
-
-      // Supabase caps a single request at 1000 rows, and "All Time" on a
-      // busy store easily exceeds that — page through with .range() so
-      // Total Billed/Paid aren't silently computed from a truncated set.
+      // Supabase caps a single request at 1000 rows — page every query that
+      // could exceed that so nothing is silently truncated.
       const PAGE_SIZE = 1000;
-      const invoices: any[] = [];
+
+      // Credit customers. outstanding_balance is the authoritative figure
+      // (it already accounts for account-level payments, settlements, manual
+      // adjustments and cleared cheques); no invoice math can reproduce it.
+      const customers: any[] = [];
       for (let offset = 0; ; offset += PAGE_SIZE) {
-        let q = supabase
-          .from('invoices')
-          .select('id, total, created_at, customer_id, payments(amount)')
-          .in('payment_status', ['unpaid', 'partial'])
-          .order('id', { ascending: true })
+        const { data: page, error } = await supabase
+          .from('customers')
+          .select('id, name, outstanding_balance')
+          .eq('is_active', true)
+          .gt('outstanding_balance', 0)
+          .order('outstanding_balance', { ascending: false })
           .range(offset, offset + PAGE_SIZE - 1);
-        if (from) q = q.gte('created_at', from);
-        if (to)   q = q.lte('created_at', to);
-        const { data: page, error } = await q;
-        if (error) { console.error('Credit report fetch failed:', error); break; }
-        invoices.push(...(page ?? []));
+        if (error) { console.error('Credit report customer fetch failed:', error); break; }
+        customers.push(...(page ?? []));
         if (!page || page.length < PAGE_SIZE) break;
       }
 
-      const invMap: Record<string, { invoiceCount: number; totalAmount: number; totalPaid: number; oldestInvoice: string | null }> = {};
-      for (const inv of (invoices ?? []) as any[]) {
-        const cid = inv.customer_id ?? 'unknown';
-        const paid = (inv.payments ?? []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-        if (!invMap[cid]) invMap[cid] = { invoiceCount: 0, totalAmount: 0, totalPaid: 0, oldestInvoice: inv.created_at };
-        invMap[cid].invoiceCount++;
-        invMap[cid].totalAmount += Number(inv.total);
-        invMap[cid].totalPaid   += paid;
-        if (!invMap[cid].oldestInvoice || inv.created_at < invMap[cid].oldestInvoice!) invMap[cid].oldestInvoice = inv.created_at;
+      const creditCustomerIds = customers.map(c => c.id);
+
+      // Every invoice for those customers — not just the still-open ones.
+      // Each row must reconcile as Total Billed − Paid = Outstanding, and
+      // Paid is derived from Outstanding, so Total Billed has to be the full
+      // billed figure. Payments are deliberately NOT summed here: account
+      // payments / settlements / adjustments carry no invoice_id and
+      // uncleared cheques would over-count, so any payments-based sum drifts
+      // away from the real balance.
+      const invMap: Record<string, { invoiceCount: number; totalAmount: number; oldestOpen: string | null }> = {};
+      for (let start = 0; start < creditCustomerIds.length; start += 200) {
+        const idChunk = creditCustomerIds.slice(start, start + 200);
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+          let q = supabase
+            .from('invoices')
+            .select('id, total, created_at, customer_id, payment_status')
+            .in('customer_id', idChunk)
+            .order('id', { ascending: true })
+            .range(offset, offset + PAGE_SIZE - 1);
+          if (from) q = q.gte('created_at', from);
+          if (to)   q = q.lte('created_at', to);
+          const { data: page, error } = await q;
+          if (error) { console.error('Credit report invoice fetch failed:', error); break; }
+          for (const inv of (page ?? []) as any[]) {
+            const cid = inv.customer_id ?? 'unknown';
+            if (!invMap[cid]) invMap[cid] = { invoiceCount: 0, totalAmount: 0, oldestOpen: null };
+            invMap[cid].invoiceCount++;
+            invMap[cid].totalAmount += Number(inv.total);
+            if ((inv.payment_status === 'unpaid' || inv.payment_status === 'partial') &&
+                (!invMap[cid].oldestOpen || inv.created_at < invMap[cid].oldestOpen!)) {
+              invMap[cid].oldestOpen = inv.created_at;
+            }
+          }
+          if (!page || page.length < PAGE_SIZE) break;
+        }
       }
 
-      const newRows: CreditRow[] = ((customers ?? []) as any[]).map(c => {
+      const newRows: CreditRow[] = customers.map(c => {
         const stats = invMap[c.id];
+        const outstanding = Number(c.outstanding_balance) || 0;
+        const totalAmount = stats?.totalAmount ?? 0;
         return {
           customerId: c.id,
           customerName: c.name ?? 'Walk-in',
           invoiceCount: stats?.invoiceCount ?? 0,
-          totalAmount: stats?.totalAmount ?? 0,
-          totalPaid: stats?.totalPaid ?? 0,
-          outstanding: Number(c.outstanding_balance) || 0,
-          oldestInvoice: stats?.oldestInvoice ?? null,
+          totalAmount,
+          // Derived from the authoritative balance so the row always ties out.
+          totalPaid: Math.max(0, totalAmount - outstanding),
+          outstanding,
+          oldestInvoice: stats?.oldestOpen ?? null,
         };
       });
       setRows(newRows.sort((a, b) => b.outstanding - a.outstanding));
