@@ -2,6 +2,11 @@ name: Release Electron App
 
 on:
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "Release description (shown on the GitHub Release)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -28,4 +33,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run dist:publish
+        run: npm run dist:publish -- --config.releaseInfo.releaseNotes="${{ github.event.inputs.release_notes }}"
