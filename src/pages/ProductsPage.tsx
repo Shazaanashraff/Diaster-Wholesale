@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import type { Product } from '../types';
 import { getProducts, getArchivedProducts, createProduct, updateProduct, checkDuplicate, archiveProduct, unarchiveProduct, deleteProduct, previewDeleteProduct } from '../services/productService';
 import { insertStockAdjustment } from '../services/inventoryService';
+import { getLocations } from '../services/supplierService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Plus, Edit2, Trash2, MoreVertical, Package, Hash, Tag, Type, AlignLeft, Loader2, AlertTriangle, RefreshCw, X, ArrowUpDown } from 'lucide-react';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -17,6 +18,7 @@ export const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shopLocationId, setShopLocationId] = useState<string | null>(null);
 
   // ── Confirm delete ──
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -76,6 +78,9 @@ export const ProductsPage: React.FC = () => {
   // ── Fetch products on mount ──
   useEffect(() => {
     fetchProducts();
+    getLocations()
+      .then((locs) => setShopLocationId(locs.find((l) => l.type === 'shop')?.id ?? null))
+      .catch(() => setShopLocationId(null));
   }, []);
 
   useEffect(() => {
@@ -164,6 +169,7 @@ export const ProductsPage: React.FC = () => {
             adjustment_pieces: quantity,
             reason: '[CREATE] Initial quantity at product creation',
             adjusted_by: 'admin',
+            location_id: shopLocationId,
           });
         }
 
