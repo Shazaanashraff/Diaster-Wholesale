@@ -28,9 +28,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write release notes
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ github.event.inputs.release_notes }}
+        run: printf '%s' "$RELEASE_NOTES" > release-notes.txt
+
       - name: Build and publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run dist:publish -- --config.releaseInfo.releaseNotes="${{ github.event.inputs.release_notes }}"
+        run: npm run dist:publish -- --publish always --config.releaseInfo.releaseNotesFile=release-notes.txt
