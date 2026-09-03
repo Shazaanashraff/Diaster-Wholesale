@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { PRODUCT_STOCK_COLUMNS } from './inventoryService';
+import { signedSaleUnits } from '../utils/reportUtils';
 
 // ============================================================
 // Types & Interfaces
@@ -89,7 +90,9 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
     if (inv?.payment_status === 'cancelled') return;
     const prod = item.products as { pieces_per_carton?: number; cost_price?: number } | null;
     const ppc = prod?.pieces_per_carton || 1;
-    const totalPieces = item.cartons * ppc + item.pieces;
+    // Negative-total lines are exchange return credits — subtract their COGS
+    // (the units went back into stock) instead of adding it again.
+    const totalPieces = signedSaleUnits(item.cartons * ppc + item.pieces, item.total);
     const unitCost = prod?.cost_price || 0;
     cogs += unitCost * totalPieces;
   });
@@ -104,7 +107,7 @@ export const getProfitAndLoss = async (from?: string, to?: string) => {
 export const getSalesProfitReport = async (from?: string, to?: string) => {
   let query = supabase
     .from('invoice_items')
-    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton, cost_price), invoices(invoice_no, payment_status, salesperson_id, salesperson_name, salesperson:salespeople(name))');
+    .select('invoice_id, product_id, cartons, pieces, unit_price, total, created_at, products(name, pieces_per_carton, cost_price), invoices(invoice_no, payment_status, salesperson_id, salesperson_name, subtotal, discount, salesperson:salespeople(name))');
 
   if (from) query = query.gte('created_at', from);
   if (to) query = query.lte('created_at', to);
@@ -117,17 +120,27 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
     .map(item => {
     const prod = item.products as { name?: string; pieces_per_carton?: number; cost_price?: number } | null;
     const ppc = prod?.pieces_per_carton || 1;
-    const totalPieces = item.cartons * ppc + item.pieces;
+    // Exchange return credit lines carry a negative unit_price — show them as a
+    // negative quantity / negative cost so the line nets the original sale out
+    // rather than reading as a second sale at a huge loss.
+    const totalPieces = signedSaleUnits(item.cartons * ppc + item.pieces, item.unit_price);
     const unitCost = prod?.cost_price || 0;
     const totalCost = unitCost * totalPieces;
-    const profit = Number(item.total) - totalCost;
     const inv = item.invoices as {
       invoice_no?: string;
       salesperson?: { name?: string } | { name?: string }[];
       salesperson_name?: string;
+      subtotal?: number;
+      discount?: number;
     } | null;
     const salesperson = inv?.salesperson;
     const spName = Array.isArray(salesperson) ? salesperson[0]?.name : salesperson?.name;
+
+    // Allocate the bill-level discount proportionally across line items
+    const discountRatio = inv?.subtotal ? Number(inv.discount) / Number(inv.subtotal) : 0;
+    const allocatedDiscount = Number(item.total) * discountRatio;
+    const netRevenue = Number(item.total) - allocatedDiscount;
+    const profit = netRevenue - totalCost;
 
     return {
       invoice_no: inv?.invoice_no,
@@ -136,7 +149,8 @@ export const getSalesProfitReport = async (from?: string, to?: string) => {
       quantity: totalPieces,
       selling_price: item.unit_price,
       cost_price: unitCost,
-      total_revenue: item.total,
+      discount: allocatedDiscount,
+      total_revenue: netRevenue,
       total_cost: totalCost,
       profit
     };

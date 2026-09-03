@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getProducts } from '../../services/productService';
-import { type ReportPeriod, getReportDateRange } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, signedSaleUnits } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { Loader2, TrendingUp } from 'lucide-react';
 
@@ -20,7 +20,7 @@ export const FastMovingReport: React.FC = () => {
       const [prods, itemsRes] = await Promise.all([
         getProducts(),
         (() => {
-          let q = supabase.from('invoice_items').select('product_id, cartons, pieces, products(pieces_per_carton)');
+          let q = supabase.from('invoice_items').select('product_id, cartons, pieces, unit_price, products(pieces_per_carton)');
           if (from) q = q.gte('created_at', from);
           if (to)   q = q.lte('created_at', to);
           return q;
@@ -31,7 +31,8 @@ export const FastMovingReport: React.FC = () => {
       const unitMap: Record<string, number> = {};
       for (const item of (itemsRes.data ?? [])) {
         const ppc = (item.products as any)?.pieces_per_carton || 1;
-        const units = item.cartons * ppc + item.pieces;
+        // Nets out exchange return credit lines instead of counting them as sales.
+        const units = signedSaleUnits(item.cartons * ppc + item.pieces, (item as any).unit_price);
         unitMap[item.product_id] = (unitMap[item.product_id] ?? 0) + units;
       }
 

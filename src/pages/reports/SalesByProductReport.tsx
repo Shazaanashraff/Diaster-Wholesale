@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { type ReportPeriod, getReportDateRange, fmtCurrency } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, signedSaleUnits } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
@@ -17,7 +17,7 @@ export const SalesByProductReport: React.FC = () => {
       
       let query = supabase
         .from('invoice_items')
-        .select('product_id, total, cartons, pieces, products(name, pieces_per_carton, cost_price), invoices(payment_status, subtotal, discount)');
+        .select('product_id, total, cartons, pieces, unit_price, products(name, pieces_per_carton, cost_price), invoices(payment_status, subtotal, discount)');
 
       if (from) query = query.gte('created_at', from);
       if (to) query = query.lte('created_at', to);
@@ -32,8 +32,12 @@ export const SalesByProductReport: React.FC = () => {
         const id = item.product_id;
         const prod = item.products as any;
         const ppc = prod?.pieces_per_carton || 1;
-        const totalPieces = item.cartons * ppc + item.pieces;
         const unitCost = prod?.cost_price || 0;
+
+        // Sign the quantity off unit_price so an exchange/return credit line
+        // subtracts from pieces sold and cost of goods instead of inflating
+        // both (a sold-then-exchanged item nets to zero).
+        const totalPieces = signedSaleUnits(item.cartons * ppc + item.pieces, item.unit_price);
 
         // Allocate the bill-level discount proportionally across line items
         const discountRatio = inv.subtotal > 0 ? Number(inv.discount) / Number(inv.subtotal) : 0;

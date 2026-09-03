@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, fmtCurrency, fmtDate, signedSaleUnits } from '../../utils/reportUtils';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
 import { ReportKPICard } from './shared/ReportKPICard';
@@ -80,7 +80,10 @@ export const SalesByPersonReport: React.FC = () => {
 
       const prod = item.products;
       const ppc = prod?.pieces_per_carton || 1;
-      const units = item.cartons * ppc + item.pieces;
+      // Exchange return credit lines (negative unit_price) must subtract, so the
+      // returned unit's cost cancels against the original sale instead of
+      // stacking a second COGS hit on the salesperson's profit.
+      const units = signedSaleUnits(item.cartons * ppc + item.pieces, item.unit_price);
       const unitCost = prod?.cost_price || 0;
       const itemProfit = Number(item.total) - unitCost * units;
 

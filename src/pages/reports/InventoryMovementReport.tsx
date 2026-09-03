@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { type ReportPeriod, getReportDateRange } from '../../utils/reportUtils';
+import { type ReportPeriod, getReportDateRange, signedSaleUnits } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
 import { DateRangePicker } from './shared/DateRangePicker';
 import { ExportBar } from './shared/ExportBar';
@@ -35,7 +35,7 @@ export const InventoryMovementReport: React.FC = () => {
         (() => {
           let q = supabase
             .from('invoice_items')
-            .select('product_id, cartons, pieces, products(name, item_code, pieces_per_carton)');
+            .select('product_id, cartons, pieces, unit_price, products(name, item_code, pieces_per_carton)');
           if (from) q = q.gte('created_at', from);
           if (to)   q = q.lte('created_at', to);
           return q;
@@ -55,7 +55,9 @@ export const InventoryMovementReport: React.FC = () => {
       for (const s of (soldRes.data ?? []) as any[]) {
         const pid  = s.product_id;
         const ppc  = s.products?.pieces_per_carton || 1;
-        const pcs  = s.cartons * ppc + s.pieces;
+        // Exchange return credit lines (negative unit_price) are goods coming
+        // back — subtract them from "sold" so net movement stays honest.
+        const pcs  = signedSaleUnits(s.cartons * ppc + s.pieces, s.unit_price);
         if (!map[pid]) map[pid] = { productId: pid, productName: s.products?.name ?? '—', itemCode: s.products?.item_code ?? '—', received: 0, sold: 0, net: 0 };
         map[pid].sold += pcs;
       }

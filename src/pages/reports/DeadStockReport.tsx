@@ -28,8 +28,10 @@ export const DeadStockReport: React.FC = () => {
         .select('product_id, cartons, loose_pieces, received_at, products(name, item_code, pieces_per_carton), locations(type)')
         .eq('locations.type', 'shop');
 
-      // Get product_ids that had sales in the period
-      let soldQ = supabase.from('invoice_items').select('product_id');
+      // Get product_ids that had sales in the period. Exclude exchange return
+      // credit lines (negative unit_price) — a returned item coming back is not
+      // a sale and must not rescue a product from the dead-stock list.
+      let soldQ = supabase.from('invoice_items').select('product_id').gte('unit_price', 0);
       if (from) soldQ = soldQ.gte('created_at', from);
       if (to)   soldQ = soldQ.lte('created_at', to);
       const { data: soldItems } = await soldQ;

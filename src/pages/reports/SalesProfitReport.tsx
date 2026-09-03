@@ -20,11 +20,11 @@ export const SalesProfitReport: React.FC = () => {
     load();
   }, [period, customFrom, customTo]);
 
-  const headers = ['Invoice', 'Product', 'Sold By', 'Qty', 'Selling Price', 'Cost Price', 'Total Revenue', 'Total Cost', 'Profit'];
+  const headers = ['Invoice', 'Product', 'Sold By', 'Qty', 'Selling Price', 'Cost Price', 'Discount', 'Total Revenue', 'Total Cost', 'Profit'];
   const rows = data.map(r => [
     r.invoice_no, r.product, r.salesperson_name ?? '—', r.quantity,
     fmtCurrency(r.selling_price), fmtCurrency(r.cost_price),
-    fmtCurrency(r.total_revenue), fmtCurrency(r.total_cost),
+    fmtCurrency(r.discount), fmtCurrency(r.total_revenue), fmtCurrency(r.total_cost),
     fmtCurrency(r.profit)
   ]);
 
@@ -46,6 +46,13 @@ export const SalesProfitReport: React.FC = () => {
           { header: 'Qty', accessor: 'quantity', className: 'text-center' },
           { header: 'Selling Price', accessor: (r) => fmtCurrency(r.selling_price), className: 'text-right' },
           { header: 'Cost Price', accessor: (r) => fmtCurrency(r.cost_price), className: 'text-right' },
+          { header: 'Discount', accessor: (r) => (
+            <span className={r.discount > 0 ? 'text-amber-400' : 'text-gray-500'}>
+              {fmtCurrency(r.discount)}
+            </span>
+          ), className: 'text-right' },
+          { header: 'Total Revenue', accessor: (r) => fmtCurrency(r.total_revenue), className: 'text-right text-white' },
+          { header: 'Total Cost', accessor: (r) => fmtCurrency(r.total_cost), className: 'text-right' },
           { header: 'Profit', accessor: (r) => (
             <span className={r.profit >= 0 ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
               {fmtCurrency(r.profit)}

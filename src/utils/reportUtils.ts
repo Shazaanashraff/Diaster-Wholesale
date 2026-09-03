@@ -126,3 +126,14 @@ export function pct(numerator: number, denominator: number): number {
 export function isClearedForReporting(p: { cheque_status?: string | null }): boolean {
   return p.cheque_status == null || p.cheque_status === 'completed';
 }
+
+// Exchange/return credit lines are written back as invoice_items on the EXC-
+// invoice with a NEGATIVE unit_price (and negative total) but POSITIVE
+// cartons/pieces. Any report that aggregates quantity or per-unit cost of
+// goods from invoice_items must SUBTRACT these lines, not add them — otherwise
+// a sold-then-exchanged unit is counted twice (double pieces, double COGS,
+// wildly negative profit). Pass the raw unit count and the line's unit_price
+// (or its total); a return line comes back negated so it nets the sale out.
+export function signedSaleUnits(units: number, priceOrTotal: number): number {
+  return Number(priceOrTotal) < 0 ? -units : units;
+}
