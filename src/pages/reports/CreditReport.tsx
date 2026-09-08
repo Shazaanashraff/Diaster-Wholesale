@@ -10,7 +10,7 @@ import { cn } from '../../lib/utils';
 
 interface CreditRow {
   customerId: string; customerName: string; invoiceCount: number;
-  totalAmount: number; totalPaid: number; pending: number; outstanding: number; oldestInvoice: string | null;
+  totalAmount: number; totalPaid: number; adjustments: number; pending: number; outstanding: number; oldestInvoice: string | null;
 }
 
 export const CreditReport: React.FC = () => {
@@ -46,13 +46,11 @@ export const CreditReport: React.FC = () => {
 
       const creditCustomerIds = customers.map(c => c.id);
 
-      // Every invoice for those customers — not just the still-open ones.
-      // Each row must reconcile as Total Billed − Paid = Outstanding, and
-      // Paid is derived from Outstanding, so Total Billed has to be the full
-      // billed figure. Payments are deliberately NOT summed here: account
-      // payments / settlements / adjustments carry no invoice_id and
-      // uncleared cheques would over-count, so any payments-based sum drifts
-      // away from the real balance.
+      // Every invoice for those customers — not just the still-open ones, so
+      // Total Billed is the full billed figure. Paid is summed separately from
+      // the payments table (see below); the row no longer forces
+      // Total Billed − Paid = Outstanding, because manual adjustments, return
+      // credits and legacy opening balances legitimately break that identity.
       const invMap: Record<string, { invoiceCount: number; totalAmount: number; oldestOpen: string | null }> = {};
       for (let start = 0; start < creditCustomerIds.length; start += 200) {
         const idChunk = creditCustomerIds.slice(start, start + 200);
@@ -81,29 +79,67 @@ export const CreditReport: React.FC = () => {
         }
       }
 
-      // Uncleared cheques — money the customer has handed over that has NOT
-      // yet been deducted from outstanding_balance. cheque_status 'pending' =
-      // received, awaiting deposit; 'processing' = deposited, sitting in bank
-      // float. When a cheque clears it flips to 'completed', update_cheque_status
-      // drops outstanding_balance, and it rolls into the derived Paid figure
-      // automatically. This is a current-state number like Outstanding, so it
-      // is deliberately NOT date-filtered.
+      // Payments, bucketed by what they actually represent:
+      //   • paidMap    — real money received that has CLEARED. This is the true
+      //                  "Paid" figure. Cash / bank / card / online settle
+      //                  immediately; a cheque only counts once cheque_status
+      //                  flips to 'completed' (update_cheque_status then drops
+      //                  outstanding_balance to match, and a later bounce flips
+      //                  it to 'returned' so it drops back out here too).
+      //   • adjMap     — manual balance adjustments (ADJUST BALANCE button /
+      //                  adjust_customer_outstanding_manual). Signed: positive =
+      //                  reduced what the customer owes (e.g. a return credit).
+      //                  These move outstanding_balance but are NOT payments, so
+      //                  they must never land in "Paid".
+      //   • pendingMap — cheques handed over but not yet cleared ('pending' =
+      //                  held, 'processing' = deposited in float). Still sitting
+      //                  inside outstanding_balance. Current-state like
+      //                  Outstanding, so deliberately NOT date-filtered.
+      // paidMap / adjMap are date-filtered on paid_at to match Total Billed.
+      const CLEARED_METHODS = new Set(['cash', 'bank_transfer', 'card', 'online']);
+      const paidMap: Record<string, number> = {};
+      const adjMap: Record<string, number> = {};
       const pendingMap: Record<string, number> = {};
       for (let start = 0; start < creditCustomerIds.length; start += 200) {
         const idChunk = creditCustomerIds.slice(start, start + 200);
         for (let offset = 0; ; offset += PAGE_SIZE) {
           const { data: page, error } = await supabase
             .from('payments')
-            .select('customer_id, amount, cheque_status')
-            .eq('method', 'cheque')
-            .in('cheque_status', ['pending', 'processing'])
+            .select('customer_id, amount, method, payment_type, cheque_status, paid_at')
             .in('customer_id', idChunk)
             .order('id', { ascending: true })
             .range(offset, offset + PAGE_SIZE - 1);
-          if (error) { console.error('Credit report pending-cheque fetch failed:', error); break; }
+          if (error) { console.error('Credit report payment fetch failed:', error); break; }
           for (const p of (page ?? []) as any[]) {
             const cid = p.customer_id ?? 'unknown';
-            pendingMap[cid] = (pendingMap[cid] ?? 0) + Math.abs(Number(p.amount) || 0);
+            const amt = Number(p.amount) || 0;
+            const isCheque = p.method === 'cheque';
+
+            // Uncleared cheque — current-state, never date-filtered.
+            if (isCheque && (p.cheque_status === 'pending' || p.cheque_status === 'processing')) {
+              pendingMap[cid] = (pendingMap[cid] ?? 0) + Math.abs(amt);
+              continue;
+            }
+
+            // Everything below is a period figure — honour the date range.
+            // Postgres hands back "2026-07-16 06:30:37+00"; normalise the space
+            // to 'T' so it compares lexically against the ISO from/to bounds.
+            const when: string = (p.paid_at ?? '').replace(' ', 'T');
+            if (from && when && when < from) continue;
+            if (to && when && when > to) continue;
+
+            if (p.payment_type === 'manual_adjustment') {
+              // Row stores amount = -delta, so a positive amount = debt reduced.
+              adjMap[cid] = (adjMap[cid] ?? 0) + amt;
+              continue;
+            }
+
+            // Genuine inbound payment that has cleared.
+            if (amt > 0 &&
+                (p.payment_type === 'sale' || p.payment_type === 'credit_settlement') &&
+                (CLEARED_METHODS.has(p.method) || (isCheque && p.cheque_status === 'completed'))) {
+              paidMap[cid] = (paidMap[cid] ?? 0) + amt;
+            }
           }
           if (!page || page.length < PAGE_SIZE) break;
         }
@@ -118,11 +154,14 @@ export const CreditReport: React.FC = () => {
           customerName: c.name ?? 'Walk-in',
           invoiceCount: stats?.invoiceCount ?? 0,
           totalAmount,
-          // Derived from the authoritative balance so the row always ties out
-          // as Total Billed − Paid = Outstanding.
-          totalPaid: Math.max(0, totalAmount - outstanding),
-          // Uncleared cheques still sitting inside Outstanding — informational,
-          // not part of the reconciliation above.
+          // Real cleared money in, summed from the payments table — NOT derived
+          // from the balance — so return credits and manual adjustments no
+          // longer masquerade as customer payments.
+          totalPaid: paidMap[c.id] ?? 0,
+          // Manual balance adjustments / return credits (signed: + = debt
+          // reduced), shown in their own column instead of inside Paid.
+          adjustments: adjMap[c.id] ?? 0,
+          // Uncleared cheques still sitting inside Outstanding.
           pending: pendingMap[c.id] ?? 0,
           outstanding,
           oldestInvoice: stats?.oldestOpen ?? null,
@@ -137,8 +176,8 @@ export const CreditReport: React.FC = () => {
   const totalPending     = rows.reduce((s, r) => s + r.pending, 0);
   const totalCustomers   = rows.length;
 
-  const exportHeaders = ['Customer', 'Invoices', 'Total Billed', 'Paid', 'Pending', 'Outstanding', 'Oldest Invoice'];
-  const exportRows = rows.map(r => [r.customerName, r.invoiceCount, fmtCurrency(r.totalAmount), fmtCurrency(r.totalPaid), fmtCurrency(r.pending), fmtCurrency(r.outstanding), r.oldestInvoice ? fmtDate(r.oldestInvoice) : '-']);
+  const exportHeaders = ['Customer', 'Invoices', 'Total Billed', 'Paid', 'Adjustments', 'Pending', 'Outstanding', 'Oldest Invoice'];
+  const exportRows = rows.map(r => [r.customerName, r.invoiceCount, fmtCurrency(r.totalAmount), fmtCurrency(r.totalPaid), fmtCurrency(r.adjustments), fmtCurrency(r.pending), fmtCurrency(r.outstanding), r.oldestInvoice ? fmtDate(r.oldestInvoice) : '-']);
 
   return (
     <div className="space-y-6">
@@ -162,6 +201,11 @@ export const CreditReport: React.FC = () => {
           { header: 'Invoices',      accessor: (r: CreditRow) => r.invoiceCount, className: 'text-center' },
           { header: 'Total Billed',  accessor: (r: CreditRow) => fmtCurrency(r.totalAmount), className: 'text-right font-mono' },
           { header: 'Paid',          accessor: (r: CreditRow) => fmtCurrency(r.totalPaid), className: 'text-right font-mono text-green-400' },
+          { header: 'Adjustments',   accessor: (r: CreditRow) => (
+            <span className={cn('font-mono', r.adjustments !== 0 ? 'text-amber-400' : 'text-gray-500')}>
+              {fmtCurrency(r.adjustments)}
+            </span>
+          ), className: 'text-right' },
           { header: 'Pending',       accessor: (r: CreditRow) => (
             <span className={cn('font-mono', r.pending > 0 ? 'text-sky-400' : 'text-gray-500')}>
               {fmtCurrency(r.pending)}
