@@ -515,3 +515,34 @@ describe('posService › checkout()', () => {
     });
   });
 });
+
+// ─── cancelInvoice ────────────────────────────────────────────────────────────
+
+describe('cancelInvoice', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('restores stock once via restore_stock_to_batch and writes no stock_adjustments', async () => {
+    const { cancelInvoice } = await import('./posService');
+    const tables: string[] = [];
+    (supabase.from as any).mockImplementation((table: string) => {
+      tables.push(table);
+      if (table === 'invoices') {
+        return sb({ id: 'inv-1', invoice_no: 'INV-1', total: 100, payment_status: 'paid', customer_id: null });
+      }
+      if (table === 'invoice_items') {
+        return sb([{ product_id: 'prod-1', cartons: 0, pieces: 1, batch_id: 'b1', products: { pieces_per_carton: 12 } }]);
+      }
+      if (table === 'payments') return sb([{ amount: 100 }]);
+      return sb(null);
+    });
+    (supabase.rpc as any).mockReturnValue(sb(null));
+
+    await cancelInvoice('inv-1', 'test');
+
+    expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    expect(supabase.rpc).toHaveBeenCalledWith('restore_stock_to_batch', {
+      p_batch_id: 'b1', p_product_id: 'prod-1', p_units: 1,
+    });
+    expect(tables).not.toContain('stock_adjustments');
+  });
+});

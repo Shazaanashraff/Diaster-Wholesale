@@ -408,9 +408,9 @@ export async function cancelInvoice(invoiceId: string, reason: string): Promise<
     }
   }
 
-  // 2. Restore stock for each invoice item + log to stock_adjustments
-  const adjustedBy = sessionStorage.getItem('user_role') || 'admin';
-  const adjustmentReason = `[CANCEL] ${(inv as any).invoice_no} — ${reason}`;
+  // 2. Restore stock for each invoice item. restore_stock_to_batch already puts the
+  // units back in the shop's stock_batches, so do NOT also insert a stock_adjustment:
+  // it has no location_id and the stock view counts it as warehouse stock (double restock).
   for (const item of (items ?? []) as any[]) {
     const ppc = item.products?.pieces_per_carton || 1;
     const totalPieces = Number(item.cartons) * ppc + Number(item.pieces);
@@ -421,13 +421,6 @@ export async function cancelInvoice(invoiceId: string, reason: string): Promise<
       p_units:      totalPieces,
     });
     if (restoreErr) console.warn('Stock restore warning:', restoreErr.message);
-    await supabase.from('stock_adjustments').insert({
-      product_id:         item.product_id,
-      adjustment_pieces:  totalPieces,
-      adjustment_cartons: 0,
-      reason:             adjustmentReason,
-      adjusted_by:        adjustedBy,
-    });
   }
 
   // 3. Delete payment records so they no longer appear in sales totals
