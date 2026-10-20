@@ -144,7 +144,7 @@ export const InventoryPage: React.FC = () => {
     setHistoryLoading(true);
 
     try {
-      const rows = await getStockLedger(row.product_id, 100);
+      const rows = await getStockLedger(row.product_id, null);
       setHistoryRows(rows);
     } catch (err) {
       setHistoryError(err instanceof Error ? err.message : 'Failed to load stock history');

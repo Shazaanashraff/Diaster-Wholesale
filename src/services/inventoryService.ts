@@ -276,7 +276,7 @@ export async function transferStoreToShop(data: {
   }
 }
 
-export async function getStockLedger(productId?: string, limit = 200): Promise<StockLedgerEntry[]> {
+export async function getStockLedger(productId?: string, limit: number | null = 200): Promise<StockLedgerEntry[]> {
   type ProductJoin = { name?: string; item_code?: string; pieces_per_carton?: number } | Array<{ name?: string; item_code?: string; pieces_per_carton?: number }>;
   type ShipmentJoin = { reference?: string } | Array<{ reference?: string }>;
   type LocationJoin = { name?: string; type?: string } | Array<{ name?: string; type?: string }>;
@@ -312,35 +312,59 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     locations?: LocationJoin;
   };
 
-  let stockBatchQuery = supabase
-    .from('stock_batches')
-    .select('id, product_id, cartons, loose_pieces, original_units, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference), locations(name, type)')
-    .order('received_at', { ascending: false })
-    .limit(limit);
-
-  let salesQuery = supabase
-    .from('invoice_items')
-    .select('id, product_id, cartons, pieces, created_at, products(name, item_code, pieces_per_carton), invoices(invoice_no, created_at)')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  let adjustmentQuery = supabase
-    .from('stock_adjustments')
-    .select('id, product_id, adjustment_pieces, reason, adjusted_by, created_at, products(name, item_code), locations(name, type)')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (productId) {
-    stockBatchQuery = stockBatchQuery.eq('product_id', productId);
-    salesQuery = salesQuery.eq('product_id', productId);
-    adjustmentQuery = adjustmentQuery.eq('product_id', productId);
+  // limit === null → full history: page through each source (PostgREST caps a response at 1000 rows)
+  const PAGE = 1000;
+  async function fetchRows<T>(
+    build: () => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }> }
+  ): Promise<{ data: T[]; error: { message: string } | null }> {
+    if (limit !== null) {
+      const { data, error } = await build().range(0, limit - 1);
+      return { data: data ?? [], error };
+    }
+    const all: T[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await build().range(from, from + PAGE - 1);
+      if (error) return { data: all, error };
+      all.push(...(data ?? []));
+      if (!data || data.length < PAGE) break;
+    }
+    return { data: all, error: null };
   }
+
+  const buildBatches = () => {
+    let q = supabase
+      .from('stock_batches')
+      .select('id, product_id, cartons, loose_pieces, original_units, notes, received_at, products(name, item_code, pieces_per_carton), shipments(reference), locations(name, type)')
+      .order('received_at', { ascending: false });
+    if (productId) q = q.eq('product_id', productId);
+    return q;
+  };
+  const buildSales = () => {
+    let q = supabase
+      .from('invoice_items')
+      .select('id, product_id, cartons, pieces, created_at, products(name, item_code, pieces_per_carton), invoices(invoice_no, created_at)')
+      .order('created_at', { ascending: false });
+    if (productId) q = q.eq('product_id', productId);
+    return q;
+  };
+  const buildAdjustments = () => {
+    let q = supabase
+      .from('stock_adjustments')
+      .select('id, product_id, adjustment_pieces, reason, adjusted_by, created_at, products(name, item_code), locations(name, type)')
+      .order('created_at', { ascending: false });
+    if (productId) q = q.eq('product_id', productId);
+    return q;
+  };
 
   const [
     { data: stockInRows, error: stockInError },
     { data: salesRows, error: salesError },
     { data: adjustmentRows, error: adjustmentError },
-  ] = await Promise.all([stockBatchQuery, salesQuery, adjustmentQuery]);
+  ] = await Promise.all([
+    fetchRows<StockInRow>(buildBatches as never),
+    fetchRows<SalesRow>(buildSales as never),
+    fetchRows<AdjustmentRow>(buildAdjustments as never),
+  ]);
 
   if (stockInError) throw new Error(stockInError.message);
   if (salesError) throw new Error(salesError.message);
@@ -405,6 +429,9 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
     } else if (reason.startsWith('[TRANSFER-IN STORE->SHOP]') || /^Transfer in:/i.test(reason)) {
       action = 'Transfer In';
       location = locationObj?.name ?? 'Shop';
+    } else if (/^Supplier Return:/i.test(reason)) {
+      action = 'Supplier Return';
+      location = locationObj?.name ?? 'Main Warehouse';
     } else if (reason.toLowerCase().includes('return')) {
       action = 'Sale Return';
       location = locationObj?.name ?? 'Shop';
@@ -426,5 +453,5 @@ export async function getStockLedger(productId?: string, limit = 200): Promise<S
 
   return [...stockInLedger, ...salesLedger, ...adjustmentLedger]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, limit);
+    .slice(0, limit ?? undefined);
 }
