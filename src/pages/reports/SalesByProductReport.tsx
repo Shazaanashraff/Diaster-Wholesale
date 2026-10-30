@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { type ReportPeriod, getReportDateRange, fmtCurrency, signedSaleUnits } from '../../utils/reportUtils';
 import { ReportTable } from './shared/ReportTable';
@@ -9,7 +10,8 @@ export const SalesByProductReport: React.FC = () => {
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [data, setData] = useState<any[]>([]);
+  const [allData, setAllData] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -57,10 +59,15 @@ export const SalesByProductReport: React.FC = () => {
         profitMargin: r.revenue > 0 ? ((r.revenue - r.totalCost) / r.revenue) * 100 : 0,
       }));
 
-      setData(rows.sort((a, b) => b.revenue - a.revenue));
+      setAllData(rows.sort((a, b) => b.revenue - a.revenue));
     }
     load();
   }, [period, customFrom, customTo]);
+
+  const data = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? allData.filter(r => String(r.name).toLowerCase().includes(q)) : allData;
+  }, [allData, search]);
 
   const headers = ['Product', 'Total Pieces Sold', 'Total Revenue', 'Total Cost of Goods', 'Total Profit', 'Profit Margin %'];
   const rows = data.map(r => [
@@ -77,6 +84,16 @@ export const SalesByProductReport: React.FC = () => {
           <DateRangePicker value={period} onChange={setPeriod} customFrom={customFrom} customTo={customTo} onCustomChange={(f, t) => { setCustomFrom(f); setCustomTo(t); }} />
           <ExportBar filename="Sales_By_Product" headers={headers} rows={rows} />
         </div>
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search product..."
+          className="w-full pl-9 pr-3 py-2.5 bg-[#1d222a] border border-[#2b313a] rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#3d4652]"
+        />
       </div>
 
       <ReportTable

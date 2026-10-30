@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, X, Building2, Phone, Mail, Globe,
   ChevronRight, Loader2, CheckCircle2, AlertCircle,
-  Trash2, Edit2,
+  Trash2, Edit2, FileSpreadsheet,
 } from 'lucide-react';
 import {
   getSuppliers, createSupplier, updateSupplier, archiveSupplier,
@@ -14,6 +14,7 @@ import type { Supplier, SupplierPayment } from '../types';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { PaymentMethodSelector, type PaymentLineData } from '../components/PaymentMethodSelector';
 import { cn } from '../lib/utils';
+import { exportToXLSX } from '../utils/reportUtils';
 
 const fmt = (n: number) =>
   'LKR ' + Number(n).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -99,6 +100,33 @@ export const SuppliersPage: React.FC = () => {
     ), [suppliers, search]);
 
   // ── Ledger drawer ────────────────────────────────────────────────
+  async function handleExportLedger() {
+    if (!drawerSupplier || !ledger) return;
+    const r2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+    const d = (iso: string) => new Date(iso).toLocaleDateString('en-GB');
+    const purchases: (string | number | null)[][] = [
+      ['Reference', 'Date', 'Status', 'Items', 'Total RMB', 'Exchange Rate', 'Total LKR'],
+      ...ledger.purchases.map(p => [p.reference, d(p.created_at), p.status.replace('_', ' '), p.item_count, r2(p.total_rmb), Number(p.exchange_rate) || null, r2(p.total_lkr)]),
+    ];
+    const payments: (string | number | null)[][] = [
+      ['Date', 'Amount (LKR)', 'Method', 'Cheque No.', 'Bank', 'Purchase', 'Notes'],
+      ...ledger.payments.map(p => [d(p.paid_at), r2(p.amount), p.method.replace('_', ' '), p.cheque_number ?? '', p.bank_name ?? '', p.purchases?.reference ?? 'General', p.notes ?? '']),
+    ];
+    const summary: (string | number | null)[][] = [
+      [`Supplier Ledger — ${drawerSupplier.name}`],
+      [],
+      ['Total Purchased (LKR)', r2(ledger.total_purchased)],
+      ['Total Paid (LKR)', r2(ledger.total_paid)],
+      ['Outstanding (LKR)', r2(ledger.outstanding)],
+      ['Advance Balance (LKR)', r2(ledger.advance_balance)],
+    ];
+    await exportToXLSX(`Supplier_${drawerSupplier.name.replace(/[^\w-]+/g, '_')}`, [
+      { name: 'Summary', rows: summary, colWidths: [28, 18] },
+      { name: 'Purchases', rows: purchases, colWidths: [14, 12, 14, 8, 14, 14, 16] },
+      { name: 'Payments', rows: payments, colWidths: [12, 16, 14, 14, 18, 14, 36] },
+    ]);
+  }
+
   async function openLedger(s: SupplierWithBalance) {
     setDrawerSupplier(s);
     setLedgerLoading(true);
@@ -430,6 +458,14 @@ export const SuppliersPage: React.FC = () => {
 
             {/* Tabs */}
             <div className="flex p-1 bg-[#1d222a] border-b border-[#2b313a] gap-1">
+              <button
+                onClick={handleExportLedger}
+                disabled={!ledger || ledgerLoading}
+                title="Export purchases and payments to Excel"
+                className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg text-emerald-400 hover:bg-[#2b313a] disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <FileSpreadsheet size={12} /> Excel
+              </button>
               {(['purchases', 'payments'] as const).map((t) => (
                 <button
                   key={t}

@@ -137,3 +137,23 @@ export function isClearedForReporting(p: { cheque_status?: string | null }): boo
 export function signedSaleUnits(units: number, priceOrTotal: number): number {
   return Number(priceOrTotal) < 0 ? -units : units;
 }
+
+// Excel export — one workbook, any number of sheets. xlsx is loaded on demand
+// so it stays out of the main bundle until someone actually exports.
+export interface XlsxSheet {
+  name: string;
+  rows: (string | number | null)[][];
+  colWidths?: number[];
+}
+
+export async function exportToXLSX(filename: string, sheets: XlsxSheet[]): Promise<void> {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.utils.book_new();
+  for (const s of sheets) {
+    const ws = XLSX.utils.aoa_to_sheet(s.rows);
+    if (s.colWidths) ws['!cols'] = s.colWidths.map(wch => ({ wch }));
+    // Sheet names: max 31 chars, no []:*?/\
+    XLSX.utils.book_append_sheet(wb, ws, s.name.replace(new RegExp('[\\[\\]:*?/\\\\]', 'g'), '').slice(0, 31) || 'Sheet');
+  }
+  XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}

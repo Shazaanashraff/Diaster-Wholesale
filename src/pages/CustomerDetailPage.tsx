@@ -5,7 +5,7 @@ import {
   ArrowLeft, Wallet, CreditCard, PieChart, CheckCircle2, ChevronDown,
   ClipboardList, Receipt, Edit, AlertCircle, Loader2, Mail, Phone,
   MapPin, Hash, User, Landmark, FileText, ArrowRightCircle,
-  CheckCircle, XCircle, Clock, Building2, Scale,
+  CheckCircle, XCircle, Clock, Building2, Scale, FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Modal } from '../components/Modal';
@@ -21,6 +21,8 @@ import type { Customer, Invoice, Payment } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AnimatedNumber } from '../components/AnimatedNumber';
 import { usePermissions } from '../utils/permissions';
+import { InvoiceViewModal } from '../components/InvoiceViewModal';
+import { exportToXLSX, isClearedForReporting } from '../utils/reportUtils';
 
 type PayMethod = 'cash' | 'bank_transfer' | 'cheque';
 type ChequeTab = 'float' | 'completed' | 'returned';
@@ -47,6 +49,12 @@ export const CustomerDetailPage: React.FC = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState('');
   const [paymentError, setPaymentError] = useState('');
+
+  // Invoice reprint + statement export
+  const [viewInvoiceId, setViewInvoiceId] = useState<string | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
 
   // Cheque action loading state — keyed by payment id
   const [chequeActionLoading, setChequeActionLoading] = useState<Record<string, boolean>>({});
@@ -298,6 +306,64 @@ export const CustomerDetailPage: React.FC = () => {
     returned:   'bg-red-500/10 text-red-400',
   };
 
+  // Debit/credit statement: invoices on the debit side, payments on the credit
+  // side, merged by date with a running balance. Uncleared cheques are listed
+  // but excluded from the totals, matching how outstanding is calculated.
+  async function handleExportStatement() {
+    if (!customer) return;
+    const fromMs = exportFrom ? new Date(`${exportFrom}T00:00:00`).getTime() : -Infinity;
+    const toMs   = exportTo   ? new Date(`${exportTo}T23:59:59.999`).getTime() : Infinity;
+    const inRange = (iso: string) => { const t = new Date(iso).getTime(); return t >= fromMs && t <= toMs; };
+
+    type Line = { date: string; ref: string; desc: string; debit: number; credit: number; counted: boolean };
+    const lines: Line[] = [];
+    for (const inv of invoices) {
+      if ((inv.payment_status as string) === 'cancelled' || !inv.created_at || !inRange(inv.created_at)) continue;
+      lines.push({ date: inv.created_at, ref: inv.invoice_no, desc: `Invoice (${inv.payment_status})`, debit: Number(inv.total) || 0, credit: 0, counted: true });
+    }
+    for (const pay of payments) {
+      if (!inRange(pay.paid_at)) continue;
+      const amt = Number(pay.amount) || 0;
+      const inv = pay.invoice_id ? invoices.find(i => i.id === pay.invoice_id) : null;
+      const counted = isClearedForReporting(pay);
+      const label = METHOD_LABEL[pay.method] ?? pay.method;
+      const chq = pay.method === 'cheque'
+        ? ` #${pay.cheque_number ?? ''} (${pay.cheque_status ?? 'pending'})`
+        : '';
+      lines.push({
+        date: pay.paid_at,
+        ref: inv?.invoice_no ?? 'General',
+        desc: `Payment — ${label}${chq}${pay.bank_name ? ` · ${pay.bank_name}` : ''}`,
+        debit: amt < 0 ? -amt : 0,
+        credit: amt > 0 ? amt : 0,
+        counted,
+      });
+    }
+    lines.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    let balance = 0, totalDebit = 0, totalCredit = 0;
+    const rows: (string | number | null)[][] = [
+      [`Customer Statement — ${customer.name}`],
+      [`Period: ${exportFrom || 'Beginning'} to ${exportTo || 'Today'}${!exportFrom && !exportTo ? ' (All Time)' : ''}`],
+      [],
+      ['Date', 'Reference', 'Description', 'Debit (Billed)', 'Credit (Paid)', 'Balance'],
+    ];
+    for (const l of lines) {
+      if (l.counted) { balance += l.debit - l.credit; totalDebit += l.debit; totalCredit += l.credit; }
+      rows.push([
+        new Date(l.date).toLocaleDateString('en-GB'), l.ref, l.counted ? l.desc : `${l.desc} — not counted`,
+        l.debit ? r2(l.debit) : null, l.credit ? r2(l.credit) : null, l.counted ? r2(balance) : null,
+      ]);
+    }
+    rows.push([], ['', '', 'TOTAL', r2(totalDebit), r2(totalCredit), r2(totalDebit - totalCredit)]);
+
+    await exportToXLSX(`Statement_${customer.name.replace(/[^\w-]+/g, '_')}`, [
+      { name: 'Statement', rows, colWidths: [12, 16, 48, 16, 16, 16] },
+    ]);
+    setIsExportOpen(false);
+  }
+
   const METHOD_LABEL: Record<string, string> = {
     cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', credit: 'Credit',
     adjustment: 'Balance Adjustment',
@@ -334,6 +400,10 @@ export const CustomerDetailPage: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={() => setIsExportOpen(true)}
+              className="flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 bg-[#1d222a] text-emerald-400 hover:text-emerald-300 hover:bg-[#2b313a] rounded-2xl md:rounded-3xl font-bold text-sm border border-emerald-900/30 transition-all active:scale-[0.98]">
+              <FileSpreadsheet size={18} strokeWidth={2.5} /> EXPORT EXCEL
+            </button>
             <button onClick={openEditModal}
               className="flex items-center gap-2 px-4 md:px-6 py-3 md:py-4 bg-[#1d222a] text-gray-400 hover:text-white hover:bg-[#2b313a] rounded-2xl md:rounded-3xl font-bold text-sm border border-[#2b313a] transition-all active:scale-[0.98]">
               <Edit size={18} strokeWidth={2.5} /> EDIT
@@ -463,8 +533,8 @@ export const CustomerDetailPage: React.FC = () => {
                   {invoices.length === 0 ? (
                     <tr><td colSpan={4} className="py-12 text-center text-sm text-gray-500 font-semibold italic">No invoices found</td></tr>
                   ) : invoices.map(inv => (
-                    <tr key={inv.id} className="hover:bg-[#1d222a]/50 transition-colors">
-                      <td className="py-4 text-sm font-mono font-bold text-white">{inv.invoice_no}</td>
+                    <tr key={inv.id} onClick={() => setViewInvoiceId(inv.id)} title="View / reprint invoice" className="hover:bg-[#1d222a]/50 transition-colors cursor-pointer">
+                      <td className="py-4 text-sm font-mono font-bold text-white underline decoration-dotted underline-offset-4">{inv.invoice_no}</td>
                       <td className="py-4 text-xs font-semibold text-gray-500">{new Date(inv.created_at!).toLocaleDateString()}</td>
                       <td className="py-4 text-sm font-mono font-bold text-white text-right">
                         Rs. {(inv.total || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -518,7 +588,9 @@ export const CustomerDetailPage: React.FC = () => {
                         </td>
                         <td className="py-3 align-top pt-4">
                           <span className="text-sm font-bold text-white">
-                            {linkedInv ? linkedInv.invoice_no : 'General'}
+                            {linkedInv ? (
+                              <button type="button" onClick={() => setViewInvoiceId(linkedInv.id)} title="View / reprint invoice" className="underline decoration-dotted underline-offset-4 hover:text-primary">{linkedInv.invoice_no}</button>
+                            ) : 'General'}
                           </span>
                         </td>
                         <td className="py-3 align-top pt-4">
@@ -684,7 +756,9 @@ export const CustomerDetailPage: React.FC = () => {
                         <div className="flex items-center gap-3 text-[11px] text-gray-500">
                           {pay.bank_name && <span className="flex items-center gap-1"><Building2 size={10} />{pay.bank_name}</span>}
                           {pay.due_date  && <span>Due: {new Date(pay.due_date).toLocaleDateString()}</span>}
-                          <span>{linkedInv ? linkedInv.invoice_no : 'General'}</span>
+                          <span>{linkedInv ? (
+                              <button type="button" onClick={() => setViewInvoiceId(linkedInv.id)} title="View / reprint invoice" className="underline decoration-dotted underline-offset-4 hover:text-primary">{linkedInv.invoice_no}</button>
+                            ) : 'General'}</span>
                           <span>{new Date(pay.paid_at).toLocaleDateString()}</span>
                         </div>
                       </div>
@@ -763,6 +837,32 @@ export const CustomerDetailPage: React.FC = () => {
       </div>
 
       {/* ── RECORD PAYMENT MODAL ─────────────────────────────────── */}
+      {viewInvoiceId && <InvoiceViewModal invoiceId={viewInvoiceId} onClose={() => setViewInvoiceId(null)} />}
+
+      <Modal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} title="Export Statement to Excel">
+        <div className="space-y-5">
+          <p className="text-xs text-gray-400">Debit/credit statement with a running balance. Leave both dates empty for all time.</p>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">From
+              <input type="date" value={exportFrom} onChange={e => setExportFrom(e.target.value)}
+                className="mt-2 w-full bg-[#1d222a] border border-[#2b313a] rounded-xl px-3 py-3 text-sm text-white" />
+            </label>
+            <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">To
+              <input type="date" value={exportTo} onChange={e => setExportTo(e.target.value)}
+                className="mt-2 w-full bg-[#1d222a] border border-[#2b313a] rounded-xl px-3 py-3 text-sm text-white" />
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <button onClick={() => { setExportFrom(''); setExportTo(''); }}
+              className="flex-1 py-3 bg-[#1d222a] border border-[#2b313a] rounded-2xl text-sm font-bold text-gray-400 hover:text-white">All Time</button>
+            <button onClick={handleExportStatement}
+              className="flex-1 py-3 bg-primary text-black rounded-2xl text-sm font-bold hover:bg-white flex items-center justify-center gap-2">
+              <FileSpreadsheet size={16} /> Download
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isPaymentModalOpen} onClose={() => !paymentSuccess && setIsPaymentModalOpen(false)} title="Record Payment">
         <div className="space-y-5">
           {paymentSuccess ? (
