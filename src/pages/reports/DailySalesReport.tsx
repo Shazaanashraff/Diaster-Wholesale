@@ -9,8 +9,7 @@ import { ReportKPICard } from './shared/ReportKPICard';
 import { EditInvoiceModal } from './shared/EditInvoiceModal';
 import { cn } from '../../lib/utils';
 import { getCurrentRole } from '../../utils/permissions';
-import { POSSaleReceipt, type SaleReceiptData } from '../../components/POSSaleReceipt';
-import type { Product } from '../../types';
+import { POSSaleReceipt, splitInvoiceLinesForReceipt, exchangeForFromNotes, type SaleReceiptData } from '../../components/POSSaleReceipt';
 import { TrendingUp, RotateCcw, Wallet, CreditCard, Smartphone, Building2, RefreshCw, XCircle, Eye, Printer, X, ArrowLeftRight, Search, Edit2 } from 'lucide-react';
 
 interface PaymentRow { invoice_id: string | null; method: string; bank_name: string | null; amount: number; paid_at: string; reference: string | null; payment_type?: string; cheque_status?: string | null }
@@ -141,17 +140,12 @@ export const DailySalesReport: React.FC = () => {
 
   function handlePrintReceipt() {
     if (!detailInvoice) return;
+    const { cartSnapshot, returnedItems } = splitInvoiceLinesForReceipt(detailItems as any[]);
     const rd: SaleReceiptData = {
       invoiceNo: detailInvoice.invoice_no,
-      cartSnapshot: detailItems
-        .filter(item => item.products !== null && item.unit_price >= 0)
-        .map(item => ({
-          product: item.products as Product,
-          quantityCartons: item.cartons,
-          quantityPieces: item.pieces,
-          unitPrice: item.unit_price,
-          batchId: item.batch_id ?? undefined,
-        })),
+      cartSnapshot,
+      exchangeFor: exchangeForFromNotes(detailInvoice.notes),
+      returnedItems,
       customerName: detailInvoice.customers?.name ?? 'Walk-in',
       salespersonName: detailInvoice.salesperson?.name ?? detailInvoice.salesperson_name ?? '—',
       paymentSplits: detailPayments.map(p => ({ method: p.method, amount: Number(p.amount) })),

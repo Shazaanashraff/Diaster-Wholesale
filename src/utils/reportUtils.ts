@@ -92,7 +92,24 @@ export function getAgingBucket(days: number): '0-30' | '31-60' | '61-90' | '90+'
 }
 
 // CSV Export
-export function exportToCSV(filename: string, headers: string[], rows: (string | number)[][]): void {
+/** Today's calendar date (YYYY-MM-DD) in Asia/Colombo (UTC+5:30, no DST). */
+export function colomboTodayKey(): string {
+  return new Date(Date.now() + (5 * 60 + 30) * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** End of the given Colombo calendar day (23:59:59.999) as a UTC ISO timestamp. */
+export function colomboEndOfDayIso(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (5 * 60 + 30) * 60 * 1000).toISOString();
+}
+
+/** '2026-10-02' -> '02 Oct 2026' */
+export function fmtDateKey(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+export function exportToCSV(filename: string, headers: string[], rows: (string | number)[][], metaLines: string[] = []): void {
   const escape = (v: string | number) => {
     const s = String(v);
     return s.includes(',') || s.includes('"') || s.includes('\n')
@@ -100,6 +117,7 @@ export function exportToCSV(filename: string, headers: string[], rows: (string |
       : s;
   };
   const csvContent = [
+    ...(metaLines.length > 0 ? [...metaLines.map(escape), ''] : []),
     headers.map(escape).join(','),
     ...rows.map((row) => row.map(escape).join(',')),
   ].join('\n');

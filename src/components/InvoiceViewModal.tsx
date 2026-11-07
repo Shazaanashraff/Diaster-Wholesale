@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { POSSaleReceipt, type SaleReceiptData } from './POSSaleReceipt';
-import type { Product } from '../types';
+import { POSSaleReceipt, splitInvoiceLinesForReceipt, exchangeForFromNotes, type SaleReceiptData } from './POSSaleReceipt';
 
 interface Props {
   invoiceId: string;
@@ -20,12 +19,12 @@ export const InvoiceViewModal: React.FC<Props> = ({ invoiceId, onClose }) => {
       const [invRes, itemsRes, payRes] = await Promise.all([
         supabase
           .from('invoices')
-          .select('id, invoice_no, subtotal, discount, total, mode, created_at, salesperson_name, salesperson:salespeople(name), customers(name)')
+          .select('id, invoice_no, subtotal, discount, total, mode, notes, created_at, salesperson_name, salesperson:salespeople(name), customers(name)')
           .eq('id', invoiceId)
           .single(),
         supabase
           .from('invoice_items')
-          .select('cartons, pieces, unit_price, batch_id, products(id, name, item_code, pieces_per_carton, wholesale_price, retail_price, cost_price, model, category, created_at, updated_at)')
+          .select('cartons, pieces, unit_price, total, batch_id, products(id, name, item_code, pieces_per_carton, wholesale_price, retail_price, cost_price, model, category, created_at, updated_at)')
           .eq('invoice_id', invoiceId),
         supabase
           .from('payments')
@@ -39,17 +38,12 @@ export const InvoiceViewModal: React.FC<Props> = ({ invoiceId, onClose }) => {
         return;
       }
       const inv = invRes.data as any;
+      const { cartSnapshot, returnedItems } = splitInvoiceLinesForReceipt((itemsRes.data ?? []) as any[]);
       setData({
         invoiceNo: inv.invoice_no,
-        cartSnapshot: ((itemsRes.data ?? []) as any[])
-          .filter(i => i.products && i.unit_price >= 0)
-          .map(i => ({
-            product: i.products as Product,
-            quantityCartons: i.cartons,
-            quantityPieces: i.pieces,
-            unitPrice: i.unit_price,
-            batchId: i.batch_id ?? undefined,
-          })),
+        cartSnapshot,
+        exchangeFor: exchangeForFromNotes(inv.notes),
+        returnedItems,
         customerName: inv.customers?.name ?? 'Walk-in',
         salespersonName: inv.salesperson?.name ?? inv.salesperson_name ?? '—',
         paymentSplits: ((payRes.data ?? []) as any[]).map(p => ({ method: p.method, amount: Number(p.amount) })),
