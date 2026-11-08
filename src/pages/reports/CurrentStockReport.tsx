@@ -4,6 +4,7 @@ import { ReportTable } from './shared/ReportTable';
 import { ExportBar } from './shared/ExportBar';
 import { Package, Activity, Warehouse, ShoppingCart, RefreshCw } from 'lucide-react';
 import { ReportKPICard } from './shared/ReportKPICard';
+import { colomboTodayKey, fmtDateKey } from '../../utils/reportUtils';
 
 interface LocationStockData {
   location_id: string | null;
@@ -23,23 +24,31 @@ export const CurrentStockReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [locationFilter, setLocationFilter] = useState<'all' | 'shop' | 'warehouse'>('all');
+  // "Stock as of" date — defaults to today (live stock).
+  const [asOfDate, setAsOfDate] = useState<string>(colomboTodayKey());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const asOfLabel = asOfDate >= colomboTodayKey() ? `Today (${fmtDateKey(asOfDate)})` : fmtDateKey(asOfDate);
 
-  const loadData = async () => {
+  const loadData = async (date: string = asOfDate) => {
     try {
-      const res = await getCurrentStockReportByLocation();
+      setLoadError(null);
+      const res = await getCurrentStockReportByLocation(date);
       setLocationData(res);
     } catch (err) {
       console.error('Failed to load stock report:', err);
+      setLocationData([]);
+      setLoadError(err instanceof Error ? err.message : 'Failed to load stock report');
     }
   };
 
   useEffect(() => {
     async function load() {
-      await loadData();
+      setLoading(true);
+      await loadData(asOfDate);
       setLoading(false);
     }
     load();
-  }, []);
+  }, [asOfDate]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -72,8 +81,21 @@ export const CurrentStockReport: React.FC = () => {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Current Stock Report</h2>
+        <div>
+          <h2 className="text-xl font-bold text-white">Current Stock Report</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Stock as of <span className="font-semibold text-gray-200">{asOfLabel}</span></p>
+        </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#2b313a] border border-[#3d444d] text-sm text-gray-300">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-500">As of</span>
+            <input
+              type="date"
+              value={asOfDate}
+              max={colomboTodayKey()}
+              onChange={(e) => setAsOfDate(e.target.value || colomboTodayKey())}
+              className="bg-transparent text-white text-sm focus:outline-none [color-scheme:dark]"
+            />
+          </label>
           <select
             value={locationFilter}
             onChange={(e) => setLocationFilter(e.target.value as 'all' | 'shop' | 'warehouse')}
@@ -94,6 +116,10 @@ export const CurrentStockReport: React.FC = () => {
         </div>
       </div>
 
+      {loadError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{loadError}</div>
+      )}
+
       {/* Overall Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ReportKPICard label={`${locationFilter === 'all' ? 'Total' : locationFilter === 'shop' ? 'Shop' : 'Warehouse'} Products`} value={totalProducts} icon={Package} color="bg-blue-600" />
@@ -110,6 +136,7 @@ export const CurrentStockReport: React.FC = () => {
           p.pieces_per_carton || 1,
           clampUnits(p.total_units)
         ]);
+        const csvMeta = [`Current Stock Report - ${location.location_name}`, `As of: ${fmtDateKey(asOfDate)}`];
 
         const locationIcon = location.location_type === 'warehouse' ? Warehouse : ShoppingCart;
         const locationColor = location.location_type === 'warehouse' ? 'bg-amber-600' : 'bg-green-600';
@@ -137,9 +164,10 @@ export const CurrentStockReport: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <h4 className="text-md font-semibold text-gray-300">{location.location_name} Inventory</h4>
+              <h4 className="text-md font-semibold text-gray-300">{location.location_name} Inventory <span className="font-normal text-gray-500">· as of {fmtDateKey(asOfDate)}</span></h4>
               <ExportBar
-                filename={`Stock_${location.location_name}`}
+                filename={`Stock_${location.location_name}_AsOf_${asOfDate}`}
+                metaLines={csvMeta}
                 headers={headers}
                 rows={rows}
               />

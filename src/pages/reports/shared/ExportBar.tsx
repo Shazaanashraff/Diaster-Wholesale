@@ -9,14 +9,16 @@ interface ExportBarProps {
   rows: (string | number)[][];
   className?: string;
   showCsv?: boolean;
+  /** Lines written above the CSV header (e.g. report title and the 'as of' date). */
+  metaLines?: string[];
 }
 
-export const ExportBar: React.FC<ExportBarProps> = ({ filename, headers, rows, className, showCsv = true }) => {
+export const ExportBar: React.FC<ExportBarProps> = ({ filename, headers, rows, className, showCsv = true, metaLines }) => {
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {showCsv && (
       <button
-        onClick={() => exportToCSV(filename, headers, rows)}
+        onClick={() => exportToCSV(filename, headers, rows, metaLines)}
         className="flex items-center gap-1.5 px-3 py-2 bg-[#1d222a] border border-[#2b313a] text-gray-400 rounded-xl hover:bg-[#252a33] hover:text-white hover:border-[#3d4652] transition-all text-[11px] font-bold"
       >
         <Download size={13} />

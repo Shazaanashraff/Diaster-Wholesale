@@ -2,6 +2,16 @@ import React, { useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { CartItem } from '../pages/POSPage';
 
+/** An item the customer handed back on an exchange invoice (all values positive; printed as minus). */
+export interface ReturnedReceiptItem {
+  product: CartItem['product'];
+  quantityCartons: number;
+  quantityPieces: number;
+  unitPrice: number;
+  /** Credit value of the line (positive number). */
+  amount: number;
+}
+
 export interface SaleReceiptData {
   invoiceNo: string;
   cartSnapshot: CartItem[];
@@ -15,6 +25,64 @@ export interface SaleReceiptData {
   isWholesale: boolean;
   earnedPoints: number;
   timestamp: Date;
+  /** Exchange invoices: the invoice this one is an exchange for (e.g. INV-903565). */
+  exchangeFor?: string | null;
+  /** Exchange invoices: items returned by the customer. */
+  returnedItems?: ReturnedReceiptItem[];
+}
+
+interface RawInvoiceLine {
+  cartons: number;
+  pieces: number;
+  unit_price: number;
+  total?: number | null;
+  batch_id?: string | null;
+  products: CartItem['product'] | null;
+}
+
+/**
+ * Splits a saved invoice's lines into sold items (cart snapshot) and, for exchange invoices,
+ * the returned items (stored as negative-price credit lines). Per-unit line discount is the
+ * RECORDED one (gross - total), so the receipt agrees with the invoice view.
+ */
+export function splitInvoiceLinesForReceipt(lines: RawInvoiceLine[]): {
+  cartSnapshot: CartItem[];
+  returnedItems: ReturnedReceiptItem[];
+} {
+  const cartSnapshot: CartItem[] = [];
+  const returnedItems: ReturnedReceiptItem[] = [];
+  for (const line of lines) {
+    if (!line.products) continue;
+    const ppc = line.products.pieces_per_carton || 1;
+    const qty = line.cartons * ppc + line.pieces;
+    if (Number(line.unit_price) < 0) {
+      returnedItems.push({
+        product: line.products,
+        quantityCartons: line.cartons,
+        quantityPieces: line.pieces,
+        unitPrice: Math.abs(Number(line.unit_price)),
+        amount: Math.abs(Number(line.total ?? Number(line.unit_price) * qty)),
+      });
+      continue;
+    }
+    const gross = Number(line.unit_price) * qty;
+    const recordedDiscount = line.total != null && qty > 0 ? Math.max(0, gross - Number(line.total)) : 0;
+    cartSnapshot.push({
+      product: line.products,
+      quantityCartons: line.cartons,
+      quantityPieces: line.pieces,
+      unitPrice: Number(line.unit_price),
+      batchId: line.batch_id ?? undefined,
+      lineDiscount: qty > 0 ? recordedDiscount / qty : 0,
+    });
+  }
+  return { cartSnapshot, returnedItems };
+}
+
+/** 'Exchange for INV-123' -> 'INV-123' (null if the note is not an exchange note). */
+export function exchangeForFromNotes(notes?: string | null): string | null {
+  const m = /^Exchange for\s+(.+)$/i.exec((notes || '').trim());
+  return m ? m[1].trim() : null;
 }
 
 interface POSSaleReceiptProps {
@@ -35,8 +103,20 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
   const {
     invoiceNo, cartSnapshot, customerName, salespersonName,
     paymentSplits, subtotal, discount, redeemedPoints, total,
-    isWholesale, earnedPoints, timestamp,
+    isWholesale, earnedPoints, timestamp, exchangeFor, returnedItems = [],
   } = data;
+
+  const isExchange = !!exchangeFor || returnedItems.length > 0;
+  const newItemsTotal = cartSnapshot.reduce((sum, item) => {
+    const ppc = item.product.pieces_per_carton || 1;
+    const qty = item.quantityCartons * ppc + item.quantityPieces;
+    const basePrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
+    const rate = Number(item.unitPrice ?? basePrice);
+    return sum + Math.max(0, rate - (item.lineDiscount ?? 0)) * qty;
+  }, 0);
+  const returnedItemsTotal = returnedItems.reduce((sum, r) => sum + r.amount, 0);
+  // Net of the exchange = new items minus returned items, less any bill discount.
+  const exchangeNet = newItemsTotal - returnedItemsTotal - (discount > 0 ? discount : 0);
 
   const totalPaid = paymentSplits.reduce((s, p) => s + p.amount, 0);
   const balanceDue = Math.max(0, total - totalPaid);
@@ -116,6 +196,7 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           {line(isWholesale ? 'Wholesale' : 'Retail')}
           {salespersonName && line('Sales Rep', salespersonName)}
           {line('Invoice No', invoiceNo)}
+          {exchangeFor && line('Exchange for', exchangeFor)}
           {line('Date', `${dateStr}  ${timeStr}`)}
           {line('Inv Type', invType)}
         </div>
@@ -138,7 +219,9 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           const basePrice = Number(isWholesale ? item.product.wholesale_price : item.product.retail_price);
           const rate = Number(item.unitPrice ?? basePrice);
           const perUnitDisc = item.lineDiscount ?? 0;
-          const lineDisc = perUnitDisc * qty + Math.max(0, (basePrice - rate) * qty);
+          // Only the RECORDED line discount is shown. The gap to list price used to be added here,
+          // which printed a "discount" the invoice view (and the amount column) never applied.
+          const lineDisc = perUnitDisc * qty;
           const amt = Math.max(0, rate - perUnitDisc) * qty;
           return (
             <div key={item.product.id} style={{ marginBottom: 5, fontSize: 12 }}>
@@ -159,23 +242,77 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
           );
         })}
 
+        {/* Exchange: returned items, amounts as minus values */}
+        {returnedItems.length > 0 && (
+          <>
+            {divider(true)}
+            <div style={{ textAlign: 'center', fontWeight: 900, fontSize: 12, marginBottom: 3 }}>RETURNED ITEMS</div>
+            {returnedItems.map((r, i) => {
+              const ppc = r.product.pieces_per_carton || 1;
+              const qty = r.quantityCartons * ppc + r.quantityPieces;
+              return (
+                <div key={`ret-${r.product.id}-${i}`} style={{ marginBottom: 5, fontSize: 12 }}>
+                  <div style={{ fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {i + 1}. {r.product.name.toUpperCase()}
+                  </div>
+                  {r.product.item_code && (
+                    <div style={{ fontSize: 10, color: '#000', marginBottom: 1 }}>{r.product.item_code}</div>
+                  )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 9ch 3ch 9ch 9ch', gap: '0 5px', fontSize: 11 }}>
+                    <span />
+                    <span style={{ textAlign: 'right' }}>{fmt(r.unitPrice)}</span>
+                    <span style={{ textAlign: 'right' }}>{qty}</span>
+                    <span style={{ textAlign: 'right' }}>-</span>
+                    <span style={{ textAlign: 'right', fontWeight: 900 }}>-{fmt(r.amount)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
         {divider()}
 
         {/* Totals block */}
         <div style={{ fontSize: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>No. of Item  {cartSnapshot.length}</span>
-            <span>Net Total  {fmt(subtotal)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>Total Qty  {totalQty}</span>
-            <span />
-          </div>
-          {discount > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span />
-              <span>Discount  -{fmt(discount)}</span>
-            </div>
+          {isExchange ? (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>New Items</span>
+                <span>{fmt(newItemsTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Returned Items</span>
+                <span>-{fmt(returnedItemsTotal)}</span>
+              </div>
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Discount</span>
+                  <span>-{fmt(discount)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900 }}>
+                <span>Net Total</span>
+                <span>{exchangeNet < 0 ? '-' : ''}{fmt(Math.abs(exchangeNet))}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>No. of Item  {cartSnapshot.length}</span>
+                <span>Net Total  {fmt(subtotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total Qty  {totalQty}</span>
+                <span />
+              </div>
+              {discount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span />
+                  <span>Discount  -{fmt(discount)}</span>
+                </div>
+              )}
+            </>
           )}
           {redeemedPoints > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -192,18 +329,32 @@ export const POSSaleReceipt: React.FC<POSSaleReceiptProps> = ({ data, onClose })
             </div>
           ))}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span />
-            <span>Balance to be paid  {fmt(balanceDue)}</span>
-          </div>
+          {isExchange ? (
+            exchangeNet < -0.005 ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900 }}>
+                <span>Refund to customer</span>
+                <span>{fmt(Math.abs(exchangeNet))}</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span />
+                <span>Balance to be paid  {fmt(Math.max(0, exchangeNet - totalPaid))}</span>
+              </div>
+            )
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span />
+              <span>Balance to be paid  {fmt(balanceDue)}</span>
+            </div>
+          )}
         </div>
 
         {divider()}
 
         {/* Grand total */}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 17, margin: '5px 0' }}>
-          <span>TOTAL</span>
-          <span>LKR {fmt(total)}</span>
+          <span>{isExchange ? 'NET TOTAL' : 'TOTAL'}</span>
+          <span>LKR {isExchange && exchangeNet < 0 ? '-' : ''}{fmt(isExchange ? Math.abs(exchangeNet) : total)}</span>
         </div>
 
         {divider()}

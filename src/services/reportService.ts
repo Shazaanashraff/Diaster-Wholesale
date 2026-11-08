@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { PRODUCT_STOCK_COLUMNS } from './inventoryService';
-import { signedSaleUnits } from '../utils/reportUtils';
+import { signedSaleUnits, colomboTodayKey, colomboEndOfDayIso } from '../utils/reportUtils';
 
 // ============================================================
 // Types & Interfaces
@@ -168,8 +168,49 @@ export const getCurrentStockReport = async () => {
   return data ?? [];
 };
 
-/** 2.1a Current Stock Report by Location */
-export const getCurrentStockReportByLocation = async () => {
+type AsOfRow = {
+  product_id: string; name: string; item_code: string | null; pieces_per_carton: number;
+  location_id: string | null; location_name: string | null; location_type: string | null;
+  units: number; unit_cost: number;
+};
+
+/**
+ * Stock + unit cost per product/location as at the END of `asOfDate` (YYYY-MM-DD, Colombo),
+ * rebuilt from the stock movement history (see migration 20261107000000_stock_history_as_of).
+ */
+const getStockAsOfRows = async (asOfDate: string): Promise<AsOfRow[]> => {
+  const { data, error } = await supabase.rpc('get_stock_as_of', { p_as_of: colomboEndOfDayIso(asOfDate) });
+  if (error) {
+    throw new Error(
+      `Could not load stock as of ${asOfDate}: ${error.message}. ` +
+      'Make sure migration 20261107000000_stock_history_as_of.sql has been run on the database.'
+    );
+  }
+  return (data ?? []) as AsOfRow[];
+};
+
+/** 2.1a Current Stock Report by Location (pass asOfDate for a past day) */
+export const getCurrentStockReportByLocation = async (asOfDate?: string) => {
+  if (asOfDate && asOfDate < colomboTodayKey()) {
+    const rows = await getStockAsOfRows(asOfDate);
+    const grouped: Record<string, { location_id: string | null; location_name: string | null; location_type: string | null; products: any[] }> = {};
+    rows
+      .slice()
+      .sort((a, b) => (a.location_name ?? '').localeCompare(b.location_name ?? '') || a.name.localeCompare(b.name))
+      .forEach((r) => {
+        const key = r.location_id || 'unassigned';
+        if (!grouped[key]) {
+          grouped[key] = { location_id: r.location_id, location_name: r.location_name || 'Unassigned', location_type: r.location_type, products: [] };
+        }
+        grouped[key].products.push({
+          product_id: r.product_id, name: r.name, item_code: r.item_code,
+          pieces_per_carton: r.pieces_per_carton, location_id: r.location_id,
+          location_name: r.location_name, location_type: r.location_type, total_units: Number(r.units),
+        });
+      });
+    return Object.values(grouped);
+  }
+
   const { data, error } = await supabase
     .from('product_stock_by_location')
     .select('product_id, name, item_code, pieces_per_carton, location_id, location_name, location_type, total_units')
@@ -303,8 +344,33 @@ export const getCategoryDistribution = async (): Promise<{ name: string; value: 
   }));
 };
 
-/** Stock valuation grouped by location (server-side aggregate). */
-export const getStockValuationReport = async () => {
+/** Stock valuation grouped by location (server-side aggregate). Pass asOfDate for a past day. */
+export const getStockValuationReport = async (asOfDate?: string) => {
+  if (asOfDate && asOfDate < colomboTodayKey()) {
+    const rows = await getStockAsOfRows(asOfDate);
+    const byLoc = new Map<string, {
+      location_id: string | null; location_name: string; location_type: string | null;
+      products: Array<{ product_id: string; name: string; item_code: string; available: number; unitCost: number; valuation: number }>;
+      totalValuation: number;
+    }>();
+    rows.forEach((r) => {
+      const key = r.location_id || 'unassigned';
+      if (!byLoc.has(key)) {
+        byLoc.set(key, { location_id: r.location_id, location_name: r.location_name || 'Unassigned', location_type: r.location_type, products: [], totalValuation: 0 });
+      }
+      const loc = byLoc.get(key)!;
+      const available = Number(r.units);
+      const unitCost = Number(r.unit_cost);
+      const valuation = available * unitCost;
+      loc.products.push({ product_id: r.product_id, name: r.name, item_code: r.item_code ?? '', available, unitCost, valuation });
+      loc.totalValuation += valuation;
+    });
+    const order = (t: string | null) => (t === 'shop' ? 0 : t === 'warehouse' ? 1 : 2);
+    return Array.from(byLoc.values())
+      .map((loc) => ({ ...loc, products: loc.products.sort((a, b) => b.valuation - a.valuation) }))
+      .sort((a, b) => order(a.location_type) - order(b.location_type) || a.location_name.localeCompare(b.location_name));
+  }
+
   const { data, error } = await supabase.rpc('get_stock_valuation_report');
   if (error) throw error;
   return (data ?? []) as Array<{
